@@ -4,7 +4,7 @@
         <main class="as-app">
             <header class="as-topline">
                 <div class="as-heading-group">
-                    <div class="as-eyebrow">BOUNAIM AUTO <span aria-hidden="true">/</span> INVENTORY INTELLIGENCE</div>
+                    <div class="as-eyebrow">AUTOSTOCK AI <span aria-hidden="true">/</span> INVENTORY INTELLIGENCE</div>
                     <h1 class="as-title">Dashboard</h1>
                     <p class="as-subtitle">A clear, current view of your automotive inventory.</p>
                 </div>
@@ -109,22 +109,183 @@
                     <article class="as-card as-forecast-panel">
                         <div class="as-panel-head">
                             <div>
-                                <span class="as-section-kicker">PLANNED CAPABILITY</span>
-                                <h2>AI demand forecast</h2>
-                                <p>Forecasts will be shown after model evaluation and Odoo integration.</p>
+                                <span class="as-section-kicker">EVALUATED DEMAND</span>
+                                <h2>Daily fulfilled sales forecast</h2>
+                                <p>Chronological evaluation compares a trained model with transparent baselines.</p>
                             </div>
-                            <span class="as-pill as-pill-planned">Not connected</span>
+                            <span class="as-pill as-pill-planned" t-esc="forecastStateLabel"/>
                         </div>
-                        <div class="as-chart-empty" role="status">
-                            <div class="as-chart-grid" aria-hidden="true"></div>
-                            <div class="as-empty-message">
-                                <span class="as-empty-icon" aria-hidden="true">
-                                    <svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h16M7 15l4-4 3 2 5-6m-4 0h4v4"/></svg>
-                                </span>
-                                <h3>Forecasts aren't connected yet</h3>
-                                <p>The offline forecasting experiment is not linked to Odoo. No sample predictions or accuracy claims are shown here.</p>
+                        <form class="as-forecast-form" t-on-submit.prevent="submitForecast" aria-label="Forecast filters">
+                            <label class="as-filter-field">
+                                <span>Data source</span>
+                                <select t-model="state.filters.sourceType" t-on-change="changeSource" t-att-disabled="state.forecastBusy">
+                                    <option value="synthetic_demo">Synthetic demo</option>
+                                    <option value="completed_deliveries" t-att-disabled="!state.forecastOptions.can_forecast_real">Completed Odoo deliveries</option>
+                                </select>
+                            </label>
+                            <label class="as-filter-field as-filter-span">
+                                <span t-if="state.filters.sourceType === 'synthetic_demo'">Synthetic SKU</span>
+                                <span t-else="">Tracked part / SKU</span>
+                                <select t-if="state.filters.sourceType === 'synthetic_demo'" t-model="state.filters.sku" t-on-change="loadForecastSnapshot" t-att-disabled="state.forecastBusy">
+                                    <option t-foreach="state.forecastOptions.demo_skus" t-as="sample" t-key="sample.sku" t-att-value="sample.sku" t-esc="sample.name"/>
+                                </select>
+                                <select t-else="" t-model="state.filters.productId" t-on-change="changeProduct" t-att-disabled="state.forecastBusy || !state.forecastOptions.products.length">
+                                    <option value="">Choose a tracked part</option>
+                                    <option t-foreach="state.forecastOptions.products" t-as="product" t-key="product.id" t-att-value="product.id" t-esc="product.sku + ' · ' + product.name"/>
+                                </select>
+                            </label>
+                            <label t-if="state.filters.sourceType === 'completed_deliveries'" class="as-filter-field as-filter-span">
+                                <span>Warehouse <small>(optional)</small></span>
+                                <select t-model="state.filters.warehouseId" t-on-change="changeWarehouse" t-att-disabled="state.forecastBusy">
+                                    <option value="">All warehouses in <t t-esc="state.forecastOptions.company_name"/></option>
+                                    <option t-foreach="state.forecastOptions.warehouses" t-as="warehouse" t-key="warehouse.id" t-att-value="warehouse.id" t-esc="warehouse.name"/>
+                                </select>
+                            </label>
+                            <label class="as-filter-field">
+                                <span>History from <small>UTC</small></span>
+                                <input type="date" t-model="state.filters.historyStart" t-on-change="loadForecastSnapshot" t-att-max="state.filters.historyEnd" t-att-disabled="state.forecastBusy" required="required"/>
+                            </label>
+                            <label class="as-filter-field">
+                                <span>History through <small>UTC</small></span>
+                                <input type="date" t-model="state.filters.historyEnd" t-on-change="loadForecastSnapshot" t-att-max="state.forecastOptions.today_utc" t-att-min="state.filters.historyStart" t-att-disabled="state.forecastBusy" required="required"/>
+                            </label>
+                            <label class="as-filter-field">
+                                <span>Horizon</span>
+                                <select t-model="state.filters.horizon" t-on-change="loadForecastSnapshot" t-att-disabled="state.forecastBusy">
+                                    <option value="7">7 days</option>
+                                    <option value="30">30 days</option>
+                                    <option value="60">60 days</option>
+                                </select>
+                            </label>
+                            <div class="as-forecast-submit">
+                                <button class="as-btn as-btn-primary" type="submit" t-att-disabled="state.forecastBusy || (state.filters.sourceType === 'completed_deliveries' &amp;&amp; (!state.forecastOptions.can_forecast_real || !state.filters.productId))">
+                                    <span t-if="state.forecastBusy">Evaluating…</span>
+                                    <span t-elif="state.filters.sourceType === 'synthetic_demo'">Run synthetic demo</span>
+                                    <span t-else="">Evaluate Odoo history</span>
+                                    <svg class="as-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5m0 14h16M7 15l4-4 3 2 5-6m-4 0h4v4"/></svg>
+                                </button>
                             </div>
+                        </form>
+
+                        <div t-if="state.filters.sourceType === 'synthetic_demo'" class="as-forecast-notice as-notice-demo" role="note">
+                            Synthetic sample only. This deterministic demo does not read Odoo transactions, stock, supplier records, or customer data.
                         </div>
+                        <div t-elif="!state.forecastOptions.can_forecast_real" class="as-forecast-notice" role="note">
+                            Odoo delivery forecasts require both Inventory and Sales access. Synthetic demos remain available with Inventory access.
+                        </div>
+                        <div t-elif="!selectedCoverageStart" class="as-forecast-notice" role="note">
+                            Configure and verify a complete-history start date for <strong t-esc="selectedWarehouse ? selectedWarehouse.name : state.forecastOptions.company_name"/> before forecasting Odoo deliveries.
+                        </div>
+
+                        <div t-if="state.forecastError" class="as-forecast-error" role="alert" t-esc="state.forecastError"/>
+                        <div t-if="state.forecastNotice" class="as-forecast-notice" role="status" t-esc="state.forecastNotice"/>
+
+                        <t t-if="state.forecastBusy &amp;&amp; ['queued', 'running'].includes(state.forecast?.state)">
+                            <div class="as-forecast-progress" role="status" aria-live="polite">
+                                <span class="as-spinner" aria-hidden="true"/>
+                                <span>Forecast job queued for the background worker. Your browser is not training a model.</span>
+                            </div>
+                        </t>
+                        <t t-elif="state.forecast &amp;&amp; ['queued', 'running'].includes(state.forecast.state)">
+                            <div class="as-forecast-progress" role="status">
+                                <span class="as-spinner" aria-hidden="true"/>
+                                <span>Forecast is <strong t-esc="forecastStateLabel.toLowerCase()"/>. Refresh results shortly.</span>
+                            </div>
+                        </t>
+                        <t t-elif="state.forecast &amp;&amp; state.forecast.state === 'completed' &amp;&amp; forecastChart">
+                            <div class="as-forecast-result-head">
+                                <div>
+                                    <span class="as-section-kicker" t-esc="state.forecast.source_label"/>
+                                    <h3><t t-esc="state.forecast.sku"/> · <t t-esc="state.forecast.horizon_days"/> day outlook</h3>
+                                    <p><t t-esc="state.forecast.history_start"/> — <t t-esc="state.forecast.history_end"/> UTC · <t t-esc="state.forecast.history_days"/> daily observations</p>
+                                </div>
+                                <span t-if="state.forecast.source_type === 'synthetic_demo'" class="as-pill as-pill-demo">SYNTHETIC DATA</span>
+                                <span t-else="" class="as-pill as-pill-real">ODOO HISTORY</span>
+                            </div>
+                            <figure class="as-forecast-figure" aria-labelledby="as-forecast-chart-title">
+                                <svg class="as-forecast-chart" viewBox="0 0 800 220" role="img" t-att-aria-label="'Daily delivered units and evaluated forecast for ' + state.forecast.sku">
+                                    <title id="as-forecast-chart-title">Historical fulfilled sales and forecast</title>
+                                    <desc>Historical daily delivered units followed by the selected baseline or model forecast. The shaded range is heuristic and not a confidence interval.</desc>
+                                    <line x1="44" y1="20" x2="44" y2="178" class="as-chart-axis"/>
+                                    <line x1="44" y1="178" x2="780" y2="178" class="as-chart-axis"/>
+                                    <line x1="44" y1="99" x2="780" y2="99" class="as-chart-gridline"/>
+                                    <text x="8" y="25" class="as-chart-label" t-esc="forecastChart.max"/>
+                                    <text x="12" y="180" class="as-chart-label">0</text>
+                                    <path t-att-d="forecastChart.forecastBand" class="as-chart-band"/>
+                                    <path t-att-d="forecastChart.historyPath" class="as-chart-history"/>
+                                    <path t-att-d="forecastChart.forecastPath" class="as-chart-prediction"/>
+                                    <line x1="780" y1="20" x2="780" y2="178" class="as-chart-edge"/>
+                                    <text x="44" y="205" class="as-chart-date" t-esc="forecastChart.firstDate"/>
+                                    <text t-att-x="forecastChart.cutoffX" y="205" text-anchor="middle" class="as-chart-date" t-esc="forecastChart.cutoffDate"/>
+                                    <text x="780" y="205" text-anchor="end" class="as-chart-date" t-esc="forecastChart.lastDate"/>
+                                </svg>
+                                <figcaption class="as-chart-legend">
+                                    <span><i class="as-legend-line as-legend-history" aria-hidden="true"/>Historical delivered units</span>
+                                    <span><i class="as-legend-line as-legend-forecast" aria-hidden="true"/>Forecast</span>
+                                    <span><i class="as-legend-band" aria-hidden="true"/>Heuristic range</span>
+                                </figcaption>
+                            </figure>
+
+                            <div class="as-forecast-summary" aria-label="Forecast evaluation details">
+                                <div><span>Selected method</span><strong t-esc="state.forecast.selected_method"/></div>
+                                <div><span>Baseline</span><strong t-esc="state.forecast.baseline_method"/></div>
+                                <div><span>Baseline MAE</span><strong><t t-esc="state.forecast.baseline_mae"/> <t t-esc="state.forecast.uom"/></strong></div>
+                                <div t-if="state.forecast.ml_evaluated"><span>Random forest MAE</span><strong><t t-esc="state.forecast.ml_mae"/> <t t-esc="state.forecast.uom"/></strong></div>
+                                <div><span>Demand pattern</span><strong t-esc="state.forecast.demand_pattern"/></div>
+                                <div><span>Measured holdout</span><strong><t t-esc="state.forecast.evaluation_days"/> / <t t-esc="state.forecast.horizon_days"/> days</strong></div>
+                                <div><span>Evaluation status</span><strong t-esc="state.forecast.evaluation_status"/></div>
+                            </div>
+                            <p t-if="state.forecast.evaluation_days &lt; state.forecast.horizon_days" class="as-interval-note" role="note">
+                                This forecast extends beyond the measured holdout by <t t-esc="state.forecast.horizon_days - state.forecast.evaluation_days"/> days; those days have no holdout evidence.
+                            </p>
+                            <p class="as-interval-note" t-esc="state.forecast.interval_note"/>
+
+                            <details class="as-forecast-details">
+                                <summary>Review source, assumptions, and daily values</summary>
+                                <dl class="as-source-details">
+                                    <dt>Model and version</dt><dd><t t-esc="state.forecast.model_version"/> · <t t-esc="state.forecast.selected_method"/></dd>
+                                    <dt>Source cutoff</dt><dd><t t-esc="state.forecast.source_cutoff"/> UTC</dd>
+                                    <dt>Data provenance</dt><dd t-esc="state.forecast.data_provenance"/>
+                                    <dt>Assumptions</dt><dd t-esc="state.forecast.assumptions"/>
+                                    <dt>Limitations</dt><dd t-esc="state.forecast.limitations"/>
+                                </dl>
+                                <div class="as-table-scroll as-forecast-table-scroll" role="region" aria-label="Historical and forecast daily values" tabindex="0">
+                                    <table class="as-table as-forecast-table">
+                                        <caption class="as-visually-hidden">Daily historical completed delivery units and future forecast values in the product unit. Returns are separate audit events.</caption>
+                                        <thead><tr><th scope="col">UTC date</th><th scope="col">Series</th><th scope="col">Delivered / forecast</th><th scope="col">Returns, separate</th><th scope="col">Heuristic range</th></tr></thead>
+                                        <tbody>
+                                            <tr t-foreach="state.forecast.observations" t-as="point" t-key="'actual-' + point.day">
+                                                <td t-esc="point.day"/><td>Actual</td><td t-esc="point.units"/><td t-esc="point.returned_units"/><td>—</td>
+                                            </tr>
+                                            <tr t-foreach="state.forecast.predictions" t-as="point" t-key="'forecast-' + point.day">
+                                                <td t-esc="point.day"/><td>Forecast</td><td t-esc="point.units"/><td>—</td><td><t t-esc="point.lower_heuristic"/> – <t t-esc="point.upper_heuristic"/></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </details>
+
+                            <div t-if="state.forecast.current_stock" class="as-stock-separation" role="note">
+                                <strong>Current Odoo stock</strong>
+                                <span>On hand: <b t-esc="state.forecast.current_stock.on_hand"/> <t t-esc="state.forecast.current_stock.uom"/></span>
+                                <span>Odoo projected stock: <b t-esc="state.forecast.current_stock.odoo_projected"/> <t t-esc="state.forecast.current_stock.uom"/></span>
+                                <small>Projected stock comes from Odoo's known operations; it is not the demand forecast above.</small>
+                            </div>
+                        </t>
+                        <t t-elif="state.forecast &amp;&amp; ['insufficient_history', 'no_observed_demand', 'failed'].includes(state.forecast.state)">
+                            <div class="as-forecast-empty" role="status">
+                                <span class="as-empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 19h18.4L12 3Zm0 6v4m0 3h.01"/></svg></span>
+                                <h3 t-esc="forecastStateLabel"/>
+                                <p t-esc="state.forecast.failure_reason || 'No numeric forecast was produced for this history.'"/>
+                            </div>
+                        </t>
+                        <t t-else="">
+                            <div class="as-forecast-empty" role="status">
+                                <span class="as-empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h16M7 15l4-4 3 2 5-6m-4 0h4v4"/></svg></span>
+                                <h3>No forecast run for these filters</h3>
+                                <p>Choose a SKU, date range, and horizon. The initial demo uses generated synthetic history and displays its provenance on every run.</p>
+                            </div>
+                        </t>
                     </article>
 
                     <article class="as-card as-health-panel">
@@ -138,24 +299,19 @@
                             </div>
                         </div>
                         <div class="as-health-lines" aria-label="Stock status counts">
-                            <div><span><i class="as-dot as-dot-green" aria-hidden="true"></i> Above safety stock</span><strong t-esc="state.data.kpis.healthy"/></div>
-                            <div><span><i class="as-dot as-dot-amber" aria-hidden="true"></i> Low stock</span><strong t-esc="state.data.kpis.low"/></div>
-                            <div><span><i class="as-dot as-dot-red" aria-hidden="true"></i> Out of stock</span><strong t-esc="state.data.kpis.out"/></div>
+                            <div><span><i class="as-dot as-dot-green" aria-hidden="true"/> Above safety stock</span><strong t-esc="state.data.kpis.healthy"/></div>
+                            <div><span><i class="as-dot as-dot-amber" aria-hidden="true"/> Low stock</span><strong t-esc="state.data.kpis.low"/></div>
+                            <div><span><i class="as-dot as-dot-red" aria-hidden="true"/> Out of stock</span><strong t-esc="state.data.kpis.out"/></div>
                         </div>
                     </article>
                 </section>
 
                 <section class="as-card as-insights" aria-labelledby="as-planned-title">
                     <div class="as-panel-head">
-                        <div><span class="as-section-kicker">ROADMAP</span><h2 id="as-planned-title">Planned decision tools</h2><p>These capabilities are not available in this foundation release.</p></div>
+                        <div><span class="as-section-kicker">FUTURE STAGES</span><h2 id="as-planned-title">Other decision tools</h2><p>Forecast review is available above; these workflows remain planned.</p></div>
                         <span class="as-pill as-pill-planned">In development</span>
                     </div>
                     <div class="as-insight-grid">
-                        <article class="as-insight-card">
-                            <span class="as-insight-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h16M7 15l4-4 3 2 5-6"/></svg></span>
-                            <h3>Demand forecasting</h3>
-                            <p>Evaluated forecasts with history coverage, baseline comparisons and uncertainty notes.</p>
-                        </article>
                         <article class="as-insight-card">
                             <span class="as-insight-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM8 7V4h8v3m-8 5h8m-8 4h5"/></svg></span>
                             <h3>Replenishment review</h3>
@@ -165,6 +321,11 @@
                             <span class="as-insight-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v18m9-9H3m15.4-6.4L5.6 18.4m12.8 0L5.6 5.6"/></svg></span>
                             <h3>Scenario analysis</h3>
                             <p>Explore demand and supplier changes without mutating live inventory or orders.</p>
+                        </article>
+                        <article class="as-insight-card">
+                            <span class="as-insight-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12h18M5 12l2-6h10l2 6m-14 0v5h2v-2h10v2h2v-5m-10-6 2 3m4-3-2 3"/></svg></span>
+                            <h3>Vehicle fitment</h3>
+                            <p>Verify automotive compatibility against trusted catalog and manufacturer data.</p>
                         </article>
                     </div>
                 </section>
@@ -202,7 +363,7 @@
                     </div>
                 </section>
 
-                <footer class="as-footer">AutoStock AI · Foundation release · Live stock from Odoo · Forecast integration pending</footer>
+                <footer class="as-footer">AutoStock AI · Evaluated demand forecast · Live inventory and company rules from Odoo</footer>
             </t>
         </main>
     </t>

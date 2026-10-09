@@ -14,7 +14,10 @@ services:
       timeout: 5s
       retries: 10
   odoo:
-    image: odoo:19.0
+    image: autostock-ai-odoo:19.0
+    build:
+      context: .
+      dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
       db:

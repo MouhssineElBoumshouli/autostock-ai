@@ -1,19 +1,28 @@
 {
     "name": "AutoStock AI — Inventory Intelligence",
     "author": "AutoStock AI",
-    "version": "19.0.0.1.0",
-    "summary": "Automotive inventory intelligence foundation for Odoo",
-    "description": """A secure inventory dashboard and automotive parts metadata.
+    "version": "19.0.0.1.1",
+    "summary": "Automotive inventory intelligence and evaluated demand forecasts",
+    "description": """A company-aware inventory dashboard and explainable demand forecasts.
 
-This foundation does not claim to have integrated AI predictions yet.
+Forecast jobs use gross completed customer deliveries as demand; linked returns
+are separately timestamped for audit and never revise an earlier demand value.
+Synthetic demonstrations remain isolated from Odoo sales and stock transactions.
 """,
     "category": "Inventory/Inventory",
     "license": "Other proprietary",
-    "depends": ["stock", "web"],
+    "depends": ["stock", "web", "sale_stock"],
+    "external_dependencies": {
+        "python": ["numpy>=1.26,<3", "scikit-learn>=1.5,<2"]
+    },
     "data": [
+        "security/ir.model.access.csv",
+        "security/forecast_rules.xml",
         "views/product_template_views.xml",
+        "views/forecast_configuration_views.xml",
         "views/dashboard_actions.xml",
         "views/menus.xml",
+        "data/forecast_cron.xml",
     ],
     "assets": {
         "web.assets_backend": [

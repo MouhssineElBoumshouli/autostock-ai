@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_autostock_forecast_run_user,autostock.forecast.run user,model_autostock_forecast_run,stock.group_stock_user,1,0,1,0
+access_autostock_forecast_run_manager,autostock.forecast.run manager,model_autostock_forecast_run,stock.group_stock_manager,1,1,1,0
+access_autostock_forecast_observation_user,autostock.forecast.observation user,model_autostock_forecast_observation,stock.group_stock_user,1,0,0,0
+access_autostock_forecast_point_user,autostock.forecast.point user,model_autostock_forecast_point,stock.group_stock_user,1,0,0,0
