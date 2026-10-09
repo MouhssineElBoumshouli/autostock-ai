@@ -23,6 +23,7 @@
 | JavaScript syntax | **Passed** for both browser QA scripts (`node --check`) |
 | Fresh Odoo 19 addon install with PostgreSQL 16 integration tests | **Passed**; 0 failures and 0 errors across 28 addon tests |
 | Docker Compose configuration | **Passed** (`docker compose config --quiet`) |
+| GitHub Actions, run 18 | **Passed**; Python and Odoo 19 integration jobs succeeded ([run](https://github.com/MouhssineElBoumshouli/autostock-ai/actions/runs/38005325268)) |
 | Synthetic offline 30-day forecast evaluation | **6/6 evaluated**; mean baseline MAE **1.90185**, selected-model MAE **2.24713** |
 | Actual Odoo browser QA: desktop 1440×1000, tablet 1024×900, mobile 390×844 | **Passed**; all 5 synthetic scenarios and filters verified; no page overflow |
 | Forecast-history date controls | **Passed**; rendered input widths 139 px desktop, 337 px tablet, 149 px mobile |
