@@ -1,7 +1,54 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="autostock_ai.Dashboard">
-        <main class="as-app">
+        <main class="as-app" t-on-keydown="onShellKeydown">
+            <button t-if="state.mobileView &amp;&amp; state.navOpen" class="as-nav-scrim" type="button" aria-label="Close AutoStock navigation" t-on-click="closeMobileNav"/>
+            <aside id="as-mobile-nav" t-ref="mobileNavDrawer" t-att-class="state.navOpen ? 'as-sidebar as-sidebar-open' : 'as-sidebar'" t-att-role="state.mobileView &amp;&amp; state.navOpen ? 'dialog' : 'complementary'" t-att-aria-modal="state.mobileView &amp;&amp; state.navOpen ? 'true' : 'false'" aria-label="AutoStock AI navigation" tabindex="-1">
+                <div class="as-sidebar-brand-row">
+                <a class="as-brand" href="/web" aria-label="AutoStock AI, return to Odoo home">
+                    <span class="as-brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 3 29 26H3L16 3Zm0 7-8 14h16L16 10Zm0 6 4 8h-8l4-8Z"/></svg></span>
+                    <span class="as-brand-copy"><strong>AutoStock <b>AI</b></strong><small>Inventory intelligence</small></span>
+                </a>
+                <button t-if="state.mobileView" type="button" class="as-mobile-close" aria-label="Close navigation" t-on-click="closeMobileNav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+                </div>
+                <div class="as-company-card" title="The active company is changed in Odoo's company menu above.">
+                    <img t-if="state.forecastOptions" class="as-company-logo" t-att-src="state.forecastOptions.company_logo_url" t-att-alt="state.forecastOptions.company_name + ' logo'"/>
+                    <span class="as-company-copy"><small>ACTIVE COMPANY</small><strong t-esc="state.forecastOptions ? state.forecastOptions.company_name : 'Loading company'"/></span>
+                </div>
+                <nav class="as-primary-nav" aria-label="Workspace">
+                    <span class="as-nav-label">WORKSPACE</span>
+                    <button type="button" t-att-class="state.activeSection === 'dashboard' ? 'as-nav-item is-active' : 'as-nav-item'" t-att-aria-current="state.activeSection === 'dashboard' ? 'page' : false" t-on-click="scrollToDashboard">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V10Z"/></svg><span>Dashboard</span>
+                    </button>
+                    <button type="button" class="as-nav-item" t-on-click="openProducts">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></svg><span>Inventory</span>
+                    </button>
+                    <button type="button" t-att-class="state.activeSection === 'forecast' ? 'as-nav-item is-active' : 'as-nav-item'" t-att-aria-current="state.activeSection === 'forecast' ? 'location' : false" t-on-click="scrollToForecast">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18 9 12l4 4 8-9M16 7h5v5"/></svg><span>Forecasts</span>
+                    </button>
+                </nav>
+                <div class="as-sidebar-footer">
+                    <span t-att-class="'as-sidebar-status is-' + state.connectionStatus" role="status" aria-live="polite">
+                        <i aria-hidden="true"/>
+                        <t t-if="state.connectionStatus === 'connected'">Connected to Odoo</t>
+                        <t t-elif="state.connectionStatus === 'connecting'">Connecting to Odoo</t>
+                        <t t-else="">Odoo connection unavailable</t>
+                    </span>
+                    <small>Stock records and company access stay in Odoo.</small>
+                </div>
+            </aside>
+            <div class="as-content-column">
+                <header class="as-appbar">
+                    <button t-if="state.mobileView" t-ref="mobileMenuButton" class="as-menu-toggle" type="button" aria-controls="as-mobile-nav" t-att-aria-expanded="state.navOpen ? 'true' : 'false'" aria-label="Open AutoStock navigation" t-on-click="toggleMobileNav">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+                    </button>
+                    <div class="as-appbar-context"><span>AutoStock AI</span><i aria-hidden="true">/</i><strong>Dashboard</strong></div>
+                    <div class="as-appbar-company" t-if="state.forecastOptions">
+                        <span class="as-company-caption">Company</span><strong t-esc="state.forecastOptions.company_name"/>
+                    </div>
+                </header>
+                <div class="as-page-scroll" t-ref="dashboardScroll">
+                    <div class="as-page-content">
             <header class="as-topline">
                 <div class="as-heading-group">
                     <div class="as-eyebrow">AUTOSTOCK AI <span aria-hidden="true">/</span> INVENTORY INTELLIGENCE</div>
@@ -89,28 +136,29 @@
                 </section>
 
                 <t t-if="!state.data.kpis.total">
-                    <section class="as-first-step" role="status">
-                        <div class="as-first-step-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM8 7V4h8v3m-8 5h8m-8 4h5"/></svg>
+                    <section class="as-onboarding" aria-labelledby="as-onboarding-title">
+                        <div class="as-onboarding-head">
+                            <span class="as-onboarding-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM8 7V4h8v3m-8 5h8m-8 4h5"/></svg></span>
+                            <div><span class="as-section-kicker">GETTING STARTED</span><h2 id="as-onboarding-title">Set up your first stock review</h2><p>Three short steps connect your parts catalog to a useful forecast.</p></div>
                         </div>
-                        <div class="as-first-step-copy">
-                            <span class="as-section-kicker">GETTING STARTED</span>
-                            <h2>No parts are being tracked yet</h2>
-                            <p>Open your product catalog and enable “Track in AutoStock AI” on the parts you want to review. Stock values will appear here after they are tracked.</p>
+                        <ol class="as-onboarding-steps">
+                            <li><span>1</span><div><strong>Choose the parts to track</strong><small>Start with active automotive items in your Odoo catalog.</small></div></li>
+                            <li><span>2</span><div><strong>Confirm history coverage</strong><small>Use completed customer deliveries and verify when the history is complete.</small></div></li>
+                            <li><span>3</span><div><strong>Review a forecast</strong><small>Compare the evidence and limitations before making a decision.</small></div></li>
+                        </ol>
+                        <div class="as-onboarding-actions">
+                            <button class="as-btn as-btn-primary" type="button" t-on-click="openProducts">Choose parts <svg class="as-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg></button>
+                            <button class="as-btn as-btn-secondary" type="button" t-on-click="scrollToForecast">Explore synthetic demo</button>
                         </div>
-                        <button class="as-btn as-btn-secondary" type="button" t-on-click="openProducts">
-                            Browse products
-                            <svg class="as-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg>
-                        </button>
                     </section>
                 </t>
 
                 <section class="as-panels" aria-label="Forecast and inventory health">
-                    <article class="as-card as-forecast-panel">
+                    <article class="as-card as-forecast-panel" data-as-section="forecast" t-ref="chartFrame">
                         <div class="as-panel-head">
                             <div>
                                 <span class="as-section-kicker">EVALUATED DEMAND</span>
-                                <h2>Daily fulfilled sales forecast</h2>
+                                <h2 tabindex="-1">Daily fulfilled sales forecast</h2>
                                 <p>Chronological evaluation compares a trained model with transparent baselines.</p>
                             </div>
                             <span class="as-pill as-pill-planned" t-esc="forecastStateLabel"/>
@@ -129,7 +177,7 @@
                                 <select t-if="state.filters.sourceType === 'synthetic_demo'" t-model="state.filters.sku" t-on-change="loadForecastSnapshot" t-att-disabled="state.forecastBusy">
                                     <option t-foreach="state.forecastOptions.demo_skus" t-as="sample" t-key="sample.sku" t-att-value="sample.sku" t-esc="sample.name"/>
                                 </select>
-                                <select t-else="" t-model="state.filters.productId" t-on-change="changeProduct" t-att-disabled="state.forecastBusy || !state.forecastOptions.products.length">
+                                <select t-else="" t-key="'odoo-products-' + state.forecastOptions.company_id" t-model="state.filters.productId" t-on-change="changeProduct" t-att-disabled="state.forecastBusy || !state.forecastOptions.products.length">
                                     <option value="">Choose a tracked part</option>
                                     <option t-foreach="state.forecastOptions.products" t-as="product" t-key="product.id" t-att-value="product.id" t-esc="product.sku + ' · ' + product.name"/>
                                 </select>
@@ -202,22 +250,30 @@
                                 <span t-if="state.forecast.source_type === 'synthetic_demo'" class="as-pill as-pill-demo">SYNTHETIC DATA</span>
                                 <span t-else="" class="as-pill as-pill-real">ODOO HISTORY</span>
                             </div>
+                            <div class="as-chart-controls">
+                                <span>History shown</span>
+                                <div class="as-chart-range" role="group" aria-label="History displayed in chart">
+                                    <button type="button" data-days="30" t-att-class="state.chartWindowDays === 30 ? 'is-selected' : ''" t-att-aria-pressed="state.chartWindowDays === 30 ? 'true' : 'false'" t-on-click="changeChartWindow">30 days</button>
+                                    <button type="button" data-days="90" t-att-class="state.chartWindowDays === 90 ? 'is-selected' : ''" t-att-aria-pressed="state.chartWindowDays === 90 ? 'true' : 'false'" t-on-click="changeChartWindow">90 days</button>
+                                    <button type="button" data-days="full" t-att-class="state.chartWindowDays === 'full' ? 'is-selected' : ''" t-att-aria-pressed="state.chartWindowDays === 'full' ? 'true' : 'false'" t-on-click="changeChartWindow">Full</button>
+                                </div>
+                                <span class="as-chart-window-label"><t t-esc="forecastChart.visibleHistoryDays"/> of <t t-esc="forecastChart.totalHistoryDays"/> days</span>
+                            </div>
                             <figure class="as-forecast-figure" aria-labelledby="as-forecast-chart-title">
-                                <svg class="as-forecast-chart" viewBox="0 0 800 220" role="img" t-att-aria-label="'Daily delivered units and evaluated forecast for ' + state.forecast.sku">
+                                <svg class="as-forecast-chart" t-att-viewBox="forecastChart.viewBox" role="img" t-att-aria-label="forecastChart.accessibleLabel">
                                     <title id="as-forecast-chart-title">Historical fulfilled sales and forecast</title>
-                                    <desc>Historical daily delivered units followed by the selected baseline or model forecast. The shaded range is heuristic and not a confidence interval.</desc>
-                                    <line x1="44" y1="20" x2="44" y2="178" class="as-chart-axis"/>
-                                    <line x1="44" y1="178" x2="780" y2="178" class="as-chart-axis"/>
-                                    <line x1="44" y1="99" x2="780" y2="99" class="as-chart-gridline"/>
-                                    <text x="8" y="25" class="as-chart-label" t-esc="forecastChart.max"/>
-                                    <text x="12" y="180" class="as-chart-label">0</text>
+                                    <desc>Daily delivered units followed by the selected baseline or model forecast. The vertical dashed line marks the history cutoff. The shaded range is heuristic, not a confidence interval. The full daily series remains available in the data table.</desc>
+                                    <line t-att-x1="forecastChart.left" y1="20" t-att-x2="forecastChart.left" y2="174" class="as-chart-axis"/>
+                                    <line t-att-x1="forecastChart.left" y1="174" t-att-x2="forecastChart.right" y2="174" class="as-chart-axis"/>
+                                    <g t-foreach="forecastChart.valueTicks" t-as="tick" t-key="'value-' + tick.label">
+                                        <line t-att-x1="forecastChart.left" t-att-y1="tick.y" t-att-x2="forecastChart.right" t-att-y2="tick.y" class="as-chart-gridline"/>
+                                        <text x="48" t-att-y="tick.labelY" text-anchor="end" class="as-chart-label" t-esc="tick.label"/>
+                                    </g>
                                     <path t-att-d="forecastChart.forecastBand" class="as-chart-band"/>
                                     <path t-att-d="forecastChart.historyPath" class="as-chart-history"/>
                                     <path t-att-d="forecastChart.forecastPath" class="as-chart-prediction"/>
-                                    <line x1="780" y1="20" x2="780" y2="178" class="as-chart-edge"/>
-                                    <text x="44" y="205" class="as-chart-date" t-esc="forecastChart.firstDate"/>
-                                    <text t-att-x="forecastChart.cutoffX" y="205" text-anchor="middle" class="as-chart-date" t-esc="forecastChart.cutoffDate"/>
-                                    <text x="780" y="205" text-anchor="end" class="as-chart-date" t-esc="forecastChart.lastDate"/>
+                                    <line t-att-x1="forecastChart.cutoffX" y1="20" t-att-x2="forecastChart.cutoffX" y2="174" class="as-chart-edge"/>
+                                    <text t-foreach="forecastChart.dateTicks" t-as="tick" t-key="'date-' + tick.date" t-att-x="tick.x" y="202" text-anchor="middle" class="as-chart-date"><title t-esc="tick.date"/><t t-esc="tick.label"/></text>
                                 </svg>
                                 <figcaption class="as-chart-legend">
                                     <span><i class="as-legend-line as-legend-history" aria-hidden="true"/>Historical delivered units</span>
@@ -292,45 +348,28 @@
                         <div class="as-panel-head">
                             <div><span class="as-section-kicker">CURRENT STOCK</span><h2>Inventory health</h2><p>Classified from Odoo on-hand quantity.</p></div>
                         </div>
-                        <div class="as-health-summary" t-att-style="healthStyle" role="img" t-att-aria-label="'Above safety stock: ' + state.data.kpis.healthy + ', low stock: ' + state.data.kpis.low + ', out of stock: ' + state.data.kpis.out">
-                            <div class="as-health-center">
-                                <strong><t t-esc="state.data.kpis.total"/></strong>
-                                <small>Tracked SKUs</small>
+                        <t t-if="state.data.kpis.total">
+                            <div class="as-health-summary" t-att-style="healthStyle" role="img" t-att-aria-label="'Above safety stock: ' + state.data.kpis.healthy + ', low stock: ' + state.data.kpis.low + ', out of stock: ' + state.data.kpis.out">
+                                <div class="as-health-center"><strong><t t-esc="state.data.kpis.total"/></strong><small>Tracked SKUs</small></div>
                             </div>
-                        </div>
-                        <div class="as-health-lines" aria-label="Stock status counts">
-                            <div><span><i class="as-dot as-dot-green" aria-hidden="true"/> Above safety stock</span><strong t-esc="state.data.kpis.healthy"/></div>
-                            <div><span><i class="as-dot as-dot-amber" aria-hidden="true"/> Low stock</span><strong t-esc="state.data.kpis.low"/></div>
-                            <div><span><i class="as-dot as-dot-red" aria-hidden="true"/> Out of stock</span><strong t-esc="state.data.kpis.out"/></div>
-                        </div>
+                            <div class="as-health-lines" aria-label="Stock status counts">
+                                <div><span><i class="as-dot as-dot-green" aria-hidden="true"/> Above safety stock</span><strong t-esc="state.data.kpis.healthy"/></div>
+                                <div><span><i class="as-dot as-dot-amber" aria-hidden="true"/> Low stock</span><strong t-esc="state.data.kpis.low"/></div>
+                                <div><span><i class="as-dot as-dot-red" aria-hidden="true"/> Out of stock</span><strong t-esc="state.data.kpis.out"/></div>
+                            </div>
+                        </t>
+                        <t t-else="">
+                            <div class="as-health-empty" role="status">
+                                <span class="as-health-empty-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM8 7V4h8v3m-8 5h8"/></svg></span>
+                                <h3>Inventory health starts with tracked parts</h3>
+                                <p>When parts are enabled, this panel will classify live Odoo on-hand stock against each manual safety-stock threshold.</p>
+                                <button type="button" class="as-link" t-on-click="openProducts">Browse the product catalog</button>
+                            </div>
+                        </t>
                     </article>
                 </section>
 
-                <section class="as-card as-insights" aria-labelledby="as-planned-title">
-                    <div class="as-panel-head">
-                        <div><span class="as-section-kicker">FUTURE STAGES</span><h2 id="as-planned-title">Other decision tools</h2><p>Forecast review is available above; these workflows remain planned.</p></div>
-                        <span class="as-pill as-pill-planned">In development</span>
-                    </div>
-                    <div class="as-insight-grid">
-                        <article class="as-insight-card">
-                            <span class="as-insight-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM8 7V4h8v3m-8 5h8m-8 4h5"/></svg></span>
-                            <h3>Replenishment review</h3>
-                            <p>Human-reviewed proposals based on evaluated demand and confirmed Odoo stock.</p>
-                        </article>
-                        <article class="as-insight-card">
-                            <span class="as-insight-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v18m9-9H3m15.4-6.4L5.6 18.4m12.8 0L5.6 5.6"/></svg></span>
-                            <h3>Scenario analysis</h3>
-                            <p>Explore demand and supplier changes without mutating live inventory or orders.</p>
-                        </article>
-                        <article class="as-insight-card">
-                            <span class="as-insight-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12h18M5 12l2-6h10l2 6m-14 0v5h2v-2h10v2h2v-5m-10-6 2 3m4-3-2 3"/></svg></span>
-                            <h3>Vehicle fitment</h3>
-                            <p>Verify automotive compatibility against trusted catalog and manufacturer data.</p>
-                        </article>
-                    </div>
-                </section>
-
-                <section class="as-card as-table-panel" aria-labelledby="as-inventory-title">
+                <section class="as-card as-table-panel" data-as-section="inventory" aria-labelledby="as-inventory-title">
                     <div class="as-panel-head">
                         <div><span class="as-section-kicker">LIVE ODOO DATA</span><h2 id="as-inventory-title">Automotive inventory</h2><p>On-hand and projected quantities come from Odoo; projected stock is not an AI forecast.</p></div>
                         <button type="button" class="as-link" t-on-click="openProducts">
@@ -365,6 +404,9 @@
 
                 <footer class="as-footer">AutoStock AI · Evaluated demand forecast · Live inventory and company rules from Odoo</footer>
             </t>
+                    </div>
+                </div>
+            </div>
         </main>
     </t>
 </templates>

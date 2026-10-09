@@ -378,7 +378,9 @@ class AutoStockForecastRun(models.Model):
             [("company_id", "=", company.id)], order="name, id", limit=100
         )
         return {
+            "company_id": company.id,
             "company_name": company.display_name,
+            "company_logo_url": f"/web/image/res.company/{company.id}/logo_web",
             "today_utc": fields.Date.today().isoformat(),
             "coverage_start": company.autostock_history_complete_from.isoformat()
             if company.autostock_history_complete_from
