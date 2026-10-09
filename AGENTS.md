@@ -7,6 +7,7 @@
 - Do not invent inventory values, forecast accuracy, pricing, supplier records, or business claims.
 - Do not bypass Odoo ACLs/record rules, use sudo to fetch business data, or allow LLM-generated purchasing actions.
 - Never merge, deploy or send company data outside the local environment without user approval.
+- Treat [commercial readiness issue #7](https://github.com/MouhssineElBoumshouli/autostock-ai/issues/7) and [premium UX issue #8](https://github.com/MouhssineElBoumshouli/autostock-ai/issues/8) as cross-phase requirements. Keep each PR scoped, state which gates it satisfies and which remain open, and do not call the product production-ready until the full release evidence is complete.
 - Keep the screenshot as a **design reference**, not a screenshot of running software.
 - Work in small feature branches and open draft PRs for review.
 - Always document actual checks completed and distinguish static/unit checks from live Odoo install and browser tests.

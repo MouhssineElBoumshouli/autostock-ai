@@ -4,7 +4,7 @@
         <main class="as-app">
             <header class="as-topline">
                 <div class="as-heading-group">
-                    <div class="as-eyebrow">BOUNAIM AUTO <span aria-hidden="true">/</span> INVENTORY INTELLIGENCE</div>
+                    <div class="as-eyebrow">AUTOSTOCK AI <span aria-hidden="true">/</span> INVENTORY INTELLIGENCE</div>
                     <h1 class="as-title">Dashboard</h1>
                     <p class="as-subtitle">A clear, current view of your automotive inventory.</p>
                 </div>
@@ -168,7 +168,7 @@
                         </form>
 
                         <div t-if="state.filters.sourceType === 'synthetic_demo'" class="as-forecast-notice as-notice-demo" role="note">
-                            Synthetic sample only. This deterministic demo does not read Odoo transactions, stock, suppliers, or Bounaim Auto data.
+                            Synthetic sample only. This deterministic demo does not read Odoo transactions, stock, supplier records, or customer data.
                         </div>
                         <div t-elif="!state.forecastOptions.can_forecast_real" class="as-forecast-notice" role="note">
                             Odoo delivery forecasts require both Inventory and Sales access. Synthetic demos remain available with Inventory access.
@@ -232,8 +232,12 @@
                                 <div><span>Baseline MAE</span><strong><t t-esc="state.forecast.baseline_mae"/> <t t-esc="state.forecast.uom"/></strong></div>
                                 <div t-if="state.forecast.ml_evaluated"><span>Random forest MAE</span><strong><t t-esc="state.forecast.ml_mae"/> <t t-esc="state.forecast.uom"/></strong></div>
                                 <div><span>Demand pattern</span><strong t-esc="state.forecast.demand_pattern"/></div>
-                                <div><span>Evaluation</span><strong t-esc="state.forecast.evaluation_status"/></div>
+                                <div><span>Measured holdout</span><strong><t t-esc="state.forecast.evaluation_days"/> / <t t-esc="state.forecast.horizon_days"/> days</strong></div>
+                                <div><span>Evaluation status</span><strong t-esc="state.forecast.evaluation_status"/></div>
                             </div>
+                            <p t-if="state.forecast.evaluation_days &lt; state.forecast.horizon_days" class="as-interval-note" role="note">
+                                This forecast extends beyond the measured holdout by <t t-esc="state.forecast.horizon_days - state.forecast.evaluation_days"/> days; those days have no holdout evidence.
+                            </p>
                             <p class="as-interval-note" t-esc="state.forecast.interval_note"/>
 
                             <details class="as-forecast-details">
@@ -247,8 +251,8 @@
                                 </dl>
                                 <div class="as-table-scroll as-forecast-table-scroll" role="region" aria-label="Historical and forecast daily values" tabindex="0">
                                     <table class="as-table as-forecast-table">
-                                        <caption class="as-visually-hidden">Daily historical delivered units and future forecast values in the product unit.</caption>
-                                        <thead><tr><th scope="col">UTC date</th><th scope="col">Series</th><th scope="col">Delivered / forecast</th><th scope="col">Returned</th><th scope="col">Heuristic range</th></tr></thead>
+                                        <caption class="as-visually-hidden">Daily historical completed delivery units and future forecast values in the product unit. Returns are separate audit events.</caption>
+                                        <thead><tr><th scope="col">UTC date</th><th scope="col">Series</th><th scope="col">Delivered / forecast</th><th scope="col">Returns, separate</th><th scope="col">Heuristic range</th></tr></thead>
                                         <tbody>
                                             <tr t-foreach="state.forecast.observations" t-as="point" t-key="'actual-' + point.day">
                                                 <td t-esc="point.day"/><td>Actual</td><td t-esc="point.units"/><td t-esc="point.returned_units"/><td>—</td>

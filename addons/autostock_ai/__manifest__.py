@@ -1,12 +1,13 @@
 {
     "name": "AutoStock AI — Inventory Intelligence",
     "author": "AutoStock AI",
-    "version": "19.0.0.1.0",
+    "version": "19.0.0.1.1",
     "summary": "Automotive inventory intelligence and evaluated demand forecasts",
     "description": """A company-aware inventory dashboard and explainable demand forecasts.
 
-Forecast jobs use completed customer deliveries and linked returns. Synthetic
-demonstrations remain isolated from Odoo sales and stock transactions.
+Forecast jobs use gross completed customer deliveries as demand; linked returns
+are separately timestamped for audit and never revise an earlier demand value.
+Synthetic demonstrations remain isolated from Odoo sales and stock transactions.
 """,
     "category": "Inventory/Inventory",
     "license": "Other proprietary",

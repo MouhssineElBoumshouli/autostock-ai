@@ -47,6 +47,34 @@ def test_supported_horizons_return_the_requested_number_of_days():
         result = forecast_daily(data, horizon=horizon)
         assert result.status == "evaluated"
         assert len(result.predictions) == horizon
+        assert result.evaluation_days == horizon
+        assert f"{horizon}-day chronological holdout" in result.interval_note
+        assert "not an independent accuracy estimate" in result.interval_note
+
+
+@pytest.mark.parametrize("horizon", [7, 30, 60])
+def test_horizon_aligned_evaluation_handles_intermittent_demand(horizon):
+    rows = [
+        Observation(date(2026, 1, 1) + timedelta(days=i), 6.0 if i % 14 == 0 else 0.0)
+        for i in range(90)
+    ]
+
+    result = forecast_daily(rows, horizon=horizon)
+
+    assert result.status == "intermittent_baseline"
+    assert result.demand_pattern == "intermittent"
+    assert result.evaluation_days == horizon
+    assert result.ml_mae is None
+    assert len(result.predictions) == horizon
+
+
+def test_sixty_day_holdout_with_minimum_history_reports_baseline_only():
+    result = forecast_daily(sample(days=90), horizon=60)
+
+    assert result.status == "baseline_only"
+    assert result.evaluation_days == 60
+    assert result.ml_mae is None
+    assert "random forest was skipped" in result.interval_note
 
 
 def test_zero_sales_is_not_invented_into_positive_demand():

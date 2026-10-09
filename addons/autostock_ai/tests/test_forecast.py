@@ -5,6 +5,7 @@ from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import Form
 from odoo.tests.common import TransactionCase
 
+from ml.forecast import Observation, forecast_daily
 from odoo.addons.autostock_ai.models.forecast import REAL_SOURCE
 
 
@@ -118,15 +119,20 @@ class TestAutoStockForecast(TransactionCase):
             }
         )
 
-    def test_completed_delivery_and_linked_return_are_netted_in_inventory_uom(self):
+    def test_return_is_bounded_by_history_and_kept_on_its_actual_day(self):
         company = self.env.company
         warehouse = self._warehouse(company)
-        warehouse.write({"autostock_history_complete_from": self.today})
+        delivery_day = self.today - timedelta(days=4)
+        return_day = delivery_day + timedelta(days=2)
+        warehouse.write({"autostock_history_complete_from": delivery_day})
         product = self._product(company, "AS-DOZEN-RETURN", self.unit)
         order, delivery = self._sale_order(
             company, warehouse, product, quantity=2, uom=self.dozen, state="done"
         )
         self.assertEqual(delivery.state, "done")
+        delivery.move_ids.write(
+            {"date": fields.Datetime.to_string(datetime.combine(delivery_day, time(10)))}
+        )
 
         return_form = Form(
             self.env["stock.return.picking"].with_context(
@@ -146,23 +152,54 @@ class TestAutoStockForecast(TransactionCase):
         return_validation = return_picking.button_validate()
         if isinstance(return_validation, dict):
             Form.from_action(self.env, return_validation).save().process()
+        return_picking.move_ids.write(
+            {"date": fields.Datetime.to_string(datetime.combine(return_day, time(10)))}
+        )
 
         # A quotation and an undelivered confirmed order have no completed demand.
         self._sale_order(company, warehouse, product, quantity=1, state="quote")
         self._sale_order(company, warehouse, product, quantity=1, state="confirmed")
         self._sale_order(company, warehouse, product, quantity=1, state="cancel")
 
-        run = self._source_run(company, product, warehouse=warehouse)
-        snapshot, event_count = run._completed_sales_snapshot()
-        observed_day = fields.Datetime.to_datetime(delivery.move_ids.date).date()
-        row = next(item for item in snapshot if item["day"] == observed_day)
+        delivery_only_run = self._source_run(
+            company, product, warehouse=warehouse, start=delivery_day, end=delivery_day
+        )
+        delivery_only, delivery_events = delivery_only_run._completed_sales_snapshot()
+        self.assertEqual(delivery_events, 1)
+        self.assertEqual(len(delivery_only), 1)
+        self.assertEqual(delivery_only[0]["delivered_units"], 24.0)
+        self.assertEqual(delivery_only[0]["returned_units"], 0.0)
+        self.assertEqual(delivery_only[0]["units"], 24.0)
+        self.assertEqual(delivery_only[0]["source_event_count"], 1)
 
-        self.assertEqual(row["delivered_units"], 24.0)
-        self.assertEqual(row["returned_units"], 6.0)
-        self.assertEqual(row["units"], 18.0)
-        self.assertEqual(row["source_event_count"], 2)
-        self.assertEqual(event_count, 2)
-        self.assertEqual(len(snapshot), 1)
+        before_return_cutoff = datetime.combine(return_day, time.min)
+        cutoff_run = self._source_run(
+            company,
+            product,
+            warehouse=warehouse,
+            cutoff=before_return_cutoff,
+            start=delivery_day,
+            end=return_day,
+        )
+        cutoff_snapshot, cutoff_events = cutoff_run._completed_sales_snapshot()
+        self.assertEqual(cutoff_events, 1)
+        self.assertEqual(cutoff_snapshot[0]["units"], 24.0)
+        self.assertEqual(cutoff_snapshot[-1]["returned_units"], 0.0)
+
+        full_run = self._source_run(
+            company, product, warehouse=warehouse, start=delivery_day, end=return_day
+        )
+        full_snapshot, full_events = full_run._completed_sales_snapshot()
+        delivery_row = next(item for item in full_snapshot if item["day"] == delivery_day)
+        return_row = next(item for item in full_snapshot if item["day"] == return_day)
+        self.assertEqual(delivery_row["delivered_units"], 24.0)
+        self.assertEqual(delivery_row["returned_units"], 0.0)
+        self.assertEqual(delivery_row["units"], 24.0)
+        self.assertEqual(return_row["delivered_units"], 0.0)
+        self.assertEqual(return_row["returned_units"], 6.0)
+        self.assertEqual(return_row["units"], 0.0)
+        self.assertEqual(return_row["source_event_count"], 1)
+        self.assertEqual(full_events, 2)
         self.assertEqual(order.state, "sale")
 
     def test_real_forecast_worker_persists_evaluated_odoo_delivery_history(self):
@@ -179,6 +216,27 @@ class TestAutoStockForecast(TransactionCase):
                     datetime.combine(start + timedelta(days=15), time(10))
                 )
             }
+        )
+        return_day = self.today - timedelta(days=2)
+        return_form = Form(
+            self.env["stock.return.picking"].with_context(
+                active_ids=delivery.ids,
+                active_id=delivery.id,
+                active_model="stock.picking",
+            )
+        )
+        return_wizard = return_form.save()
+        return_wizard.product_return_moves.filtered(
+            lambda line: line.product_id == product
+        ).quantity = 1.0
+        return_result = return_wizard.action_create_returns()
+        return_picking = self.env["stock.picking"].browse(return_result["res_id"])
+        return_picking.move_ids.write({"quantity": 1.0, "picked": True})
+        return_validation = return_picking.button_validate()
+        if isinstance(return_validation, dict):
+            Form.from_action(self.env, return_validation).save().process()
+        return_picking.move_ids.write(
+            {"date": fields.Datetime.to_string(datetime.combine(return_day, time(10)))}
         )
 
         forecast_user = self.env["res.users"].create(
@@ -213,14 +271,57 @@ class TestAutoStockForecast(TransactionCase):
         run.invalidate_recordset()
         self.assertEqual(run.state, "completed", run.failure_reason)
         self.assertEqual(run.source_type, REAL_SOURCE)
-        self.assertEqual(run.source_event_count, 1)
+        self.assertEqual(run.source_event_count, 2)
         self.assertEqual(run.history_days, 120)
         self.assertEqual(len(run.observation_ids), 120)
         self.assertEqual(len(run.point_ids), 7)
         self.assertEqual(sum(run.observation_ids.mapped("units")), 4.0)
+        self.assertEqual(run.evaluation_days, 7)
         self.assertTrue(run.source_snapshot_sha256)
-        self.assertEqual(run.model_version, "autostock-demand-v2.0.0")
+        self.assertEqual(run.model_version, "autostock-demand-v2.1.0")
         self.assertEqual(run.review_status, "unreviewed")
+
+        delivered_day = start + timedelta(days=15)
+        delivered_row = run.observation_ids.filtered(lambda item: item.day == delivered_day)
+        returned_row = run.observation_ids.filtered(lambda item: item.day == return_day)
+        self.assertEqual(delivered_row.units, 4.0)
+        self.assertEqual(delivered_row.returned_units, 0.0)
+        self.assertEqual(returned_row.units, 0.0)
+        self.assertEqual(returned_row.returned_units, 1.0)
+
+        # This return falls inside the final seven-day evaluation window. A
+        # snapshot taken before it was completed must have identical demand
+        # targets and evaluation results: returns never revise past deliveries.
+        before_return = self._source_run(
+            company,
+            product,
+            cutoff=datetime.combine(return_day, time.min),
+            start=start,
+            end=self.today,
+        )
+        before_snapshot, before_events = before_return._completed_sales_snapshot()
+        after_snapshot = [
+            {
+                "day": item.day,
+                "units": item.units,
+            }
+            for item in run.observation_ids
+        ]
+        self.assertEqual(before_events, 1)
+        self.assertEqual(
+            [(row["day"], row["units"]) for row in before_snapshot],
+            [(row["day"], row["units"]) for row in after_snapshot],
+        )
+        before_evaluation = forecast_daily(
+            [Observation(row["day"], row["units"]) for row in before_snapshot], horizon=7
+        )
+        after_evaluation = forecast_daily(
+            [Observation(row["day"], row["units"]) for row in after_snapshot], horizon=7
+        )
+        self.assertEqual(before_evaluation.evaluation_days, 7)
+        self.assertEqual(before_evaluation.baseline_mae, after_evaluation.baseline_mae)
+        self.assertEqual(before_evaluation.ml_mae, after_evaluation.ml_mae)
+        self.assertEqual(before_evaluation.predictions, after_evaluation.predictions)
 
     def test_source_cutoff_excludes_moves_completed_after_cutoff(self):
         company = self.env.company
@@ -397,13 +498,13 @@ class TestAutoStockForecast(TransactionCase):
         self.assertEqual(run.state, "completed", run.failure_reason)
         self.assertEqual(run.source_event_count, 0)
         self.assertEqual(run.source_type, "synthetic_demo")
-        self.assertEqual(run.model_version, "autostock-demand-v2.0.0")
+        self.assertEqual(run.model_version, "autostock-demand-v2.1.0")
         self.assertTrue(run.source_snapshot_sha256)
         self.assertEqual(len(run.observation_ids), 210)
         self.assertEqual(len(run.point_ids), 7)
         self.assertTrue(run.baseline_method)
         self.assertIn("synthetic", run.data_provenance.lower())
-        self.assertIn("No Odoo sale", run.data_provenance)
+        self.assertIn("No customer or business transaction data", run.data_provenance)
         self.assertFalse(run.product_id)
 
         stock_run = self.env["autostock.forecast.run"].with_user(stock_user).browse(run.id)

@@ -2,84 +2,76 @@
 
 **Run date:** 2026-10-09
 **Branch:** `codex/phase2-demand-forecast`
-**Scope:** connect the evaluated forecasting pipeline to Odoo with auditable demand provenance, access control, bounded background work, and a responsive forecast view. No purchasing, stock mutation, or other decision-tool features were added.
+**Scope:** connect the evaluated forecasting pipeline to Odoo with auditable demand provenance, access control, bounded background work, and a responsive forecast view. This PR addresses linked-return leakage and horizon-aligned evaluation. It does not add purchasing, stock mutation, or other decision tools.
+
+The commercial-readiness charter ([issue #7](https://github.com/MouhssineElBoumshouli/autostock-ai/issues/7)) and premium UI/UX requirements ([issue #8](https://github.com/MouhssineElBoumshouli/autostock-ai/issues/8)) remain cross-phase standards. This PR adds explicit source/evaluation limitations, preserves Odoo company and access scopes, removes the hardcoded customer identity from the dashboard, and exercises the running responsive view. It does not satisfy the complete release gates and must not be described as production-ready.
 
 ## Automated checks
 
 | Check | Result | Evidence |
 |---|---|---|
-| Python tests | **17 passed** | `.\.venv\Scripts\python.exe -m pytest -q` |
+| Python tests | **21 passed** | `.\.venv\Scripts\python.exe -m pytest -q` |
 | Python compilation | **Passed** | `.\.venv\Scripts\python.exe -m compileall -q addons ml scripts tests` |
-| Odoo integration tests | **24 tests; 0 failures, 0 errors** | Fresh `autostock_phase2_ci` database; Odoo 19 (`19.0-20260926`) and PostgreSQL 16; addon installed with `--test-enable --test-tags=/autostock_ai --stop-after-init --without-demo=true`. The temporary Compose project, volumes, and generated database credentials were removed after the run. |
+| Odoo integration tests | **20 test cases; 0 failures, 0 errors** | Fresh isolated Odoo 19 (`19.0-20260926`) and PostgreSQL 16 Compose project; addon installed with `--test-enable --test-tags=/autostock_ai --stop-after-init --without-demo=true`. Odoo's `odoo.tests.stats` line reports 24 timing entries because it includes setUpClass/tearDownClass buckets for two test classes; `odoo.tests.result` reports the 20 actual test cases. |
 | Docker Compose configuration | **Passed** | `docker compose config --quiet` |
-| Git whitespace check | **Passed** | `git diff --check` (Git printed expected LF-to-CRLF working-copy notices only.) |
+| Git whitespace check | **Passed** | `git diff --check`; Git emitted only expected LF-to-CRLF working-copy notices. |
 | Synthetic forecast generation | **Passed** | `.\.venv\Scripts\python.exe scripts/generate_synthetic_sales.py` generated the ignored local fixture. |
-| Offline forecasting evaluation | **Completed for 6 synthetic SKUs** | A 28-day chronological holdout was evaluated for each 210-day fixture. Results below are synthetic-only measurements, not business accuracy claims. |
+| Offline forecasting evaluation | **Completed for 6 synthetic SKUs** | Each fixture contains 210 days; requested 30-day horizon was evaluated on a 30-day chronological holdout. Results below are synthetic pipeline measurements, not business-accuracy claims. |
+| GitHub Actions | **Configured for each PR update** | Separate Python and isolated Odoo 19/PostgreSQL 16 integration jobs; the latest result is shown in PR #6 checks. |
 
 ### Offline synthetic holdout results
 
-MAE is reported in each fixture's generated demand units. The single holdout is a pipeline check, not evidence of production model performance.
+MAE is reported in the fixture's generated demand units. Candidate selection and displayed MAE use the same single holdout, so these figures are comparison evidence, not an independent accuracy estimate.
 
-| SKU | Selected method | Baseline method | Baseline MAE | Random-forest MAE |
-|---|---|---|---:|---:|
-| `DEMO-AF-331` | `trailing_mean_7` | `trailing_mean_7` | 2.4434 | 2.5067 |
-| `DEMO-BP-001` | `seasonal_naive_7` | `seasonal_naive_7` | 3.3929 | 3.6367 |
-| `DEMO-BR-210` | `seasonal_naive_7` | `seasonal_naive_7` | 0.8929 | 1.2886 |
-| `DEMO-BT-912` | `random_forest` | `trailing_mean_7` | 1.0548 | 0.9529 |
-| `DEMO-OF-203` | `trailing_mean_7` | `trailing_mean_7` | 3.2985 | 3.6746 |
-| `DEMO-SP-104` | `trailing_mean_7` | `trailing_mean_7` | 1.5135 | 1.7308 |
+| SKU | Selected method | Baseline MAE | Random-forest MAE |
+|---|---|---:|---:|
+| `DEMO-AF-331` | `trailing_mean_7` | 2.4525 | 2.4138 |
+| `DEMO-BP-001` | `seasonal_naive_7` | 2.8667 | 3.7252 |
+| `DEMO-BR-210` | `trailing_mean_7` | 1.2003 | 1.2334 |
+| `DEMO-BT-912` | `trailing_mean_7` | 0.8668 | 0.8709 |
+| `DEMO-OF-203` | `trailing_mean_7` | 2.7084 | 3.5677 |
+| `DEMO-SP-104` | `trailing_mean_7` | 1.3164 | 1.6718 |
 
-The simple macro averages are 2.0993 baseline MAE and 2.2984 random-forest MAE. Five fixtures selected their listed baseline; one selected the random forest. The forecast range remains heuristic, not a calibrated confidence interval.
+Macro mean MAE was 1.90185 for the selected baselines and 2.24713 for the random forest; all six fixtures selected a baseline. This deterministic sample does not establish performance on business data. The forecast band is heuristic, not a calibrated confidence interval.
 
-## Odoo data and permission checks
+## Odoo source and return-data checks
 
-The Odoo integration suite exercises actual Odoo records and stock workflows:
+The tests use real Odoo stock moves, return pickings, users, companies, and forecast records:
 
-- A completed customer delivery is counted; a linked completed return is netted against its delivery day. The test changes the sale UoM and verifies conversion into the product inventory UoM.
-- A stock-and-sales user requests a real seven-day forecast from 120 days of Odoo history. The worker processes its completed delivery, stores the daily source snapshot and digest, and persists seven forecast points.
-- Quotations, confirmed-but-unshipped orders, canceled orders, and moves completed after the run cutoff are excluded.
-- Requests require the expected inventory and sales permissions. Insufficient covered history persists an explicit state without predictions, and direct forecast-run creation cannot bypass the validated request path.
-- Two companies have separate products and stock histories plus a shared product. A user enabled for both receives the right company-specific demand and the shared product's company-specific delivery total; each company's forecast choices contain only its own product and the shared product. A user restricted to Company B cannot see Company A forecast runs. Standard Odoo ACLs and record rules remain enabled.
-- Synthetic work persists observations, forecast points, model/baseline metrics, and labeled provenance without creating Odoo sales or stock events.
-- A regular stock user cannot mark a run reviewed. An inventory manager can mark a completed run reviewed, and the reviewer and timestamp are stored.
+- Demand is gross completed customer delivery quantity in the product inventory UoM. Completed returns linked to deliveries in the selected history are separate audit events on their actual UTC completion day; they never subtract from or rewrite an earlier delivery and never become negative forecast demand.
+- Return moves outside the requested history window or after the source cutoff are excluded. A worker integration test places a linked return in the final seven-day holdout and compares the forecast snapshot from before and after that return. Gross delivery targets, baseline/model MAE, and predictions remain identical.
+- A completed return in the requested window is recorded on its own day; unit-of-measure conversion is exercised against real Odoo return moves.
+- The series remains a fulfilled-sales proxy, not unconstrained demand. Odoo does not record lost demand during stockouts, and this workflow has no complete as-of history of later edits to stock moves. We do not claim point-in-time replay or leakage-free backtests for arbitrary later source-record edits.
+- Quotations, confirmed-but-unshipped orders, canceled orders, and moves completed after the source cutoff are excluded.
+- Company-specific products, shared products, and users with company and stock/sales access are tested. ORM reads stay scoped to the selected company/optional warehouse and standard Odoo ACLs and record rules remain active.
+- Insufficient source coverage produces an explicit state without predictions. Direct run creation cannot bypass the validated request path. Synthetic forecasts retain labeled provenance and do not write sales or inventory events.
 
-The scheduled worker handles at most two queued runs in one invocation. Forecast requests queue work; they do not train the model in the interactive RPC. Real source reads use Odoo's ORM and remain scoped to the selected company and optional warehouse.
+The scheduled worker handles at most two queued runs per invocation. Forecast requests queue work; they do not train the model in the interactive RPC.
 
-## Browser and visual checks
+## Forecast evaluation
 
-Tested the running Odoo 19 addon in the local demo database at `http://127.0.0.1:8175`:
+The offline suite and Odoo integration suite cover 7-, 30-, and 60-day horizons, including sparse demand. Evaluation holdout length now matches the requested horizon. With the minimum 90-day history and a 60-day horizon, only 30 pre-holdout days remain; the random forest is skipped when its training examples are insufficient, and the baseline evaluation remains horizon-aligned. The UI explains that the same holdout selects the method and supplies MAE.
 
-- Desktop viewport: **1440×1000**. The evaluated synthetic forecast displayed its 210 daily observations, 30-day seasonal-naive forecast, baseline/model MAE, heuristic range label, and provenance/limitations. Inventory health remained separately labeled as current Odoo stock. The empty product catalog showed the intended getting-started state.
-- Mobile viewport: **390×844**. Forecast controls stack vertically, the chart and evaluation cards remain readable, and page width remains 390px with no horizontal page overflow. The `.as-app` container scrolls vertically so the forecast and inventory sections remain reachable.
-- The completed-delivery source showed the no-tracked-products / history-coverage setup state; its evaluate action remained disabled until a valid product and covered history are configured.
-- Browser console error logs were empty on the checked desktop and mobile dashboard tabs after the installed asset reload.
+## Installed Odoo and browser checks
 
-Desktop and mobile screenshots were captured during the browser review and shown in the task session. They could not be exported from the browser tool into repository files, so **this PR contains no Phase 2 screenshot image attachments**. This is a known evidence gap; the viewports, displayed state, and browser error checks are recorded above.
+Tested the upgraded addon in the local Odoo 19 demo database at `http://127.0.0.1:8175` (PostgreSQL 16):
 
-## Synthetic demo cleanup
+- The completed synthetic run displayed SKU `DEMO-BP-001`, 210 observations, a 30-day outlook, `Measured holdout 30 / 30 days`, baseline and random-forest comparison, and the explicit same-holdout limitation. Current inventory is clearly separated from the synthetic forecast.
+- The demo database has zero tracked products. The dashboard displays its getting-started empty state and zero stock totals instead of fabricated inventory values. Selecting “Completed Odoo deliveries” with no tracked product leaves evaluation disabled and explains that a complete-history start date must be configured.
+- The page was visually inspected against `design/dashboard-concept.png`. It carries the reference's lavender surfaces, purple accent, cards, and forecast/stock-health composition; the Odoo navigation and intentionally smaller Phase 2 workflow remain. Full concept parity and visual sign-off are still open work.
+- Desktop viewport **1920×901**, tablet **768×1024**, and mobile **390×844** were checked. All three had no horizontal page overflow; tablet and mobile stack the KPI/forecast controls for their available width.
+- Browser console error logs were empty after the checks.
 
-Synthetic demo runs are stored as `autostock.forecast.run` records with `source_type="synthetic_demo"`; their observations and forecast points cascade with the run. The demo has no `product_id` and does not read or write sale orders, stock moves, stock quants, or supplier records.
+Screenshots were visible during the browser review but the available browser capture did not export persistent files into this repository. Therefore this PR still contains **no screenshot attachments**, and the screenshot-based review required by issue #8 is pending. To add reviewable evidence on Windows:
 
-To remove only synthetic forecast runs from a local development database, open the Odoo shell for that database (replace the example database name when needed):
-
-```powershell
-docker compose exec odoo odoo shell -d autostock_phase2_demo --no-http
-```
-
-Then inspect the matching count and delete that exact domain:
-
-```python
-runs = env["autostock.forecast.run"].search([("source_type", "=", "synthetic_demo")])
-len(runs)  # inspect the count first
-runs.unlink()
-```
-
-This removes synthetic forecast runs and their dependent forecast observations and points. It does not match real `completed_deliveries` runs or alter native Odoo sales/inventory records.
+1. Open `http://127.0.0.1:8175/odoo/action-454` and confirm the synthetic sample, `BP 001`, 30-day horizon, and `Measured holdout 30 / 30 days`.
+2. Capture the dashboard at desktop **1440×1000**, tablet **768×1024**, and mobile **390×844**. For responsive sizes, use Chrome DevTools device toolbar with **Ctrl+Shift+M** and enter the dimensions.
+3. Use **Win+Shift+S** and save JPEGs as `docs/qa/screenshots/phase2-forecast-desktop.jpg`, `phase2-forecast-tablet.jpg`, and `phase2-forecast-mobile.jpg`. Add them to the PR and retain screenshot-based design review as pending until they are attached.
 
 ## Remaining limits and next steps
 
-- Real forecasts are based on fulfilled sales. Odoo does not currently supply lost demand during stockouts, so these totals may understate demand. The configured history start is an administrator assertion of coverage.
-- The single chronological holdout and deterministic synthetic fixtures are not a substitute for an approved business dataset, repeated backtesting, or interval calibration.
-- The heuristic range is not a confidence interval. Forecasts must not automatically create orders or change stock.
-- Phase 2 does not implement stockout recommendations, reorder proposals, budgets, reports, or the planned premium redesign.
-- Commit persistent screenshot files in a follow-up QA pass when screenshot export is available; review GitHub Actions results on the draft PR before merge.
+- Results use deterministic synthetic data, not an approved business dataset. Repeated rolling-origin backtesting, bias/seasonality review, interval calibration, and business evaluation are still required.
+- Odoo cannot reconstruct all historical record versions; the source snapshot is not a full as-of replay. Stockouts may also make fulfilled sales understate demand.
+- Branding configuration, onboarding beyond current empty states, broader accessibility review, installation/upgrade validation across supported configurations, performance under business-scale load, and backup/restore/operational gates remain open under issues #7 and #8.
+- The approved concept includes wider navigation and workflows that are intentionally outside this Phase 2 correction. Keep visual review open until the requested screenshots are attached and reviewed.
+- Forecasts must not automatically trigger purchasing or change stock. Do not claim the product is production-ready until all commercial release gates have evidence.

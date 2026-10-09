@@ -1,5 +1,9 @@
 # Feature branch plan
 
+## Cross-phase quality requirements
+
+The [commercial-readiness charter](https://github.com/MouhssineElBoumshouli/autostock-ai/issues/7) and [premium UX acceptance criteria](https://github.com/MouhssineElBoumshouli/autostock-ai/issues/8) apply throughout all phases. They define release gates for correctness, security, operations, maintainability, usability, accessibility, and visual evidence. Phase completion does not imply commercial readiness; release status requires the full documented evidence described in issue #7.
+
 | Stage | Scope | Test gate | Status |
 |---|---|---|---|
 | P0 | Odoo addon scaffold, product fields, inventory dashboard, offline ML lab | Static parse and Python tests | Complete in PR #1 |

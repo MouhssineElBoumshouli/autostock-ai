@@ -10,9 +10,10 @@ from typing import Iterable
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 
-MODEL_VERSION = "autostock-demand-v2.0.0"
+MODEL_VERSION = "autostock-demand-v2.1.0"
 MIN_HISTORY = 90
 MIN_TRAIN_EXAMPLES = 30
+MIN_TRAINING_DAYS = 28
 MAX_HORIZON = 60
 INTERMITTENT_ADI_THRESHOLD = 1.32
 SEED = 42
@@ -180,7 +181,17 @@ def forecast_daily(observations: Iterable[Observation], horizon: int = 30) -> Fo
             predictions=[],
         )
 
-    evaluation_days = min(28, max(14, len(rows) // 5))
+    # Measure the selected forecast length on a chronological holdout of the
+    # same length. Keep enough history to build the lag features; when that
+    # leaves too few examples for ML, evaluate the transparent baselines only.
+    evaluation_days = min(horizon, max(0, len(rows) - MIN_TRAINING_DAYS))
+    if evaluation_days == 0:
+        return ForecastResult(
+            status="insufficient_history", selected_method=None, baseline_method=None,
+            demand_pattern="insufficient", history_days=len(rows), nonzero_days=nonzero_days,
+            evaluation_days=0, baseline_mae=None, ml_mae=None,
+            interval_note=no_intervals, predictions=[],
+        )
     training = rows[:-evaluation_days]
     actual = [row.units for row in rows[-evaluation_days:]]
     start = rows[-evaluation_days].day
@@ -242,14 +253,26 @@ def forecast_daily(observations: Iterable[Observation], horizon: int = 30) -> Fo
     if intermittent:
         status = "intermittent_baseline"
         interval_note = (
-            "Intermittent history: random forest training was skipped. The selected Croston or weekly baseline "
-            "is compared on one chronological holdout; the displayed error band is heuristic, not calibrated."
+            f"Intermittent history: random forest training was skipped. Baseline comparison uses a "
+            f"{evaluation_days}-day chronological holdout matching the requested horizon. The same single "
+            "holdout selects the method and supplies the reported MAE, so it is comparison evidence, not an "
+            "independent accuracy estimate. The displayed range is heuristic, not calibrated."
         )
     else:
         status = "evaluated" if ml_mae is not None else "baseline_only"
+        holdout_note = (
+            f"The baseline and model comparison uses a {evaluation_days}-day chronological holdout matching "
+            "the requested horizon. The same single holdout selects the method and supplies the reported MAE, "
+            "so it is comparison evidence, not an independent accuracy estimate."
+        )
+        model_note = (
+            " A random forest was evaluated."
+            if ml_mae is not None
+            else " A random forest was skipped because the pre-holdout training window did not contain enough examples."
+        )
         interval_note = (
-            "The error band uses the 90th percentile of absolute errors on one chronological holdout, "
-            "widened heuristically over the horizon. It is NOT a statistically calibrated confidence interval."
+            holdout_note + model_note + " The error band uses the 90th percentile of absolute holdout errors, "
+            "widened heuristically over the horizon; it is NOT a statistically calibrated confidence interval."
         )
     return ForecastResult(
         status=status, selected_method=selected_method, baseline_method=baseline_method,
