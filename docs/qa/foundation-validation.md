@@ -18,7 +18,7 @@
 | Python tests | **14 passed** | `.\.venv\Scripts\python.exe -m pytest -q` |
 | Python compile check | **Passed** | `.\.venv\Scripts\python.exe -m compileall -q addons ml scripts tests` |
 | Odoo addon tests | **11 passed, 0 failed, 0 errors** | Fresh `autostock_test` database with `--init=autostock_ai --test-enable --test-tags=/autostock_ai --stop-after-init --without-demo=true` |
-| Isolated Odoo CI command | **11 passed, 0 failed, 0 errors** | Replayed the workflow's isolated Docker Compose project with Odoo 19, PostgreSQL 16, a fresh `autostock_ci` database, and generated runtime-only credentials; Compose resources were removed afterward. The hosted GitHub Actions run for this follow-up commit is pending. |
+| Isolated Odoo CI job | **Passed locally and on GitHub** | Replayed the workflow's isolated Docker Compose project locally with Odoo 19, PostgreSQL 16, a fresh `autostock_ci` database, and generated runtime-only credentials; Compose resources were removed afterward. The [hosted GitHub Actions run](https://github.com/MouhssineElBoumshouli/autostock-ai/actions/runs/37866433621) passed both the Python and Odoo integration jobs. |
 | Docker Compose config | **Passed** | `docker compose config --quiet` |
 | Forecast evaluation | **Completed for 6 labeled synthetic SKUs** | The evaluator selected either its baseline or ML method per fixture. This is a pipeline smoke test; no accuracy result is claimed. |
 
