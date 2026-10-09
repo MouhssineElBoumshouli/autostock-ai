@@ -25,6 +25,7 @@ export class AutoStockDashboard extends Component {
         this.action = useService("action");
         this.destroyed = false;
         this.forecastSnapshotRequestId = 0;
+        this.riskRequestId = 0;
         this.mobileMenuButton = useRef("mobileMenuButton");
         this.mobileNavDrawer = useRef("mobileNavDrawer");
         this.dashboardScroll = useRef("dashboardScroll");
@@ -46,6 +47,16 @@ export class AutoStockDashboard extends Component {
             forecastBusy: false,
             forecastError: null,
             forecastNotice: null,
+            riskData: null,
+            riskLoading: false,
+            riskError: null,
+            riskSearch: "",
+            riskWarehouseId: "",
+            riskSupplierId: "",
+            riskStatusFilter: "all",
+            riskHistoryFrom: "",
+            riskHistoryTo: "",
+            riskSort: "risk",
             mobileView: this.mobileQuery.matches,
             navOpen: false,
             activeSection: "dashboard",
@@ -78,6 +89,7 @@ export class AutoStockDashboard extends Component {
             this.destroyed = true;
             this.mobileQuery.removeEventListener("change", this.handleMobileChange);
             this.chartResizeObserver?.disconnect();
+            window.clearTimeout(this.riskSearchTimer);
         });
     }
 
@@ -106,9 +118,16 @@ export class AutoStockDashboard extends Component {
                 this.state.filters.warehouseId = "";
                 this.state.filters.horizon = "30";
                 this.resetHistoryRange();
+                this.state.riskData = null;
+                this.state.riskWarehouseId = "";
+                this.state.riskSupplierId = "";
+                this.state.riskStatusFilter = "all";
+                this.state.riskHistoryFrom = "";
+                this.state.riskHistoryTo = "";
             }
             this.state.connectionStatus = "connected";
             await this.loadForecastSnapshot();
+            await this.loadRiskData();
         } catch (error) {
             this.state.connectionStatus = "unavailable";
             this.state.error = "Could not load inventory and forecast controls. Check your permissions and try again.";
@@ -116,6 +135,142 @@ export class AutoStockDashboard extends Component {
         } finally {
             this.state.loading = false;
         }
+    }
+
+    get activeSectionLabel() {
+        return {
+            dashboard: "Dashboard",
+            forecast: "Forecasts",
+            risks: "Stock risks",
+            inventory: "Inventory",
+        }[this.state.activeSection] || "Dashboard";
+    }
+
+    get riskRows() {
+        const data = this.state.riskData;
+        if (!data) {
+            return [];
+        }
+        let rows = data.rows || [];
+        if (this.state.riskStatusFilter === "recommendations") {
+            rows = rows.filter((row) => row.reorder_needed);
+        } else if (this.state.riskStatusFilter !== "all") {
+            rows = rows.filter((row) => row.risk === this.state.riskStatusFilter);
+        }
+        if (this.state.riskSupplierId) {
+            rows = rows.filter((row) => String(row.supplier?.id) === String(this.state.riskSupplierId));
+        }
+        const statusRank = { out: 0, shortage: 1, low: 2, overstock: 3, slow_moving: 4, healthy: 5, policy_missing: 6 };
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+        return [...rows].sort((left, right) => {
+            if (this.state.riskSort === "part") {
+                return collator.compare(left.name, right.name);
+            }
+            if (this.state.riskSort === "available") {
+                return left.free_qty - right.free_qty || collator.compare(left.name, right.name);
+            }
+            if (this.state.riskSort === "suggested") {
+                return right.recommended_qty - left.recommended_qty || collator.compare(left.name, right.name);
+            }
+            return (statusRank[left.risk] ?? 9) - (statusRank[right.risk] ?? 9)
+                || Number(right.reorder_needed) - Number(left.reorder_needed)
+                || collator.compare(left.name, right.name);
+        });
+    }
+
+    async loadRiskData() {
+        const options = this.state.forecastOptions;
+        if (!options) {
+            return;
+        }
+        const requestId = ++this.riskRequestId;
+        const companyId = String(options.company_id);
+        this.state.riskLoading = true;
+        this.state.riskError = null;
+        try {
+            const result = await this.orm.call(
+                "autostock.inventory.risk",
+                "get_risk_data",
+                [
+                    Number(this.state.riskWarehouseId) || false,
+                    this.state.riskSearch,
+                    false,
+                    "all",
+                    this.state.riskHistoryFrom || false,
+                    this.state.riskHistoryTo || false,
+                ]
+            );
+            if (
+                this.destroyed
+                || requestId !== this.riskRequestId
+                || String(this.state.forecastOptions?.company_id) !== companyId
+            ) {
+                return;
+            }
+            this.state.riskData = result;
+            if (
+                this.state.riskSupplierId
+                && !result.suppliers.some((supplier) => String(supplier.id) === String(this.state.riskSupplierId))
+            ) {
+                this.state.riskSupplierId = "";
+            }
+        } catch (error) {
+            if (this.destroyed || requestId !== this.riskRequestId) {
+                return;
+            }
+            this.state.riskError = "Stock-risk data is unavailable for the active company or your Odoo permissions.";
+            console.error("AutoStock stock-risk request failed", error);
+        } finally {
+            if (requestId === this.riskRequestId) {
+                this.state.riskLoading = false;
+            }
+        }
+    }
+
+    changeRiskSearch(event) {
+        this.state.riskSearch = event.currentTarget.value;
+        window.clearTimeout(this.riskSearchTimer);
+        this.riskSearchTimer = window.setTimeout(() => this.loadRiskData(), 250);
+    }
+
+    changeRiskWarehouse(event) {
+        this.state.riskWarehouseId = event.currentTarget.value;
+        return this.loadRiskData();
+    }
+
+    changeRiskDates(event) {
+        const key = event.currentTarget.dataset.key;
+        if (key === "from") {
+            this.state.riskHistoryFrom = event.currentTarget.value;
+        } else if (key === "to") {
+            this.state.riskHistoryTo = event.currentTarget.value;
+        }
+        return this.loadRiskData();
+    }
+
+    changeRiskSupplier(event) {
+        this.state.riskSupplierId = event.currentTarget.value;
+    }
+
+    changeRiskStatus(event) {
+        this.state.riskStatusFilter = event.currentTarget.value;
+    }
+
+    changeRiskSort(event) {
+        const key = event.currentTarget.dataset.sort;
+        if (["risk", "part", "available", "suggested"].includes(key)) {
+            this.state.riskSort = key;
+        }
+    }
+
+    clearRiskFilters() {
+        this.state.riskSearch = "";
+        this.state.riskSupplierId = "";
+        this.state.riskStatusFilter = "all";
+        this.state.riskHistoryFrom = "";
+        this.state.riskHistoryTo = "";
+        this.state.riskWarehouseId = "";
+        return this.loadRiskData();
     }
 
     get healthStyle() {
@@ -316,11 +471,45 @@ export class AutoStockDashboard extends Component {
         this.dashboardScroll?.el?.scrollTo({ top: 0, behavior });
     }
 
+    updateActiveSection() {
+        const scroll = this.dashboardScroll?.el;
+        if (!scroll?.isConnected) {
+            return;
+        }
+        if (scroll.scrollTop < 80) {
+            if (this.state.activeSection !== "dashboard") {
+                this.state.activeSection = "dashboard";
+            }
+            return;
+        }
+        const anchor = scroll.getBoundingClientRect().top + 96;
+        let active = "dashboard";
+        for (const section of scroll.querySelectorAll("[data-as-section]")) {
+            if (section.getBoundingClientRect().top <= anchor) {
+                active = section.dataset.asSection;
+            }
+        }
+        if (this.state.activeSection !== active) {
+            this.state.activeSection = active;
+        }
+    }
+
     scrollToForecast() {
         this.state.activeSection = "forecast";
         this.closeMobileNav();
         window.requestAnimationFrame(() => {
-            const heading = this.el?.querySelector("[data-as-section='forecast'] h2");
+            const heading = this.dashboardScroll?.el?.querySelector("[data-as-section='forecast'] h2");
+            const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+            heading?.scrollIntoView({ behavior, block: "start" });
+            heading?.focus({ preventScroll: true });
+        });
+    }
+
+    scrollToRisks() {
+        this.state.activeSection = "risks";
+        this.closeMobileNav();
+        window.requestAnimationFrame(() => {
+            const heading = this.dashboardScroll?.el?.querySelector("[data-as-section='risks'] .as-risk-title");
             const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
             heading?.scrollIntoView({ behavior, block: "start" });
             heading?.focus({ preventScroll: true });
@@ -488,6 +677,7 @@ export class AutoStockDashboard extends Component {
     }
 
     openProduct(event) {
+        this.state.activeSection = "inventory";
         const id = Number(event.currentTarget.dataset.productTemplateId);
         if (!Number.isInteger(id) || id <= 0) {
             return;

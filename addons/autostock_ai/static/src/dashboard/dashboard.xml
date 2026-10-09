@@ -26,6 +26,9 @@
                     <button type="button" t-att-class="state.activeSection === 'forecast' ? 'as-nav-item is-active' : 'as-nav-item'" t-att-aria-current="state.activeSection === 'forecast' ? 'location' : false" t-on-click="scrollToForecast">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18 9 12l4 4 8-9M16 7h5v5"/></svg><span>Forecasts</span>
                     </button>
+                    <button type="button" t-att-class="state.activeSection === 'risks' ? 'as-nav-item is-active' : 'as-nav-item'" t-att-aria-current="state.activeSection === 'risks' ? 'location' : false" t-on-click="scrollToRisks">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.8 19h18.4L12 3Zm0 6v4m0 3h.01"/></svg><span>Stock risks</span>
+                    </button>
                 </nav>
                 <div class="as-sidebar-footer">
                     <span t-att-class="'as-sidebar-status is-' + state.connectionStatus" role="status" aria-live="polite">
@@ -42,12 +45,12 @@
                     <button t-if="state.mobileView" t-ref="mobileMenuButton" class="as-menu-toggle" type="button" aria-controls="as-mobile-nav" t-att-aria-expanded="state.navOpen ? 'true' : 'false'" aria-label="Open AutoStock navigation" t-on-click="toggleMobileNav">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
                     </button>
-                    <div class="as-appbar-context"><span>AutoStock AI</span><i aria-hidden="true">/</i><strong>Dashboard</strong></div>
+                    <div class="as-appbar-context"><span>AutoStock AI</span><i aria-hidden="true">/</i><strong t-esc="activeSectionLabel"/></div>
                     <div class="as-appbar-company" t-if="state.forecastOptions">
                         <span class="as-company-caption">Company</span><strong t-esc="state.forecastOptions.company_name"/>
                     </div>
                 </header>
-                <div class="as-page-scroll" t-ref="dashboardScroll">
+                <div class="as-page-scroll" t-ref="dashboardScroll" t-on-scroll="updateActiveSection">
                     <div class="as-page-content">
             <header class="as-topline">
                 <div class="as-heading-group">
@@ -400,6 +403,130 @@
                             </tbody>
                         </table>
                     </div>
+                </section>
+
+                <section class="as-card as-risk-panel" data-as-section="risks" aria-labelledby="as-risk-title">
+                    <div class="as-risk-heading-row">
+                        <div>
+                            <span class="as-section-kicker">LIVE ODOO STOCK · EXPLAINABLE GUIDANCE</span>
+                            <h2 id="as-risk-title" class="as-risk-title" tabindex="-1">Stock risks &amp; reorder guidance</h2>
+                            <p>Current stock, scheduled Odoo moves, configured reorder rules, supplier terms, and reviewed delivery forecasts when their scope and coverage qualify.</p>
+                        </div>
+                        <button type="button" class="as-btn as-btn-secondary" t-on-click="loadRiskData" t-att-disabled="state.riskLoading" aria-label="Refresh stock-risk data">
+                            <svg class="as-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4.7 9a7.5 7.5 0 0 1 12.6-2L20 12M4 17v-5h5m10.3 3a7.5 7.5 0 0 1-12.6 2L12 12"/></svg><span>Refresh</span>
+                        </button>
+                    </div>
+
+                    <t t-if="state.riskLoading &amp;&amp; !state.riskData">
+                        <div class="as-risk-state" role="status"><span class="as-spinner" aria-hidden="true"/>Loading scoped stock and supplier data…</div>
+                    </t>
+                    <t t-elif="state.riskError">
+                        <div class="as-risk-error" role="alert"><strong>Stock-risk data could not be loaded</strong><p t-esc="state.riskError"/><button class="as-btn as-btn-secondary" type="button" t-on-click="loadRiskData">Try again</button></div>
+                    </t>
+                    <t t-elif="state.riskData">
+                        <div class="as-risk-notes" role="note">
+                            <span class="as-risk-readonly"><i aria-hidden="true"/>Read-only planning guidance</span>
+                            <span>As of <time t-esc="state.riskData.as_of"/> UTC</span>
+                            <span t-if="!state.riskData.purchase_installed">Odoo Purchase is not installed; vendor terms can be reviewed, but no RFQ workflow is available.</span>
+                            <span t-else="">Odoo Purchase is installed. This Phase 3A screen still does not create or change orders.</span>
+                        </div>
+                        <div t-if="!state.riskData.sales_access" class="as-risk-caveat" role="note">
+                            Delivery forecasts are hidden because this account has no Sales access. Any numeric quantity below uses Odoo's scheduled stock moves and configured policy only; demand not yet entered in Odoo is unknown.
+                        </div>
+                        <div t-elif="!state.riskData.forecast_access_available" class="as-risk-caveat" role="note">
+                            Reviewed forecast evidence is unavailable to this role. Numeric quantities use visible Odoo stock moves and configured policy only; demand not yet entered in Odoo is unknown.
+                        </div>
+                        <div t-elif="state.riskData.forecast_lookup_limited" class="as-risk-caveat" role="note">
+                            Forecast lookup reached its safety limit. Rows with an individually matched reviewed forecast remain labeled; unmatched rows use the Odoo-only baseline or show no numeric quantity.
+                        </div>
+                        <div t-if="!state.riskData.reordering_rules_available" class="as-risk-caveat" role="note">
+                            This account cannot read Odoo reordering rules. No reorder quantity is shown until the rule can be checked.
+                        </div>
+                        <div t-elif="state.riskData.reordering_rule_lookup_limited" class="as-risk-caveat" role="note">
+                            Reordering-rule lookup reached its safety limit. A numeric quantity is withheld when policy could not be verified.
+                        </div>
+                        <div t-if="state.riskData.supplier_lookup_limited" class="as-risk-caveat" role="note">
+                            Vendor lookup reached its safety limit. A planning lead-time assumption is used where vendor terms could not be verified.
+                        </div>
+                        <div t-if="state.riskData.truncated" class="as-risk-caveat" role="note">
+                            Showing <strong t-esc="state.riskData.row_count"/> matching product/warehouse rows from a bounded result. Search or choose a warehouse to narrow the list.
+                        </div>
+
+                        <div class="as-risk-kpis" aria-label="Stock-risk summary">
+                            <article class="as-risk-kpi as-risk-kpi-red"><span>Out of stock</span><strong t-esc="state.riskData.summary.out"/></article>
+                            <article class="as-risk-kpi as-risk-kpi-amber"><span>Below reorder point</span><strong t-esc="state.riskData.summary.shortage"/></article>
+                            <article class="as-risk-kpi as-risk-kpi-purple"><span>Reorder quantities</span><strong t-esc="state.riskData.recommendation_count"/></article>
+                            <article class="as-risk-kpi"><span>Policy needs review</span><strong t-esc="state.riskData.summary.policy_missing"/></article>
+                        </div>
+
+                        <div class="as-risk-toolbar" aria-label="Filter stock-risk guidance">
+                            <label class="as-risk-search"><span class="as-visually-hidden">Search by part, SKU, or OEM reference</span><svg class="as-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg><input type="search" placeholder="Search part, SKU, OEM reference" t-att-value="state.riskSearch" t-on-input="changeRiskSearch" data-testid="risk-search"/></label>
+                            <label><span>Warehouse</span><select t-on-change="changeRiskWarehouse" t-att-value="state.riskWarehouseId" data-testid="risk-warehouse-filter"><option value="">All company warehouses</option><option t-foreach="state.riskData.warehouses" t-as="warehouse" t-key="warehouse.id" t-att-value="warehouse.id" t-esc="warehouse.name"/></select></label>
+                            <label><span>Risk status</span><select t-on-change="changeRiskStatus" t-att-value="state.riskStatusFilter" data-testid="risk-status-filter"><option value="all">All statuses</option><option value="recommendations">Has a reorder quantity</option><option value="out">Out of stock</option><option value="shortage">Below reorder point</option><option value="low">At reorder point</option><option value="overstock">Above target</option><option value="slow_moving">No recent deliveries</option><option value="healthy">Within policy</option><option value="policy_missing">No reorder policy</option></select></label>
+                            <label><span>Supplier</span><select t-on-change="changeRiskSupplier" t-att-value="state.riskSupplierId" data-testid="risk-supplier-filter"><option value="">All suppliers</option><option t-foreach="state.riskData.suppliers" t-as="supplier" t-key="supplier.id" t-att-value="supplier.id" t-esc="supplier.name"/></select></label>
+                            <fieldset class="as-risk-date-filter"><legend>Forecast history through</legend><label><span class="as-visually-hidden">From date</span><input type="date" data-key="from" t-att-value="state.riskHistoryFrom" t-on-change="changeRiskDates" aria-label="Forecast history from date"/></label><span aria-hidden="true">to</span><label><span class="as-visually-hidden">To date</span><input type="date" data-key="to" t-att-value="state.riskHistoryTo" t-on-change="changeRiskDates" aria-label="Forecast history to date"/></label></fieldset>
+                            <button type="button" class="as-link" t-on-click="clearRiskFilters">Clear filters</button>
+                        </div>
+
+                        <div t-if="!state.riskData.warehouses.length" class="as-risk-empty" role="status">
+                            <h3>No warehouse is available in this company</h3><p>Ask an Odoo administrator to configure an inventory warehouse for the active company.</p>
+                        </div>
+                        <div t-elif="!state.riskData.total_products" class="as-risk-empty" role="status">
+                            <span class="as-empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></svg></span>
+                            <h3 t-if="state.riskSearch">No tracked part matches this search</h3><h3 t-else="">Track a part to begin risk analysis</h3>
+                            <p>Enable tracking on a storable product, then configure a safety-stock threshold or an Odoo reordering rule. Reorder guidance is not available without a policy.</p>
+                            <button type="button" class="as-link" t-on-click="openProducts">Browse products <span aria-hidden="true">↗</span></button>
+                        </div>
+                        <div t-elif="!riskRows.length" class="as-risk-empty" role="status">
+                            <h3>No product/warehouse rows match these filters</h3><p>Clear the search, supplier, risk, or forecast-history date filters to see more rows.</p><button type="button" class="as-link" t-on-click="clearRiskFilters">Clear filters</button>
+                        </div>
+                        <t t-else="">
+                            <div class="as-risk-list-heading"><strong><t t-esc="riskRows.length"/> shown</strong><span>Stock quantity is shown in each part's inventory unit.</span><span t-if="state.riskLoading" role="status">Updating…</span></div>
+                            <div class="as-table-scroll as-risk-desktop-list" role="region" aria-label="Stock risks and read-only reorder guidance" tabindex="0">
+                                <table class="as-table as-risk-table">
+                                    <caption class="as-visually-hidden">Read-only product and warehouse risk, available and projected stock, policy trigger, supplier lead time, and reorder quantity.</caption>
+                                    <thead><tr>
+                                        <th scope="col"><button type="button" t-att-data-sort="'part'" t-on-click="changeRiskSort">Part</button></th>
+                                        <th scope="col">Warehouse</th>
+                                        <th scope="col"><button type="button" t-att-data-sort="'available'" t-on-click="changeRiskSort">Free now</button></th>
+                                        <th scope="col">At receipt / policy</th>
+                                        <th scope="col">Supplier &amp; lead</th>
+                                        <th scope="col"><button type="button" t-att-data-sort="'suggested'" t-on-click="changeRiskSort">Suggested quantity</button></th>
+                                        <th scope="col"><button type="button" t-att-data-sort="'risk'" t-on-click="changeRiskSort">Status</button></th>
+                                    </tr></thead>
+                                    <tbody><tr t-foreach="riskRows" t-as="row" t-key="row.key" t-att-data-risk-key="row.key" t-att-data-risk-sku="row.sku" t-att-data-risk-status="row.risk" t-att-data-risk-qty="row.recommended_qty" t-att-data-risk-reorder="row.reorder_needed ? 'true' : 'false'" t-att-data-supplier-id="row.supplier ? row.supplier.id : false">
+                                        <td class="as-part-name"><strong t-esc="row.name"/><small><t t-esc="row.sku"/> <t t-if="row.reference">· <t t-esc="row.reference"/></t></small></td>
+                                        <td><t t-esc="row.warehouse"/><small t-esc="row.scope_location"/></td>
+                                        <td class="as-number"><strong><t t-esc="row.free_qty"/> <t t-esc="row.uom"/></strong><small><t t-esc="row.on_hand"/> on hand · <t t-esc="row.reserved_qty"/> reserved</small></td>
+                                        <td class="as-number"><strong><t t-esc="row.projected_after_demand"/> <t t-esc="row.uom"/></strong><small>Receipt <t t-esc="row.receipt_date"/> · trigger <t t-if="row.minimum_threshold !== false" t-esc="row.minimum_threshold"/><t t-else="">not set</t></small></td>
+                                        <td><strong t-if="row.supplier" t-esc="row.supplier.name"/><strong t-else="">Vendor terms unavailable</strong><small t-esc="row.supplier ? row.lead_time_days + ' days · ' + row.lead_time_label : row.supplier_access_note"/></td>
+                                        <td class="as-number"><strong t-if="row.reorder_needed"><t t-esc="row.recommended_qty"/> <t t-esc="row.uom"/></strong><strong t-else="">—</strong><small t-esc="row.policy_source_label"/></td>
+                                        <td><span t-att-class="'as-risk-badge as-risk-' + row.risk" t-esc="row.risk_label"/><details class="as-risk-evidence"><summary>Evidence</summary>
+                                            <dl>
+                                                <dt>Calculation</dt><dd t-esc="row.calculation_note"/>
+                                                <dt>At receipt</dt><dd><t t-esc="row.odoo_projected_at_receipt"/> Odoo projected − <t t-esc="row.additional_forecast_demand"/> uncommitted forecast = <t t-esc="row.projected_after_demand"/> <t t-esc="row.uom"/>.</dd>
+                                                <dt>Policy</dt><dd><t t-esc="row.policy_source_label"/> · trigger <t t-if="row.minimum_threshold !== false" t-esc="row.minimum_threshold"/><t t-else="">not set</t> · target <t t-if="row.target_stock !== false" t-esc="row.target_stock"/><t t-else="">not set</t> <t t-esc="row.uom"/>.</dd>
+                                                <dt>Quantity method</dt><dd t-if="row.reorder_needed">Target gap: max(0, <t t-esc="row.target_stock"/> target − <t t-esc="row.projected_after_demand"/> at receipt) = <t t-esc="row.target_gap"/> <t t-esc="row.uom"/><t t-if="row.supplier_minimum_product_qty">; supplier minimum <t t-esc="row.supplier_minimum_product_qty"/> <t t-esc="row.uom"/></t><t t-if="row.pack_multiple_product_qty">; rounded up to pack multiple <t t-esc="row.pack_multiple_product_qty"/> <t t-esc="row.uom"/></t>. Suggested quantity: <strong><t t-esc="row.recommended_qty"/> <t t-esc="row.uom"/></strong>.</dd><dd t-else="">No reorder quantity: this part is not below a verified trigger, or its policy is unavailable.</dd>
+                                                <dt>Forecast evidence</dt><dd><t t-if="row.forecast.used">Reviewed <t t-esc="row.forecast.method"/> forecast; evaluation status <t t-esc="row.forecast.evaluation_status"/>, <t t-esc="row.forecast.evaluation_days"/> holdout days. <t t-if="row.forecast.baseline_mae">Baseline holdout MAE <t t-esc="row.forecast.baseline_mae"/> <t t-esc="row.uom"/>; this is a comparison measure, not a guarantee.</t> History through <t t-esc="row.forecast.history_end"/>; source cutoff <t t-esc="row.forecast.source_cutoff"/> UTC.</t><t t-else="" t-esc="row.forecast.reason"/></dd>
+                                                <dt>Supplier terms</dt><dd t-if="row.supplier"><t t-esc="row.supplier.name"/> · lead <t t-esc="row.supplier.lead_days"/> days<t t-if="row.supplier.minimum_qty"> · MOQ <t t-esc="row.supplier.minimum_qty"/> <t t-esc="row.supplier.minimum_uom"/></t><t t-if="row.supplier.price"> · reference price <t t-esc="row.supplier.price"/> <t t-esc="row.supplier.currency"/> at price tier from <t t-esc="row.supplier.price_tier_min_qty"/> <t t-esc="row.supplier.price_tier_uom"/></t></dd><dd t-else="" t-esc="row.supplier_access_note || 'No active supplier terms are available; the product planning lead time is an assumption.'"/>
+                                                <dt>Recent delivery signal</dt><dd t-if="row.slow_mover">No completed customer delivery in the last <t t-esc="row.slow_mover.window_days"/> fully covered days<t t-if="row.slow_mover.last_delivery_date">; last dated delivery <t t-esc="row.slow_mover.last_delivery_date"/></t>. This is descriptive, not a demand forecast.</dd><dd t-else="">No slow-mover status is asserted without a fresh, reviewed history covering the full window.</dd>
+                                                <dt>Phase boundary</dt><dd>Planning evidence only. No purchase order, quotation, stock move, or supplier commitment is created or changed.</dd>
+                                            </dl>
+                                            <button type="button" class="as-link" t-att-data-product-template-id="row.template_id" t-on-click="openProduct">Open part in Odoo <span aria-hidden="true">↗</span></button>
+                                        </details></td>
+                                    </tr></tbody>
+                                </table>
+                            </div>
+                            <div class="as-risk-mobile-list" aria-label="Stock risks and reorder guidance">
+                                <article t-foreach="riskRows" t-as="row" t-key="'mobile-' + row.key" class="as-risk-mobile-card" t-att-data-risk-key="row.key" t-att-data-risk-sku="row.sku" t-att-data-risk-status="row.risk" t-att-data-risk-qty="row.recommended_qty" t-att-data-risk-reorder="row.reorder_needed ? 'true' : 'false'" t-att-data-supplier-id="row.supplier ? row.supplier.id : false">
+                                    <div class="as-risk-mobile-head"><div><strong t-esc="row.name"/><small><t t-esc="row.sku"/> · <t t-esc="row.warehouse"/></small></div><span t-att-class="'as-risk-badge as-risk-' + row.risk" t-esc="row.risk_label"/></div>
+                                    <div class="as-risk-mobile-metrics"><div><span>Free now</span><strong><t t-esc="row.free_qty"/> <t t-esc="row.uom"/></strong><small><t t-esc="row.on_hand"/> on hand</small></div><div><span>At receipt</span><strong><t t-esc="row.projected_after_demand"/> <t t-esc="row.uom"/></strong><small><t t-esc="row.receipt_date"/></small></div></div>
+                                    <div class="as-risk-mobile-order"><div><span>Suggested quantity</span><strong t-if="row.reorder_needed"><t t-esc="row.recommended_qty"/> <t t-esc="row.uom"/></strong><strong t-else="">No order quantity</strong></div><span t-esc="row.policy_source_label"/></div>
+                                    <details class="as-risk-evidence"><summary>Why this status and quantity?</summary><dl><dt>At receipt</dt><dd><t t-esc="row.odoo_projected_at_receipt"/> Odoo projected − <t t-esc="row.additional_forecast_demand"/> uncommitted forecast = <t t-esc="row.projected_after_demand"/> <t t-esc="row.uom"/>.</dd><dt>Forecast evidence</dt><dd t-esc="row.forecast.used ? row.forecast.reason : row.calculation_note + ' ' + row.forecast.reason"/><dt>Quantity method</dt><dd t-if="row.reorder_needed">Target gap <t t-esc="row.target_gap"/> <t t-esc="row.uom"/><t t-if="row.supplier_minimum_product_qty">; MOQ floor <t t-esc="row.supplier_minimum_product_qty"/> <t t-esc="row.uom"/></t><t t-if="row.pack_multiple_product_qty">; pack multiple <t t-esc="row.pack_multiple_product_qty"/> <t t-esc="row.uom"/></t>; suggested <strong><t t-esc="row.recommended_qty"/> <t t-esc="row.uom"/></strong>.</dd><dd t-else="">No reorder quantity from the verified policy.</dd><dt>Supplier and lead</dt><dd><t t-if="row.supplier"><t t-esc="row.supplier.name"/> · <t t-esc="row.lead_time_days"/> days<t t-if="row.supplier.minimum_qty"> · MOQ <t t-esc="row.supplier.minimum_qty"/> <t t-esc="row.supplier.minimum_uom"/></t></t><t t-else="" t-esc="row.supplier_access_note"/></dd><dt>Policy</dt><dd><t t-esc="row.policy_source_label"/> · trigger <t t-if="row.minimum_threshold !== false" t-esc="row.minimum_threshold"/><t t-else="">not set</t> · target <t t-if="row.target_stock !== false" t-esc="row.target_stock"/><t t-else="">not set</t> <t t-esc="row.uom"/></dd><dt>Read only</dt><dd>No order or stock record is created.</dd></dl><button type="button" class="as-link" t-att-data-product-template-id="row.template_id" t-on-click="openProduct">Open part in Odoo <span aria-hidden="true">↗</span></button></details>
+                                </article>
+                            </div>
+                        </t>
+                    </t>
                 </section>
 
                 <footer class="as-footer">AutoStock AI · Evaluated demand forecast · Live inventory and company rules from Odoo</footer>

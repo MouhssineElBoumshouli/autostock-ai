@@ -15,7 +15,8 @@
                         <field name="autostock_lead_time_days"/>
                     </group>
                     <div class="text-muted">
-                        Demand forecasts and recommendations are not enabled in this foundation release.
+                        Stock-risk analysis uses live Odoo quantities and configured reorder policy.
+                        Vendor minimum order quantity is maintained separately from vendor price breaks.
                         Vehicle fitment must be checked against trusted manufacturer data.
                     </div>
                 </page>
