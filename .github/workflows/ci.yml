@@ -43,23 +43,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Configure Docker Hub pull-through cache
+      - name: Pull Odoo and PostgreSQL from the public Docker image cache
         run: |
-          sudo install -d /etc/docker
-          sudo python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          path = Path("/etc/docker/daemon.json")
-          config = json.loads(path.read_text()) if path.exists() else {}
-          mirrors = config.setdefault("registry-mirrors", [])
-          mirror = "https://mirror.gcr.io"
-          if mirror not in mirrors:
-              mirrors.append(mirror)
-          path.write_text(json.dumps(config))
-          PY
-          sudo systemctl restart docker
-          docker info --format '{{json .RegistryConfig.Mirrors}}'
+          docker pull mirror.gcr.io/library/postgres:16
+          docker tag mirror.gcr.io/library/postgres:16 postgres:16
+          docker pull mirror.gcr.io/library/odoo:19.0-20260926
+          docker tag mirror.gcr.io/library/odoo:19.0-20260926 odoo:19.0
 
       - name: Install addon and run Odoo tests against PostgreSQL 16
         shell: bash

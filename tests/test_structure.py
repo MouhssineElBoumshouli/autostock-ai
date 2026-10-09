@@ -84,9 +84,10 @@ def test_synthetic_inventory_cleanup_is_a_guarded_non_destructive_reset():
 def test_odoo_ci_uses_public_docker_hub_cache_mirror():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
-    assert "registry-mirrors" in workflow
-    assert "https://mirror.gcr.io" in workflow
-    assert "sudo systemctl restart docker" in workflow
+    assert "docker pull mirror.gcr.io/library/postgres:16" in workflow
+    assert "docker tag mirror.gcr.io/library/postgres:16 postgres:16" in workflow
+    assert "docker pull mirror.gcr.io/library/odoo:19.0-20260926" in workflow
+    assert "docker tag mirror.gcr.io/library/odoo:19.0-20260926 odoo:19.0" in workflow
 
 
 def test_inventory_action_allows_users_to_choose_untracked_products():
