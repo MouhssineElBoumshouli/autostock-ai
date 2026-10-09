@@ -46,14 +46,14 @@ export class AutoStockDashboard extends Component {
     }
 
     openProduct(event) {
-        const id = Number(event.currentTarget.dataset.productId);
+        const id = Number(event.currentTarget.dataset.productTemplateId);
         if (!Number.isInteger(id) || id <= 0) {
             return;
         }
         return this.action.doAction({
             type: "ir.actions.act_window",
             name: "Automotive Part",
-            res_model: "product.product",
+            res_model: "product.template",
             res_id: id,
             views: [[false, "form"]],
             target: "current",

@@ -31,9 +31,13 @@ class ProductTemplate(models.Model):
         help="Planning assumption. Actual supplier lead times remain in Odoo purchasing.",
     )
 
-    @api.constrains("autostock_safety_stock", "autostock_lead_time_days")
+    @api.constrains(
+        "autostock_enabled", "is_storable", "autostock_safety_stock", "autostock_lead_time_days"
+    )
     def _check_autostock_inputs(self):
         for product in self:
+            if product.autostock_enabled and not product.is_storable:
+                raise ValidationError("AutoStock tracking is only available for products that track inventory.")
             if product.autostock_safety_stock < 0:
                 raise ValidationError("Safety stock cannot be negative.")
             if product.autostock_lead_time_days < 0:

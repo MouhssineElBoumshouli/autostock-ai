@@ -5,9 +5,9 @@
         <field name="tag">autostock_ai.dashboard</field>
     </record>
     <record id="action_autostock_products" model="ir.actions.act_window">
-        <field name="name">Tracked Automotive Products</field>
+        <field name="name">Automotive Inventory</field>
         <field name="res_model">product.template</field>
         <field name="view_mode">list,form</field>
-        <field name="domain">[('autostock_enabled', '=', True)]</field>
+        <field name="domain">[('is_storable', '=', True)]</field>
     </record>
 </odoo>

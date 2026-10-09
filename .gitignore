@@ -1,0 +1,30 @@
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example
+docker-compose.override.yml
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.Python
+.venv/
+venv/
+ENV/
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# Generated synthetic data and forecast output
+ml/output/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# JavaScript dependencies, if added for local tooling later
+node_modules/

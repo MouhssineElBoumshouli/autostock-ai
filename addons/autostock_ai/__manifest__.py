@@ -1,5 +1,6 @@
 {
     "name": "AutoStock AI — Inventory Intelligence",
+    "author": "AutoStock AI",
     "version": "19.0.0.1.0",
     "summary": "Automotive inventory intelligence foundation for Odoo",
     "description": """A secure inventory dashboard and automotive parts metadata.
