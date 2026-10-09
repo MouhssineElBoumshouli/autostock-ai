@@ -17,16 +17,18 @@
 | --- | --- | --- |
 | Python tests | **14 passed** | `.\.venv\Scripts\python.exe -m pytest -q` |
 | Python compile check | **Passed** | `.\.venv\Scripts\python.exe -m compileall -q addons ml scripts tests` |
-| Odoo addon tests | **10 passed, 0 failed, 0 errors** | Fresh `autostock_test` database with `--init=autostock_ai --test-enable --test-tags=/autostock_ai --stop-after-init --without-demo=true` |
+| Odoo addon tests | **11 passed, 0 failed, 0 errors** | Fresh `autostock_test` database with `--init=autostock_ai --test-enable --test-tags=/autostock_ai --stop-after-init --without-demo=true` |
+| Isolated Odoo CI command | **11 passed, 0 failed, 0 errors** | Replayed the workflow's isolated Docker Compose project with Odoo 19, PostgreSQL 16, a fresh `autostock_ci` database, and generated runtime-only credentials; Compose resources were removed afterward. The hosted GitHub Actions run for this follow-up commit is pending. |
 | Docker Compose config | **Passed** | `docker compose config --quiet` |
 | Forecast evaluation | **Completed for 6 labeled synthetic SKUs** | The evaluator selected either its baseline or ML method per fixture. This is a pipeline smoke test; no accuracy result is claimed. |
 
-The test suite checks invalid product settings, empty dashboard values, stock-status calculations from Odoo on-hand quantities, single-product values, inventory-group access, the capped dashboard preview, the large-catalog incomplete flag, and prevention of tracking non-storable products.
+The test suite checks invalid product settings, empty dashboard values, stock-status calculations from Odoo on-hand quantities, single-product values, inventory-group access, the capped dashboard preview, the large-catalog incomplete flag, prevention of tracking non-storable products, and multi-company product and quantity isolation.
 
 ## Odoo and database checks
 
 - Installed and loaded the custom `autostock_ai` addon in Odoo 19. The dashboard is an Odoo client action and its product links open the matching `product.template` form.
 - Verified the dashboard is backed by Odoo's stockable product quantities and manual safety-stock values. No `sudo` bypass was added.
+- Verified and fixed multi-company isolation with a real `TransactionCase`: a user allowed in both companies saw only Company A's product plus the shared product with Company A selected, and only Company B's product plus the shared product with Company B selected. The shared product showed on-hand quantities 2 and 13 respectively; company-specific stock was 7 and 11. `with_company()` alone retains other allowed companies, so the dashboard now narrows `allowed_company_ids` to the active company and includes only that company's products plus shared products in the search. Product ACLs and record rules remain in force.
 - Opened the product catalog from the dashboard. It includes stockable products that are not yet tracked, so a user can opt a part into AutoStock.
 - In the browser, enabled AutoStock tracking for the QA-only cooling-hose record, saved it, reloaded the form, and confirmed the setting persisted.
 - A user without the inventory group receives `AccessError` from the dashboard model in the Odoo test suite.
@@ -47,7 +49,7 @@ The resulting live dashboard shows 4 tracked SKUs: 1 above safety stock, 1 low, 
 
 Compared the live dashboard to [`design/dashboard-concept.png`](../../design/dashboard-concept.png). The implementation keeps the reference's violet accent, light canvas, rounded white cards, status colors, donut summary, and dashboard hierarchy while retaining Odoo navigation and using live Odoo inventory values. Reference-only forecasts, accuracy, reorder recommendations, and vehicle insights remain clearly marked as disconnected or planned.
 
-The responsive pass used 1440×1000, 1024×900, and 390×844 viewports. At 390px the document stays 390px wide; the 730px inventory table is inside its own 330px `overflow:auto` region, rather than causing page-level horizontal overflow. The browser console had no errors after the asset fix.
+The responsive pass used 1440×1000, 1024×900, and 390×844 viewports. At 390px the document stays 390px wide; the 730px inventory table is inside its own 330px `overflow:auto` region, rather than causing page-level horizontal overflow. After the multi-company fix, the populated `autostock_demo` dashboard still rendered its 4 tracked SKUs (1 above safety stock, 1 low, 2 out of stock), and the browser reported no console errors.
 
 ### Demo dashboard
 
@@ -71,10 +73,12 @@ The responsive pass used 1440×1000, 1024×900, and 390×844 viewports. At 390px
 - Removed eager test-framework imports from the addon business package; Odoo discovers addon tests when test mode is enabled.
 - Corrected the Odoo 19 user group API in tests and fixed SCSS expressions that Odoo's asset compiler rejected.
 - Reworked the dashboard spacing, icons, status hierarchy, empty and disconnected states, focus treatment, responsive layout, and horizontally scrollable inventory table.
+- Restricted dashboard product searches and stock quantity reads to the selected company while retaining shared products and normal Odoo access checks.
+- Added an isolated Odoo 19/PostgreSQL 16 integration-test job to GitHub Actions. It generates a masked ephemeral database password, initializes a fresh test database, runs all addon tests, and removes its Docker resources on success or failure.
 
 ## Remaining work and recommended next steps
 
 - Connect the offline forecast evaluator to Odoo only after agreeing on a real-data evaluation protocol, history-coverage checks, baseline comparisons, and uncertainty reporting. The dashboard correctly shows no forecast or accuracy value today.
 - Replenishment review, scenario analysis, vehicle fitment, and production recommendations remain unimplemented.
-- Add an Odoo 19/PostgreSQL integration job to CI; the current workflow covers the Python suite and offline evaluation, while the addon integration suite was run locally in Docker for this validation.
+- Review the hosted Odoo integration job on this PR and make its check required in branch protection if merge gating is desired.
 - Replace the clearly labeled QA fixtures with approved product and stock data before using the demo database for business decisions.

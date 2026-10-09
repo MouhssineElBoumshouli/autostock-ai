@@ -110,3 +110,90 @@ class TestAutoStockProduct(TransactionCase):
         })
         with self.assertRaises(AccessError):
             self.env["autostock.dashboard"].with_user(user).get_dashboard_data()
+
+    def test_dashboard_isolates_company_products_and_shared_product_stock(self):
+        company_a, company_b = self.env["res.company"].create([
+            {"name": "AutoStock Test Company A"},
+            {"name": "AutoStock Test Company B"},
+        ])
+        template_a, template_b, template_shared = self.env["product.template"].create([
+            {
+                "name": "Company A Part",
+                "company_id": company_a.id,
+                "is_storable": True,
+                "autostock_enabled": True,
+            },
+            {
+                "name": "Company B Part",
+                "company_id": company_b.id,
+                "is_storable": True,
+                "autostock_enabled": True,
+            },
+            {
+                "name": "Shared Part",
+                "company_id": False,
+                "is_storable": True,
+                "autostock_enabled": True,
+            },
+        ])
+        warehouses = self.env["stock.warehouse"]
+        warehouse_a = warehouses.search([("company_id", "=", company_a.id)], limit=1)
+        warehouse_b = warehouses.search([("company_id", "=", company_b.id)], limit=1)
+        if not warehouse_a:
+            warehouse_a = warehouses.create({
+                "name": "AutoStock Test Company A Warehouse",
+                "code": "ASTA",
+                "company_id": company_a.id,
+            })
+        if not warehouse_b:
+            warehouse_b = warehouses.create({
+                "name": "AutoStock Test Company B Warehouse",
+                "code": "ASTB",
+                "company_id": company_b.id,
+            })
+        location_a = warehouse_a.lot_stock_id
+        location_b = warehouse_b.lot_stock_id
+        product_a, product_b, product_shared = (
+            template_a.product_variant_id,
+            template_b.product_variant_id,
+            template_shared.product_variant_id,
+        )
+        Quant = self.env["stock.quant"]
+        Quant.with_company(company_a)._update_available_quantity(product_a, location_a, 7)
+        Quant.with_company(company_b)._update_available_quantity(product_b, location_b, 11)
+        Quant.with_company(company_a)._update_available_quantity(product_shared, location_a, 2)
+        Quant.with_company(company_b)._update_available_quantity(product_shared, location_b, 13)
+
+        user = self.env["res.users"].create({
+            "name": "AutoStock Multi Company Test",
+            "login": "autostock-multi-company-test",
+            "company_id": company_a.id,
+            "company_ids": [Command.set([company_a.id, company_b.id])],
+            "group_ids": [Command.set([
+                self.env.ref("base.group_user").id,
+                self.env.ref("stock.group_stock_user").id,
+            ])],
+        })
+
+        def dashboard_for(company):
+            return (
+                self.env["autostock.dashboard"]
+                .with_user(user)
+                .with_context(allowed_company_ids=[company_a.id, company_b.id])
+                .with_company(company)
+                .get_dashboard_data()
+            )
+
+        data_a = dashboard_for(company_a)
+        rows_a = {row["id"]: row for row in data_a["rows"]}
+        self.assertEqual(set(rows_a), {product_a.id, product_shared.id})
+        self.assertEqual(data_a["kpis"]["total"], 2)
+        self.assertEqual(rows_a[product_a.id]["on_hand"], 7)
+        self.assertEqual(rows_a[product_shared.id]["on_hand"], 2)
+
+        data_b = dashboard_for(company_b)
+        rows_b = {row["id"]: row for row in data_b["rows"]}
+        self.assertEqual(set(rows_b), {product_b.id, product_shared.id})
+        self.assertEqual(data_b["kpis"]["total"], 2)
+        self.assertEqual(rows_b[product_b.id]["on_hand"], 11)
+        self.assertEqual(rows_b[product_shared.id]["on_hand"], 13)

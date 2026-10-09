@@ -18,12 +18,20 @@ class AutoStockDashboard(models.AbstractModel):
         if not self.env.user.has_group("stock.group_stock_user"):
             raise AccessError("Inventory access is required to view AutoStock AI.")
 
-        # Avoid sudo: respect Odoo product ACLs and record rules.
-        Product = self.env["product.product"].with_company(self.env.company)
+        # Avoid sudo: respect Odoo product ACLs and record rules. with_company
+        # moves the active company first but preserves every allowed company,
+        # so narrow the context before searching or computing stock quantities.
+        company = self.env.company
+        Product = (
+            self.env["product.product"]
+            .with_company(company)
+            .with_context(allowed_company_ids=[company.id])
+        )
         domain = [
             ("active", "=", True),
             ("is_storable", "=", True),
             ("autostock_enabled", "=", True),
+            ("company_id", "in", [False, company.id]),
         ]
         total_tracked = Product.search_count(domain)
         # This first version explicitly marks summary incompleteness instead of

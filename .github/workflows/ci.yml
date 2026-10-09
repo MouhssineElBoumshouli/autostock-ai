@@ -35,3 +35,35 @@ jobs:
         run: |
           python scripts/generate_synthetic_sales.py
           python -m ml.evaluate ml/output/synthetic_daily_sales.csv --days 30 --output "$RUNNER_TEMP/forecast.json"
+
+  odoo-integration:
+    name: Odoo 19 integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install addon and run Odoo tests against PostgreSQL 16
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="autostock-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          export POSTGRES_USER=autostock_ci
+          export POSTGRES_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          export POSTGRES_DB=postgres
+          echo "::add-mask::$POSTGRES_PASSWORD"
+
+          cleanup() {
+            docker compose --project-name "$project" down --volumes --remove-orphans
+          }
+          trap cleanup EXIT
+
+          docker compose --project-name "$project" up --detach --wait db
+          docker compose --project-name "$project" run --rm --no-deps odoo odoo \
+            --database=autostock_ci \
+            --init=autostock_ai \
+            --test-enable \
+            --test-tags=/autostock_ai \
+            --stop-after-init \
+            --without-demo=true \
+            --log-level=test
