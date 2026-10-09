@@ -1,5 +1,7 @@
 # AutoStock AI foundation validation
 
+> Phase 2 forecasting implementation and current verification are documented in [phase2-demand-forecast.md](phase2-demand-forecast.md). This file records the earlier foundation milestone.
+
 **Run date:** 2026-10-09
 **Branch:** `codex/foundation-validation-20261009`
 **Scope:** validate the existing Odoo addon and forecasting experiment, repair setup gaps, and refine the dashboard foundation. No advanced forecasting or replenishment feature was represented as complete.

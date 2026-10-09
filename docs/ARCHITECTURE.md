@@ -1,47 +1,58 @@
 # Architecture and trust boundaries
 
 ```text
-Odoo 19 Community (web login, users, roles, company restrictions)
-  ├─ stock/product/purchase/sale models [native Odoo]
+Odoo 19 Community
+  ├─ native sale / stock / product / warehouse / company records
   ├─ autostock_ai addon
-  │    ├─ product.template metadata [implemented]
-  │    ├─ read-only dashboard model [implemented]
-  │    └─ Owl dashboard with live Odoo stock [implemented]
-  └─ planned next layers
-       ├─ reproducible demand aggregation / provenance
-       ├─ persisted & reviewed ML forecast runs
-       ├─ budget and scenario service (no mutation)
-       ├─ AI explanation assistant (read-only, tool-limited)
-       └─ QWeb report renderer / PDF export
+  │    ├─ product metadata and read-only inventory dashboard
+  │    ├─ validated forecast request and source snapshot
+  │    ├─ forecast run, daily observations, forecast points, review metadata
+  │    └─ bounded scheduled worker using the shared Python forecaster
+  └─ standard Odoo ACLs, record rules, active company and warehouse scope
 
-Offline laboratory (implemented, no live data path)
-  └─ Python scikit-learn forecaster and synthetic fixture generator
+Offline laboratory
+  ├─ deterministic synthetic dataset generator
+  └─ chronological evaluation against simple forecasting baselines
 ```
 
-## Foundation: data flow
+## Inventory dashboard
 
-1. Stock user opens AutoStock AI menu.
-2. Odoo client action loads an Owl component from `web.assets_backend`.
-3. Owl requests `autostock.dashboard.get_dashboard_data` using Odoo's authenticated ORM RPC.
-4. Server checks stock-user permission, uses active Odoo company and record rules, reads opted-in products, and returns an explicit status that ML is not integrated.
-5. Browser renders live stock counts and empty AI states.
+1. A stock user opens the AutoStock AI client action.
+2. Owl loads dashboard data through Odoo's authenticated ORM RPC.
+3. The server checks the user's inventory permission, scopes product and stock reads to the active company, and returns live Odoo values.
+4. The UI distinguishes physical on-hand stock and Odoo's `virtual_available` projection from demand forecast output.
 
-**Do not** claim `virtual_available` is an ML prediction: it is Odoo's projected stock based on known operations. It is labeled 'Odoo projected' in the UI.
+No unrestricted SQL or `sudo()` is used to read business data. Odoo ACLs and record rules remain in force.
 
-## Forecast research design
+## Forecast request and data source
 
-The offline model uses daily SKU demand, a calendar timeline, lags and rolling history. It fits a RandomForestRegressor against a naive seven-day mean baseline. Both are evaluated by recursive prediction on the same chronological holdout, then the better approach is selected. Results describe method, metrics and limitations. Missing intra-period dates are treated as zero; this is only valid if data collection covers those dates. Returns, canceled orders, internal transfers and out-of-stock censored demand need separate treatment before real deployment.
+1. A stock user selects a tracked product, a 7/30/60-day horizon, a covered history range, and optionally a warehouse. Real forecasts also require sales access and a configured complete-history start date.
+2. The request validates the product, company, warehouse, horizon, date range, 90-day minimum, 730-day maximum, and a snapshot cutoff. Interactive RPC only queues work.
+3. The scheduled worker processes at most two queued runs per invocation. It reads completed Odoo stock moves through the ORM, capped at 50,000 source moves.
+4. A move counts as demand only when it is linked to a confirmed sale order line and transfers product from internal stock to a customer. Quotes, cancelled or unshipped orders, receipts, and internal transfers are excluded. A completed customer return linked to a delivery is netted against the delivery date.
+5. Move quantities are converted to the product's inventory UoM. Daily demand is dated using the completed move timestamp in UTC. Days with no qualifying completed moves are zero fulfilled sales for the configured covered period.
+6. The run stores its company/warehouse, product/SKU, cutoff, source provenance and digest, history coverage, model version, selected approach, baseline and model metrics, assumptions, status, observations, forecast points, and review metadata.
 
-The heuristic error band is not calibrated. Do not label it 90% confidence just because its underlying one-fold absolute-error quantile uses 0.90.
+The active company is applied both with `with_company()` and a narrowed `allowed_company_ids` context. Product choices include only the selected company's products and shared products. Warehouse choices are restricted to the selected company. ORM product ACLs and record rules still apply. A user's access to multiple companies does not merge their histories.
 
-## Next milestone: safe integration design
+## Forecast selection and limitations
 
-- A forecast run model should store SKU, company/warehouse, training cutoff, horizons, data provenance, selected model ID/version, loss metrics, assumptions, forecast points, created by, and review status.
-- Aggregate confirmed completed customer deliveries from stock moves or relevant business records ONLY after verifying operations and business semantics; no double counting, no future leakage.
-- Run CPU-bound ML outside interactive Odoo requests via a reviewed scheduled job/worker; enforce time/memory bounds and persist only validated numeric outputs.
-- Restrict report/assistant to Odoo-enforced ACL and user-selected company.
-- Keep draft purchase actions behind explicit user confirmation and server-side Odoo access checks.
+The forecaster compares a random-forest model with trailing-mean, seasonal-naive, and Croston SBA baselines using a chronological holdout and selects a measured method for each series. Intermittent series use their baseline rather than an unsuitable random forest. Fewer than 90 history days produces an insufficient-history result; no observed positive demand produces an explicit no-demand state.
+
+The source represents **fulfilled sales**, not unconstrained customer demand. Stockouts can censor sales, and the current Odoo history has no lost-demand signal. A configured coverage start date is an administrator assertion, not an automated proof of completeness. The reported range is heuristic and is not a calibrated confidence interval. These forecasts must not automatically trigger purchasing.
+
+The scheduled worker uses the same forecasting code as the offline lab. The request path does not fit a model. Data from Odoo is not used to train global model parameters, and synthetic data is never mixed with sale or stock records.
+
+## Synthetic demo separation and cleanup
+
+The synthetic demo creates a forecast run with `source_type=synthetic_demo`, no Odoo product relation, and generated daily observations. It does not read or write sale orders, stock moves, quants, or supplier records. Synthetic runs remain clearly labeled in the UI and may be deleted with the scoped ORM cleanup documented in [Phase 2 QA](qa/phase2-demand-forecast.md).
+
+## Next milestone
+
+- Stockout and slow-moving analysis that separates fulfilled-sales forecasts from Odoo's projected inventory.
+- Human-reviewed replenishment proposals with explicit lead-time, open-order, budget, and approval constraints.
+- Additional real-data evaluation only after a consented dataset and evaluation protocol are approved.
 
 ## Production blockers
 
-No production approval, no consented business dataset, no end-to-end Odoo/browser testing in this initial workspace, no backups/restore verification, no hardened deployment, no cross-company security test. This repository is a development starter only.
+No consented real-business evaluation dataset, calibrated uncertainty interval, lost-demand/stockout-censoring signal, backup/restore verification, hardened production deployment, or comprehensive independent security review is included in this development milestone.

@@ -2,11 +2,11 @@
 
 **An Odoo 19 Community addon for automotive inventory intelligence.**
 
-Built as a new project concept for Bounaim Auto, separate from SmartImport. This repository is a **foundation release**, not a completed AI ERP. The dashboard reads real Odoo stock; the forecasting experiment works offline and is **not yet connected** to Odoo.
+Built as a new project concept for Bounaim Auto, separate from SmartImport. This is an Odoo development project, not a completed AI ERP. Phase 2 connects an evaluated demand forecaster to permission-aware Odoo history; forecasts remain decision support and are not automatic purchasing instructions.
 
 ![Approved UI direction](design/dashboard-concept.png)
 
-> The screenshot is an AI-generated **design concept**, not a capture of the running implementation. Its sample figures and claimed accuracy are illustrative and must not be treated as measured results. The working dashboard intentionally shows empty AI states until integration.
+> The screenshot is an AI-generated **design concept**, not a capture of the running implementation. Its sample figures and claimed accuracy are illustrative and must not be treated as measured results.
 
 ## What is included now
 
@@ -14,12 +14,13 @@ Built as a new project concept for Bounaim Auto, separate from SmartImport. This
 - Custom installable Odoo module `autostock_ai`, separate from Odoo core.
 - Automotive product metadata: OEM reference, priority, safety stock, planning lead time, enable/disable tracking.
 - Read-only **Owl dashboard** based on Odoo stock, with four KPI cards, inventory health summary, and product table.
-- Explicit `not_integrated` empty states for AI features (no fake predictions).
-- Offline **scikit-learn demand forecasting experiment**, with chronological evaluation, naive baseline comparison, reproducible results and labeled heuristic error bands.
-- Synthetic-only CSV sales generator for ML testing.
-- Product model tests (for Odoo runtime), offline tests, GitHub Actions configuration, product/design/architecture docs.
+- Odoo demand forecasts for 7, 30, or 60 days from a bounded history of completed customer deliveries and linked returns, with provenance, baseline metrics, explicit assumptions, and review status.
+- A scheduled worker evaluates queued forecasts; browser requests do not train models. Standard Odoo access rules and active-company scope apply.
+- A labeled synthetic demo that is isolated from Odoo sale, stock, and supplier records.
+- Offline **scikit-learn demand forecasting**, chronological holdout evaluation, trailing-mean / seasonal-naive / Croston SBA baselines, and clearly labeled heuristic ranges.
+- Python and Odoo integration tests, an isolated PostgreSQL 16 + Odoo 19 GitHub Actions job, and project/QA documentation.
 
-**Not implemented:** ML-to-Odoo sync, report generator, assistant, simulator, budget optimizer, full mockup-matching visual polish, production deployment, and comprehensive security review. These are planned milestones, not completed features.
+**Not implemented:** stockout-risk recommendations, reorder quantities, report generator, assistant, simulator, budget optimizer, full mockup-matching visual polish, production deployment, and comprehensive security review. Forecast demand is fulfilled-sales history, so stockouts can censor demand. The model and heuristic ranges have not been calibrated against approved business data.
 
 ## Start Odoo on Windows (Docker Desktop + WSL2)
 
@@ -47,12 +48,14 @@ python -m ml.evaluate ml/output/synthetic_daily_sales.csv --days 30
 python -m pytest -q
 ```
 
-Check `ml/output/forecast.json` for, per SKU: selected approach, chronological holdout MAE for the ML model and baseline, and daily predictions. This is **synthetic-data evaluation only**; the result is not a real business forecast. The ML code intentionally declines to forecast with under 90 days of history. Error bands are heuristic, not calibrated confidence intervals. A single holdout and a tiny synthetic generator are insufficient proof of real-world accuracy.
+Check `ml/output/forecast.json` for, per SKU: selected approach, chronological holdout MAE for the ML model and baseline, and daily predictions. This is **synthetic-data evaluation only**; the result is not a real business forecast. Forecast runs require at least 90 days of covered history. Error bands are heuristic, not calibrated confidence intervals. A single holdout and a small synthetic generator are insufficient proof of real-world accuracy.
+
+For the Odoo flow, install the addon, configure the earliest date with verified complete sales history on the company (or selected warehouse), and use **AutoStock AI → Dashboard → Demand forecast**. A stock manager can mark a completed run as reviewed. Synthetic demo runs can be removed from a local development database with the scoped cleanup steps in [the Phase 2 QA report](docs/qa/phase2-demand-forecast.md).
 
 ## Milestones
 
-1. **Foundation (this package):** Odoo project setup, secure read-only dashboard, product metadata, offline ML experiment, tests, design/spec.
-2. **Data & ML:** explicit review of Odoo sales histories, daily sales aggregation, source provenance, leakage-free backtests against seasonality and intermittency, permission-aware forecast storage and a forecast chart.
+1. **Foundation:** Odoo project setup, read-only inventory dashboard, product metadata, offline ML experiment, tests, design/spec. Validated in PR #1.
+2. **Data & ML:** completed delivery/return aggregation, provenance, chronological baseline evaluation, permission-aware forecast storage, scheduled worker, forecast chart, and synthetic demo. Implemented in Phase 2; see the [QA report](docs/qa/phase2-demand-forecast.md) for evidence and limitations.
 3. **Decision tools:** stockout risk, human-approved replenishment quantities, constraint-based budget optimizer, what-if simulation.
 4. **AI explanations & reports:** controlled read-only natural-language queries; print-quality PDF management report with executive summary, evidence, tables, forecasts, assumptions, and a technical appendix.
 5. **Experience & release quality:** implement the full approved design consistently throughout Odoo; keyboard/mobile/accessibility checks, end-to-end tests, backup and operational documentation.
