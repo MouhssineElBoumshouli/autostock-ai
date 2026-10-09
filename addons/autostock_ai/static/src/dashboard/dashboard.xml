@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="autostock_ai.Dashboard">
+        <main class="as-app">
+            <div class="as-topline">
+                <div>
+                    <div class="as-eyebrow">BOUNAIM AUTO  /  INVENTORY INTELLIGENCE</div>
+                    <h1 class="as-title">Dashboard</h1>
+                    <p class="as-subtitle">A clearer view of your automotive inventory.</p>
+                </div>
+                <div class="as-toolbar">
+                    <button class="as-btn as-btn-secondary" type="button" t-on-click="load" t-att-disabled="state.loading">
+                        <span aria-hidden="true">↻</span> Refresh
+                    </button>
+                    <button class="as-btn as-btn-primary" type="button" t-on-click="openProducts">
+                        View inventory <span aria-hidden="true">↗</span>
+                    </button>
+                </div>
+            </div>
+            <t t-if="state.loading">
+                <div class="as-centered" role="status" aria-live="polite">
+                    <span class="as-spinner" aria-hidden="true"></span>
+                    Loading your inventory…
+                </div>
+            </t>
+            <t t-elif="state.error">
+                <div class="as-error" role="alert">
+                    <h2>We couldn't load your dashboard</h2>
+                    <p t-esc="state.error"/>
+                    <button class="as-btn as-btn-primary" type="button" t-on-click="load">Try again</button>
+                </div>
+            </t>
+            <t t-elif="state.data">
+                <div class="as-data-note">
+                    <span class="as-live-dot" aria-hidden="true"></span>
+                    Live Odoo inventory data <span class="as-separator">·</span>
+                    Updated <t t-esc="state.data.as_of"/>
+                </div>
+                <t t-if="state.data.summary_incomplete">
+                    <div class="as-warning" role="status">
+                        Showing a limited sample of 5,000 tracked products out of <t t-esc="state.data.total_tracked"/>.
+                        The counts below describe the sample, not the whole inventory.
+                    </div>
+                </t>
+                <section class="as-kpis" aria-label="Stock overview">
+                    <div class="as-card as-kpi">
+                        <div class="as-kpi-heading"><span class="as-kpi-icon as-purple">⬡</span><span>Tracked SKUs</span></div>
+                        <strong><t t-esc="state.data.kpis.total"/></strong>
+                        <small>Included in AutoStock AI</small>
+                    </div>
+                    <div class="as-card as-kpi">
+                        <div class="as-kpi-heading"><span class="as-kpi-icon as-green">▣</span><span>In Stock</span></div>
+                        <strong><t t-esc="state.data.kpis.healthy"/></strong>
+                        <small>Above manual safety thresholds</small>
+                    </div>
+                    <div class="as-card as-kpi">
+                        <div class="as-kpi-heading"><span class="as-kpi-icon as-amber">△</span><span>Low Stock</span></div>
+                        <strong><t t-esc="state.data.kpis.low"/></strong>
+                        <small>At or below safety stock</small>
+                    </div>
+                    <div class="as-card as-kpi">
+                        <div class="as-kpi-heading"><span class="as-kpi-icon as-red">!</span><span>Out of Stock</span></div>
+                        <strong><t t-esc="state.data.kpis.out"/></strong>
+                        <small>Zero or negative on-hand</small>
+                    </div>
+                </section>
+                <section class="as-panels" aria-label="Forecast and inventory health">
+                    <article class="as-card as-forecast-panel">
+                        <div class="as-panel-head">
+                            <div>
+                                <h2>AI Demand Forecast</h2>
+                                <p>Understand what each part may need next.</p>
+                            </div>
+                            <span class="as-pill as-pill-planned">Next phase</span>
+                        </div>
+                        <div class="as-chart-empty">
+                            <div class="as-chart-art" aria-hidden="true">
+                                <span></span><span></span><span></span><span></span>
+                            </div>
+                            <div class="as-empty-message">
+                                <div class="as-empty-icon" aria-hidden="true">✧</div>
+                                <h3>Predictions aren't connected yet</h3>
+                                <p>We are building a tested demand-forecasting model before showing real forecasts here. No sample predictions will be presented as live data.</p>
+                            </div>
+                        </div>
+                    </article>
+                    <article class="as-card as-health-panel">
+                        <div class="as-panel-head">
+                            <div><h2>Inventory Health</h2><p>Based on current stock.</p></div>
+                        </div>
+                        <div class="as-health-summary" t-att-style="healthStyle" role="img" t-att-aria-label="'In stock: ' + state.data.kpis.healthy + ', low stock: ' + state.data.kpis.low + ', out of stock: ' + state.data.kpis.out">
+                            <div class="as-health-center">
+                                <strong><t t-esc="state.data.kpis.total"/></strong>
+                                <small>Tracked SKUs</small>
+                            </div>
+                        </div>
+                        <div class="as-health-lines">
+                            <div><span><i class="as-dot as-dot-green"></i> In stock</span><strong t-esc="state.data.kpis.healthy"/></div>
+                            <div><span><i class="as-dot as-dot-amber"></i> Low stock</span><strong t-esc="state.data.kpis.low"/></div>
+                            <div><span><i class="as-dot as-dot-red"></i> Out of stock</span><strong t-esc="state.data.kpis.out"/></div>
+                        </div>
+                    </article>
+                </section>
+                <section class="as-card as-insights" aria-label="Intelligent recommendations">
+                    <div class="as-panel-head">
+                        <div><h2>AI Insights &amp; Recommendations</h2><p>Future forecasts, reorder logic and decisions will appear here.</p></div>
+                        <span class="as-pill as-pill-planned">In development</span>
+                    </div>
+                    <div class="as-insight-grid">
+                        <div><div class="as-insight-icon">↗</div><h3>Demand predictions</h3><p>Forecast future demand with uncertainty and explainable comparisons.</p></div>
+                        <div><div class="as-insight-icon">◈</div><h3>Smart replenishment</h3><p>Compare predicted demand with stock, lead times and pending deliveries.</p></div>
+                        <div><div class="as-insight-icon">◇</div><h3>Scenario simulator</h3><p>Explore demand shocks, supplier delays and budget trade-offs safely.</p></div>
+                    </div>
+                </section>
+                <section class="as-card as-table-panel" aria-label="Current tracked inventory">
+                    <div class="as-panel-head">
+                        <div><h2>Automotive Inventory</h2><p>Current Odoo on-hand and projected stock, not AI estimates.</p></div>
+                        <button type="button" class="as-link" t-on-click="openProducts">View all ↗</button>
+                    </div>
+                    <div class="as-table-scroll">
+                        <table class="as-table">
+                            <thead><tr><th scope="col">Part</th><th scope="col">SKU</th><th scope="col">OEM reference</th><th scope="col">On hand</th><th scope="col">Odoo projected</th><th scope="col">Status</th><th scope="col">Details</th></tr></thead>
+                            <tbody>
+                                <t t-foreach="state.data.rows" t-as="part" t-key="part.id">
+                                    <tr>
+                                        <td class="as-part-name"><t t-esc="part.name"/></td>
+                                        <td><t t-esc="part.sku"/></td>
+                                        <td><t t-esc="part.reference"/></td>
+                                        <td class="as-number"><t t-esc="part.on_hand"/></td>
+                                        <td class="as-number"><t t-esc="part.odoo_projected"/></td>
+                                        <td><span t-att-class="'as-status as-status-' + part.status" t-esc="part.status_label"/></td>
+                                        <td><button type="button" class="as-link" t-att-data-product-id="part.id" t-on-click="openProduct">Open ↗</button></td>
+                                    </tr>
+                                </t>
+                                <t t-if="!state.data.rows.length">
+                                    <tr><td colspan="7" class="as-table-empty">No products are tracked yet. Open Inventory, choose a product, and enable “Track in AutoStock AI”.</td></tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                <footer class="as-footer">AutoStock AI · Foundation release · Real stock only, AI model integration pending.</footer>
+            </t>
+        </main>
+    </t>
+</templates>
