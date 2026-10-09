@@ -7,7 +7,7 @@ ADDON = ROOT / "addons" / "autostock_ai"
 
 
 def test_odoo_manifests_and_views_well_formed():
-    manifest = ast.literal_eval(ast.parse((ADDON / "__manifest__.py").read_text()).body[0].value)
+    manifest = ast.literal_eval(ast.parse((ADDON / "__manifest__.py").read_text(encoding="utf-8")).body[0].value)
     assert manifest["version"].startswith("19.0.")
     assert {"stock", "web"}.issubset(manifest["depends"])
     for file in list(ADDON.rglob("*.xml")):
@@ -19,6 +19,17 @@ def test_odoo_manifests_and_views_well_formed():
 
 
 def test_dashboard_never_shows_fake_ai_accuracy():
-    xml = (ADDON / "static/src/dashboard/dashboard.xml").read_text()
-    assert "Predictions aren't connected yet" in xml
+    xml = (ADDON / "static/src/dashboard/dashboard.xml").read_text(encoding="utf-8")
+    assert "Forecasts aren't connected yet" in xml
+    assert "No sample predictions" in xml
     assert "AutoStock AI" in xml
+
+
+def test_inventory_action_allows_users_to_choose_untracked_products():
+    actions = etree.parse(str(ADDON / "views/dashboard_actions.xml"))
+    action = actions.find(".//record[@id='action_autostock_products']")
+    assert action is not None
+    assert action.find("field[@name='res_model']").text == "product.template"
+    domain = action.find("field[@name='domain']")
+    assert domain is not None and "is_storable" in domain.text
+    assert "autostock_enabled" not in domain.text

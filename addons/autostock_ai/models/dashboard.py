@@ -5,6 +5,9 @@ No synthetic or ML-derived data is returned from this model.
 from odoo import api, fields, models
 from odoo.exceptions import AccessError
 
+MAX_TRACKED_PRODUCTS = 5000
+DASHBOARD_TABLE_LIMIT = 12
+
 
 class AutoStockDashboard(models.AbstractModel):
     _name = "autostock.dashboard"
@@ -15,13 +18,25 @@ class AutoStockDashboard(models.AbstractModel):
         if not self.env.user.has_group("stock.group_stock_user"):
             raise AccessError("Inventory access is required to view AutoStock AI.")
 
-        # Avoid sudo: respect Odoo product ACLs and record rules.
-        Product = self.env["product.product"].with_company(self.env.company)
-        domain = [("active", "=", True), ("autostock_enabled", "=", True)]
+        # Avoid sudo: respect Odoo product ACLs and record rules. with_company
+        # moves the active company first but preserves every allowed company,
+        # so narrow the context before searching or computing stock quantities.
+        company = self.env.company
+        Product = (
+            self.env["product.product"]
+            .with_company(company)
+            .with_context(allowed_company_ids=[company.id])
+        )
+        domain = [
+            ("active", "=", True),
+            ("is_storable", "=", True),
+            ("autostock_enabled", "=", True),
+            ("company_id", "in", [False, company.id]),
+        ]
         total_tracked = Product.search_count(domain)
         # This first version explicitly marks summary incompleteness instead of
         # silently presenting a partial sample as a complete inventory report.
-        products = Product.search(domain, order="name, id", limit=5000)
+        products = Product.search(domain, order="name, id", limit=MAX_TRACKED_PRODUCTS)
         incomplete = total_tracked > len(products)
         counts = {"healthy": 0, "low": 0, "out": 0}
         rows = []
@@ -36,9 +51,10 @@ class AutoStockDashboard(models.AbstractModel):
             else:
                 status = "healthy"
             counts[status] += 1
-            if len(rows) < 12:
+            if len(rows) < DASHBOARD_TABLE_LIMIT:
                 rows.append({
                     "id": product.id,
+                    "template_id": product.product_tmpl_id.id,
                     "name": product.display_name,
                     "sku": product.default_code or "—",
                     "reference": product.autostock_oem_reference or "—",
