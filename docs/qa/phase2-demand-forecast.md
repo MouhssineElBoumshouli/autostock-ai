@@ -58,20 +58,21 @@ Tested the upgraded addon in the local Odoo 19 demo database at `http://127.0.0.
 
 - The completed synthetic run displayed SKU `DEMO-BP-001`, 210 observations, a 30-day outlook, `Measured holdout 30 / 30 days`, baseline and random-forest comparison, and the explicit same-holdout limitation. Current inventory is clearly separated from the synthetic forecast.
 - The demo database has zero tracked products. The dashboard displays its getting-started empty state and zero stock totals instead of fabricated inventory values. Selecting “Completed Odoo deliveries” with no tracked product leaves evaluation disabled and explains that a complete-history start date must be configured.
-- The page was visually inspected against `design/dashboard-concept.png`. It carries the reference's lavender surfaces, purple accent, cards, and forecast/stock-health composition; the Odoo navigation and intentionally smaller Phase 2 workflow remain. Full concept parity and visual sign-off are still open work.
-- Desktop viewport **1920×901**, tablet **768×1024**, and mobile **390×844** were checked. All three had no horizontal page overflow; tablet and mobile stack the KPI/forecast controls for their available width.
-- Browser console error logs were empty after the checks.
+- The page was compared with `design/dashboard-concept.png` and issue #8. The lavender canvas, purple actions, rounded cards, forecast chart, and stock-health summary carry through. Desktop and tablet preserve the side-by-side forecast/health composition; the KPI cards and controls stack on mobile. No clipping or layout issue required a code change. The current desktop navigation remains Odoo's native top bar; issue #8 calls for an integrated left navigation, which remains follow-up UX work along with the concept's broader workflows. This is not full visual-parity or commercial-release sign-off.
+- The installed Odoo 19 + PostgreSQL 16 Phase 2 demo at `http://127.0.0.1:8175` was captured locally with the bundled Playwright runtime. The screenshots were written directly to this repository at **1440×1000** desktop, **1024×1000** tablet, and **390×844** mobile viewports. Each viewport has an overview, a chart/evaluation view, and an expanded source/data-details view.
+- The screenshot run showed the completed synthetic `DEMO-BP-001` forecast, its chart and 30/30-day measured holdout, method and MAE details, source cutoff/provenance/assumptions/limitations, and daily history rows. It also showed the real demo database's four inventory KPI cards and stock-health empty state at zero tracked SKUs. No product, sales, supplier, or customer records were added to populate the dashboard; all forecast rows are labeled synthetic.
+- All three viewport widths had no horizontal document overflow. Browser console errors: **0**; uncaught page errors: **0**. A temporary stock-user QA account was created only for this local browser capture and removed after it completed.
 
-Screenshots were visible during the browser review but the available browser capture did not export persistent files into this repository. Therefore this PR still contains **no screenshot attachments**, and the screenshot-based review required by issue #8 is pending. To add reviewable evidence on Windows:
-
-1. Open `http://127.0.0.1:8175/odoo/action-454` and confirm the synthetic sample, `BP 001`, 30-day horizon, and `Measured holdout 30 / 30 days`.
-2. Capture the dashboard at desktop **1440×1000**, tablet **768×1024**, and mobile **390×844**. For responsive sizes, use Chrome DevTools device toolbar with **Ctrl+Shift+M** and enter the dimensions.
-3. Use **Win+Shift+S** and save JPEGs as `docs/qa/screenshots/phase2-forecast-desktop.jpg`, `phase2-forecast-tablet.jpg`, and `phase2-forecast-mobile.jpg`. Add them to the PR and retain screenshot-based design review as pending until they are attached.
+| Viewport | Overview: navigation and inventory cards | Forecast chart and evaluation | Source, assumptions, and daily values |
+|---|---|---|---|
+| Desktop, 1440×1000 | [phase2-forecast-desktop.jpg](screenshots/phase2-forecast-desktop.jpg) | [phase2-forecast-desktop-evaluation.jpg](screenshots/phase2-forecast-desktop-evaluation.jpg) | [phase2-forecast-desktop-details.jpg](screenshots/phase2-forecast-desktop-details.jpg) |
+| Tablet, 1024×1000 | [phase2-forecast-tablet.jpg](screenshots/phase2-forecast-tablet.jpg) | [phase2-forecast-tablet-evaluation.jpg](screenshots/phase2-forecast-tablet-evaluation.jpg) | [phase2-forecast-tablet-details.jpg](screenshots/phase2-forecast-tablet-details.jpg) |
+| Mobile, 390×844 | [phase2-forecast-mobile.jpg](screenshots/phase2-forecast-mobile.jpg) | [phase2-forecast-mobile-evaluation.jpg](screenshots/phase2-forecast-mobile-evaluation.jpg) | [phase2-forecast-mobile-details.jpg](screenshots/phase2-forecast-mobile-details.jpg) |
 
 ## Remaining limits and next steps
 
 - Results use deterministic synthetic data, not an approved business dataset. Repeated rolling-origin backtesting, bias/seasonality review, interval calibration, and business evaluation are still required.
 - Odoo cannot reconstruct all historical record versions; the source snapshot is not a full as-of replay. Stockouts may also make fulfilled sales understate demand.
 - Branding configuration, onboarding beyond current empty states, broader accessibility review, installation/upgrade validation across supported configurations, performance under business-scale load, and backup/restore/operational gates remain open under issues #7 and #8.
-- The approved concept includes wider navigation and workflows that are intentionally outside this Phase 2 correction. Keep visual review open until the requested screenshots are attached and reviewed.
+- Full left-navigation parity, wider workflows, and broader accessibility review remain commercial-readiness work under issue #8.
 - Forecasts must not automatically trigger purchasing or change stock. Do not claim the product is production-ready until all commercial release gates have evidence.
