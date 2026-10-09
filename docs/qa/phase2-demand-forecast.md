@@ -10,7 +10,7 @@
 |---|---|---|
 | Python tests | **17 passed** | `.\.venv\Scripts\python.exe -m pytest -q` |
 | Python compilation | **Passed** | `.\.venv\Scripts\python.exe -m compileall -q addons ml scripts tests` |
-| Odoo integration tests | **23 tests; 0 failures, 0 errors** | Fresh `autostock_phase2_ci` database; Odoo 19 (`19.0-20260926`) and PostgreSQL 16; addon installed with `--test-enable --test-tags=/autostock_ai --stop-after-init --without-demo=true`. The temporary Compose project, volumes, and generated database credentials were removed after the run. |
+| Odoo integration tests | **24 tests; 0 failures, 0 errors** | Fresh `autostock_phase2_ci` database; Odoo 19 (`19.0-20260926`) and PostgreSQL 16; addon installed with `--test-enable --test-tags=/autostock_ai --stop-after-init --without-demo=true`. The temporary Compose project, volumes, and generated database credentials were removed after the run. |
 | Docker Compose configuration | **Passed** | `docker compose config --quiet` |
 | Git whitespace check | **Passed** | `git diff --check` (Git printed expected LF-to-CRLF working-copy notices only.) |
 | Synthetic forecast generation | **Passed** | `.\.venv\Scripts\python.exe scripts/generate_synthetic_sales.py` generated the ignored local fixture. |
@@ -36,6 +36,7 @@ The simple macro averages are 2.0993 baseline MAE and 2.2984 random-forest MAE. 
 The Odoo integration suite exercises actual Odoo records and stock workflows:
 
 - A completed customer delivery is counted; a linked completed return is netted against its delivery day. The test changes the sale UoM and verifies conversion into the product inventory UoM.
+- A stock-and-sales user requests a real seven-day forecast from 120 days of Odoo history. The worker processes its completed delivery, stores the daily source snapshot and digest, and persists seven forecast points.
 - Quotations, confirmed-but-unshipped orders, canceled orders, and moves completed after the run cutoff are excluded.
 - Requests require the expected inventory and sales permissions. Insufficient covered history persists an explicit state without predictions, and direct forecast-run creation cannot bypass the validated request path.
 - Two companies have separate products and stock histories plus a shared product. A user enabled for both receives the right company-specific demand and the shared product's company-specific delivery total; each company's forecast choices contain only its own product and the shared product. A user restricted to Company B cannot see Company A forecast runs. Standard Odoo ACLs and record rules remain enabled.

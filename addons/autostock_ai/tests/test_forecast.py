@@ -165,6 +165,63 @@ class TestAutoStockForecast(TransactionCase):
         self.assertEqual(len(snapshot), 1)
         self.assertEqual(order.state, "sale")
 
+    def test_real_forecast_worker_persists_evaluated_odoo_delivery_history(self):
+        company = self.env.company
+        start = self.today - timedelta(days=119)
+        company.write({"autostock_history_complete_from": start})
+        warehouse = self._warehouse(company)
+        product = self._product(company, "AS-REAL-WORKER")
+        product.write({"create_date": fields.Datetime.to_string(datetime.combine(start, time.min))})
+        _, delivery = self._sale_order(company, warehouse, product, quantity=4, state="done")
+        delivery.move_ids.write(
+            {
+                "date": fields.Datetime.to_string(
+                    datetime.combine(start + timedelta(days=15), time(10))
+                )
+            }
+        )
+
+        forecast_user = self.env["res.users"].create(
+            {
+                "name": "AutoStock Real Forecast User",
+                "login": "autostock-real-forecast-user",
+                "company_id": company.id,
+                "company_ids": [Command.set([company.id])],
+                "group_ids": [
+                    Command.set(
+                        [
+                            self.env.ref("base.group_user").id,
+                            self.env.ref("stock.group_stock_user").id,
+                            self.env.ref("sales_team.group_sale_manager").id,
+                        ]
+                    )
+                ],
+            }
+        )
+        forecast_model = (
+            self.env["autostock.forecast.run"]
+            .with_user(forecast_user)
+            .with_company(company)
+            .with_context(allowed_company_ids=[company.id])
+        )
+        result = forecast_model.request_forecast(product.id, 7, start, self.today, False)
+        self.assertEqual(result["state"], "queued")
+        run = self.env["autostock.forecast.run"].browse(result["id"])
+
+        run._process_queued_run()
+
+        run.invalidate_recordset()
+        self.assertEqual(run.state, "completed", run.failure_reason)
+        self.assertEqual(run.source_type, REAL_SOURCE)
+        self.assertEqual(run.source_event_count, 1)
+        self.assertEqual(run.history_days, 120)
+        self.assertEqual(len(run.observation_ids), 120)
+        self.assertEqual(len(run.point_ids), 7)
+        self.assertEqual(sum(run.observation_ids.mapped("units")), 4.0)
+        self.assertTrue(run.source_snapshot_sha256)
+        self.assertEqual(run.model_version, "autostock-demand-v2.0.0")
+        self.assertEqual(run.review_status, "unreviewed")
+
     def test_source_cutoff_excludes_moves_completed_after_cutoff(self):
         company = self.env.company
         warehouse = self._warehouse(company)
