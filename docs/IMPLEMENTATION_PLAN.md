@@ -10,6 +10,7 @@ The [commercial-readiness charter](https://github.com/MouhssineElBoumshouli/auto
 | P0b | Install and validate the addon in Odoo 19 | Fresh-database addon integration and browser checks | Complete in PR #1 |
 | P1 | Verified sales-history scope, demand definition, provenance and company boundaries | Delivery/return, cutoff, UoM, multi-company and ACL tests | Implemented with Phase 2 |
 | P2 | Persisted 7/30/60-day forecasts; chronological comparison with simple baselines; scheduled work; reviewed result UI | Python evaluation, Odoo integration suite and browser checks | Implemented with Phase 2; see [QA report](qa/phase2-demand-forecast.md) |
+| P2.5 | Premium Odoo dashboard shell, responsive navigation, readable forecast charts and useful inventory states | Odoo integration tests, live browser interactions and desktop/tablet/mobile screenshots | Implemented in `codex/phase2-5-premium-dashboard`; pending review, see [QA report](qa/phase2-5-premium-dashboard.md) |
 | P3 | Stockout risk and human-reviewed replenishment proposals | Domain, permission and scenario tests | Planned |
 | P4 | Budget optimizer and what-if simulator | Repeatability and constraint tests | Planned |
 | P5 | Permission-aware assistant and report generator | Source-grounding and PDF rendering tests | Planned |

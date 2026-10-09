@@ -28,6 +28,21 @@ def test_dashboard_never_shows_fake_ai_accuracy():
     assert "AutoStock AI" in xml
 
 
+def test_dashboard_navigation_and_chart_controls_are_connected():
+    xml = (ADDON / "static/src/dashboard/dashboard.xml").read_text(encoding="utf-8")
+    javascript = (ADDON / "static/src/dashboard/dashboard.js").read_text(encoding="utf-8")
+    forecast = (ADDON / "models/forecast.py").read_text(encoding="utf-8")
+
+    assert 'aria-label="AutoStock AI navigation"' in xml
+    assert 't-on-click="openProducts"' in xml
+    assert 't-on-click="scrollToForecast"' in xml
+    assert 't-on-click="changeChartWindow"' in xml
+    assert "chartWindowDays" in javascript
+    assert "company_logo_url" in forecast
+    assert "Other decision tools" not in xml
+    assert "Replenishment review" not in xml
+
+
 def test_inventory_action_allows_users_to_choose_untracked_products():
     actions = etree.parse(str(ADDON / "views/dashboard_actions.xml"))
     action = actions.find(".//record[@id='action_autostock_products']")

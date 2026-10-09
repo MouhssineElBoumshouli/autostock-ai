@@ -376,6 +376,16 @@ class TestAutoStockForecast(TransactionCase):
         self.assertFalse(run.point_ids)
         self.assertIn("At least 90", run.failure_reason)
 
+    def test_forecast_options_include_active_company_branding(self):
+        options = self.env["autostock.forecast.run"].get_forecast_options()
+
+        self.assertEqual(options["company_id"], self.env.company.id)
+        self.assertEqual(options["company_name"], self.env.company.display_name)
+        self.assertEqual(
+            options["company_logo_url"],
+            f"/web/image/res.company/{self.env.company.id}/logo_web",
+        )
+
     def test_forecast_run_creation_cannot_bypass_validated_request(self):
         with self.assertRaises(AccessError):
             self.env["autostock.forecast.run"].create({"name": "unvalidated"})

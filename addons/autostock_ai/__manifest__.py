@@ -1,7 +1,7 @@
 {
     "name": "AutoStock AI — Inventory Intelligence",
     "author": "AutoStock AI",
-    "version": "19.0.0.1.1",
+    "version": "19.0.0.1.2",
     "summary": "Automotive inventory intelligence and evaluated demand forecasts",
     "description": """A company-aware inventory dashboard and explainable demand forecasts.
 
