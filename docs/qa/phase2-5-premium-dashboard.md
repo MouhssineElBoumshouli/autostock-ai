@@ -14,12 +14,13 @@ The commercial-readiness charter ([issue #7](https://github.com/MouhssineElBoums
 - Showed the active Odoo company and its company logo through the authenticated Odoo image route.
 - Added keyboard-operable mobile navigation with focus entry, focus wrapping, Escape close, and focus return. A live browser check exposed an Owl rerender timing issue; focus now lands after the drawer is rendered.
 - Made chart history selection work at 30 days, 90 days, or every observation returned for the selected history, with the accessible date range included in the chart label. The SVG resizes with its container and keeps date and value ticks visible.
+- Fixed Full-history plot compression by synchronizing the SVG `viewBox` to the actual rendered SVG width after Owl patches and frame resize events. This prevents SVG's default `xMidYMid meet` behavior from centering a stale 260px viewBox inside a much wider chart.
 - Replaced the empty health visualization with an explanatory empty state and added next-step guidance when no tracked products exist.
 - Removed cards that suggested tools not implemented in Odoo.
 - Added an idempotent, database-guarded synthetic automotive inventory seeder. Its `cleanup` action is a **non-destructive reset**: it zeroes quantities and disables AutoStock tracking on labeled `[SYNTHETIC QA]` products, but the products remain in the catalog and Odoo keeps stock adjustment history. It creates no customers, suppliers, sales, or purchase orders.
 - Corrected company-switch detection to compare company IDs, reset company-bound filters and charts, and ignore late forecast snapshots from the previous company. The Odoo regression uses two real companies with separate products and warehouses; the browser regression holds the display name constant while changing the ID. Odoo enforces unique company names, so the backend test does not create duplicate names.
 - Made the appbar breadcrumb consistently identify the Dashboard route and made the Odoo connection status reflect loading, successful dashboard RPCs, failures, and recovery.
-- Extended Playwright browser QA to exercise 400 synthetic history observations, accessible date ranges, same-name display with a changed company ID, company-bound state reset, truthful status failure/recovery, navigation, and absence of future-feature placeholders.
+- Extended Playwright browser QA to measure the SVG, `viewBox`, axes/path bounds, figure width, and plot utilization after 30/Full transitions on desktop, tablet, and mobile, using 400 in-memory synthetic history observations. It also checks accessible date ranges, same-name display with a changed company ID, company-bound state reset, truthful status failure/recovery, navigation, and absence of future-feature placeholders.
 
 ## Automated checks
 
@@ -30,7 +31,8 @@ The commercial-readiness charter ([issue #7](https://github.com/MouhssineElBoums
 | Odoo integration tests | **22 test cases; 0 failures, 0 errors** | Fresh isolated Compose project, Odoo `19.0-20260926`, PostgreSQL 16; addon installed using `--test-enable --test-tags=/autostock_ai --stop-after-init --without-demo=true`. The project volumes and container were removed after the run. |
 | GitHub Actions | **Both jobs passed** | Run [37991940492](https://github.com/MouhssineElBoumshouli/autostock-ai/actions/runs/37991940492): Python tests, compilation, and synthetic evaluation passed; Odoo 19 addon installation and integration tests passed against PostgreSQL 16. CI pulls the pinned test images from the public Docker image cache before starting Compose. |
 | Synthetic forecast evaluation | **Completed for 6 labeled synthetic SKUs** | Generated 210-day histories and evaluated a 30-day chronological holdout with `python -m ml.evaluate ... --days 30`. This verifies pipeline execution only; it is not evidence of business forecast accuracy. |
-| Odoo browser QA | **Passed; 0 unexpected console/page errors** | Chromium against the running local Odoo 19 demo database. Two expected browser logs came from the deliberate dashboard-RPC failure used to test unavailable and recovery status. Checked live Odoo values, synthetic provenance, 30/90/full chart ranges, accessible dates, same-name display with a changed company ID, company-bound resets, and a delayed old snapshot arriving after the new company forecast. |
+| Odoo browser QA | **Passed; 0 unexpected console/page errors** | Chromium against the running local Odoo 19 demo database. Two expected logs came from the deliberate dashboard-RPC failure used to test unavailable and recovery status. Checked live Odoo values, synthetic provenance, 30/90/full chart ranges, accessible dates, same-name display with a changed company ID, company-bound resets, and rejection of a delayed old forecast snapshot. |
+| 400-day plot sizing regression | **Passed at desktop, tablet, and mobile** | After 30↔Full toggles, plot axes used **86%** of figure width on desktop (742.66px panel, 674.66px SVG, 675px viewBox, 602.69px axes), **86%** on tablet (756px panel, 688px SVG/viewBox, 616px axes), and **71%** on mobile (364px panel, 318px SVG/viewBox, 234.82px axes). All exceed the 68% browser assertion. The stale 260px viewBox no longer recurs after range changes. |
 | Viewport checks | **Passed** | Desktop 1440×1000, tablet 1024×900, and mobile 390×844. Inventory columns remain available through the labeled horizontal-scroll table on mobile. |
 | Static checks and Docker Compose configuration | **Passed** | Python compileall, `node --check scripts/qa_dashboard_browser.mjs`, `docker compose config --quiet`, and `git diff --check` |
 
@@ -48,7 +50,15 @@ Screenshots were captured directly to this repository using local Playwright/Chr
 
 The [mobile navigation capture](screenshots/phase2-5/phase2-5-navigation-mobile.jpg) shows the open drawer and visible keyboard focus state.
 
-The [400-day full-history chart capture](screenshots/phase2-5/phase2-5-forecast-full-400-desktop.jpg) verifies the Full control includes every returned observation and keeps its date labels spaced. Its synthetic history extension was applied only to the browser response fixture.
+The 400-day Full-history screenshots show the corrected responsive plot width at all tested sizes:
+
+| Viewport | Actual Odoo screenshot |
+|---|---|
+| Desktop, 1440×1000 | [Full-history chart](screenshots/phase2-5/phase2-5-forecast-full-400-desktop.jpg) |
+| Tablet, 1024×900 | [Full-history chart](screenshots/phase2-5/phase2-5-forecast-full-400-tablet.jpg) |
+| Mobile, 390×844 | [Full-history chart](screenshots/phase2-5/phase2-5-forecast-full-400-mobile.jpg) |
+
+All 400-observation extensions were applied only to the browser response fixture and were not written to Odoo. The captures also verify that the Full control includes all returned observations and that the date labels remain spaced.
 
 ## Comparison with the approved design
 

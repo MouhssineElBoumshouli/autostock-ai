@@ -1,5 +1,5 @@
 /** @odoo-module **/
-import { Component, onMounted, onWillDestroy, onWillStart, useRef, useState } from "@odoo/owl";
+import { Component, onMounted, onPatched, onWillDestroy, onWillStart, useRef, useState } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 
@@ -62,17 +62,16 @@ export class AutoStockDashboard extends Component {
             },
         });
         this.mobileQuery.addEventListener("change", this.handleMobileChange);
+        onPatched(() => this.syncChartWidth());
         onMounted(() => {
             if (typeof ResizeObserver === "undefined" || !this.chartFrame.el) {
                 return;
             }
-            this.chartResizeObserver = new ResizeObserver(([entry]) => {
-                const width = Math.max(260, Math.round(entry.contentRect.width - 28));
-                if (width !== this.state.chartWidth) {
-                    this.state.chartWidth = width;
-                }
+            this.chartResizeObserver = new ResizeObserver(() => {
+                window.requestAnimationFrame(() => this.syncChartWidth());
             });
             this.chartResizeObserver.observe(this.chartFrame.el);
+            this.syncChartWidth();
         });
         onWillStart(() => this.load());
         onWillDestroy(() => {
@@ -237,6 +236,23 @@ export class AutoStockDashboard extends Component {
             cutoffX: x(actual.length - 1).toFixed(1),
             lastDate: future.at(-1).day,
         };
+    }
+
+    syncChartWidth() {
+        if (this.destroyed || !this.chartFrame.el) {
+            return;
+        }
+        const svg = this.chartFrame.el.querySelector(".as-forecast-chart");
+        const renderedWidth = svg?.getBoundingClientRect().width;
+        if (!renderedWidth) {
+            return;
+        }
+        // The viewBox must track the SVG viewport. A stale, smaller viewBox is
+        // centered by SVG's default preserveAspectRatio and leaves empty sides.
+        const width = Math.max(260, Math.round(renderedWidth));
+        if (width !== this.state.chartWidth) {
+            this.state.chartWidth = width;
+        }
     }
 
     toggleMobileNav() {

@@ -131,6 +131,89 @@ async function takeScreenshot(filename) {
     });
 }
 
+async function measureChartGeometry() {
+    return page.locator(".as-forecast-chart").evaluate((svg) => {
+        const round = (value) => Math.round(value * 100) / 100;
+        const svgRect = svg.getBoundingClientRect();
+        const panel = svg.closest(".as-forecast-panel");
+        const figure = svg.closest(".as-forecast-figure");
+        const panelRect = panel.getBoundingClientRect();
+        const panelStyle = getComputedStyle(panel);
+        const panelContentWidth = panelRect.width
+            - parseFloat(panelStyle.borderLeftWidth)
+            - parseFloat(panelStyle.borderRightWidth)
+            - parseFloat(panelStyle.paddingLeft)
+            - parseFloat(panelStyle.paddingRight);
+        const matrix = svg.getScreenCTM();
+        const boundsFor = (selector) => {
+            const points = [...svg.querySelectorAll(selector)].flatMap((element) => {
+                const box = element.getBBox();
+                const corners = [
+                    [box.x, box.y],
+                    [box.x + box.width, box.y],
+                    [box.x, box.y + box.height],
+                    [box.x + box.width, box.y + box.height],
+                ];
+                return corners.map(([x, y]) => {
+                    const point = svg.createSVGPoint();
+                    point.x = x;
+                    point.y = y;
+                    return point.matrixTransform(matrix);
+                });
+            });
+            const left = Math.min(...points.map((point) => point.x));
+            const right = Math.max(...points.map((point) => point.x));
+            const top = Math.min(...points.map((point) => point.y));
+            const bottom = Math.max(...points.map((point) => point.y));
+            return {
+                left: round(left - svgRect.left),
+                right: round(right - svgRect.left),
+                width: round(right - left),
+                top: round(top - svgRect.top),
+                bottom: round(bottom - svgRect.top),
+                height: round(bottom - top),
+            };
+        };
+        const axes = boundsFor(".as-chart-axis");
+        const plot = boundsFor(".as-chart-axis, .as-chart-gridline, .as-chart-edge, .as-chart-history, .as-chart-prediction, .as-chart-band");
+        return {
+            viewport: { width: window.innerWidth, height: window.innerHeight },
+            panelWidth: round(panelRect.width),
+            panelContentWidth: round(panelContentWidth),
+            expectedChartWidthFromObserver: round(panelContentWidth - 28),
+            figureWidth: round(figure.getBoundingClientRect().width),
+            svg: { width: round(svgRect.width), height: round(svgRect.height) },
+            viewBox: svg.getAttribute("viewBox"),
+            viewBoxWidth: round(svg.viewBox.baseVal.width),
+            viewBoxHeight: round(svg.viewBox.baseVal.height),
+            preserveAspectRatio: svg.getAttribute("preserveAspectRatio") || "xMidYMid meet (SVG default)",
+            axes,
+            plot,
+            plotWidthUtilization: round(plot.width / svgRect.width),
+            axisWidthUtilization: round(axes.width / svgRect.width),
+            plotFigureUtilization: round(plot.width / figure.getBoundingClientRect().width),
+        };
+    });
+}
+
+async function waitForChartWidthSync() {
+    await page.waitForFunction(() => {
+        const svg = document.querySelector(".as-forecast-chart");
+        return svg && Math.abs(svg.viewBox.baseVal.width - Math.round(svg.getBoundingClientRect().width)) <= 1;
+    });
+}
+
+function assertChartUsesAvailableWidth(label, geometry) {
+    assert(
+        geometry.plotFigureUtilization >= 0.68,
+        `${label} plot uses only ${(geometry.plotFigureUtilization * 100).toFixed(1)}% of its figure width: ${JSON.stringify(geometry)}`
+    );
+    assert(
+        Math.abs(geometry.viewBoxWidth - Math.round(geometry.svg.width)) <= 1,
+        `${label} SVG viewBox (${geometry.viewBoxWidth}) does not track its rendered width (${geometry.svg.width}): ${JSON.stringify(geometry)}`
+    );
+}
+
 try {
     await page.goto(`${baseUrl}/web/login?db=${encodeURIComponent(database)}`, { waitUntil: "domcontentloaded" });
     await page.locator('input[name="login"], #login').first().fill(login);
@@ -182,7 +265,10 @@ try {
         await page.locator(".as-forecast-figure").scrollIntoViewIfNeeded();
         await page.getByRole("button", { name: "30 days", exact: true }).click();
         await page.waitForFunction(() => document.querySelector(".as-chart-window-label")?.textContent.trim().startsWith("30 of "));
+        await waitForChartWidthSync();
         assert((await page.locator(".as-chart-window-label").innerText()).startsWith("30 of "), `${viewport.name} 30-day chart window did not update.`);
+        const chart30Geometry = await measureChartGeometry();
+        assertChartUsesAvailableWidth(`${viewport.name} 30-day chart`, chart30Geometry);
         await page.getByRole("button", { name: "90 days", exact: true }).click();
         await page.waitForFunction(() => document.querySelector(".as-chart-window-label")?.textContent.trim().startsWith("90 of "));
         const chartLabel = await page.locator(".as-chart-window-label").innerText();
@@ -193,7 +279,10 @@ try {
         );
         await page.getByRole("button", { name: "Full", exact: true }).click();
         await page.waitForFunction(() => document.querySelector(".as-chart-window-label")?.textContent.trim().startsWith("210 of "));
+        await waitForChartWidthSync();
         assert((await page.locator(".as-chart-window-label").innerText()).startsWith("210 of "), `${viewport.name} full chart window did not restore all available history.`);
+        const chartFullGeometry = await measureChartGeometry();
+        assertChartUsesAvailableWidth(`${viewport.name} full-history chart`, chartFullGeometry);
         await page.getByRole("button", { name: "30 days", exact: true }).click();
         await page.waitForFunction(() => document.querySelector(".as-chart-window-label")?.textContent.trim().startsWith("30 of "));
         await takeScreenshot(`phase2-5-forecast-${viewport.name}.jpg`);
@@ -259,16 +348,33 @@ try {
     assert(expandedHistoryRange, "The synthetic browser fixture was not extended beyond the original 210-day history.");
     await page.getByRole("button", { name: "Full", exact: true }).click();
     await page.waitForFunction(() => document.querySelector(".as-chart-window-label")?.textContent.trim() === "400 of 400 days");
+    await waitForChartWidthSync();
     const fullHistoryLabel = await page.locator(".as-forecast-chart").getAttribute("aria-label");
     assert(fullHistoryLabel.includes("400 of 400 history days"), `Full history accessibility label omitted the complete range: ${fullHistoryLabel}`);
     assert(fullHistoryLabel.includes(`from ${expandedHistoryRange.first} through ${expandedHistoryRange.last}`), `Full history accessibility label omitted its date range: ${fullHistoryLabel}`);
     assert(await page.locator(".as-forecast-chart .as-chart-date").count() === 3, "Full chart history rendered crowded date labels instead of spaced start, midpoint, and forecast-end ticks.");
     const firstChartDate = await page.locator(".as-forecast-chart .as-chart-date title").first().textContent();
     assert(firstChartDate === expandedHistoryRange.first, `The full chart starts at ${firstChartDate}, expected ${expandedHistoryRange.first}.`);
-    await page.locator(".as-forecast-panel").scrollIntoViewIfNeeded();
-    await takeScreenshot("phase2-5-forecast-full-400-desktop.jpg");
-    await page.getByRole("button", { name: "30 days", exact: true }).click();
-    await page.waitForFunction(() => document.querySelector(".as-chart-window-label")?.textContent.trim() === "30 of 400 days");
+    for (const viewport of resolutions) {
+        await page.setViewportSize({ width: viewport.width, height: viewport.height });
+        await page.getByRole("button", { name: "30 days", exact: true }).click();
+        await page.waitForFunction(() => document.querySelector(".as-chart-window-label")?.textContent.trim() === "30 of 400 days");
+        await waitForChartWidthSync();
+        const chart30Of400Geometry = await measureChartGeometry();
+        assertChartUsesAvailableWidth(`${viewport.name} 400-history 30-day mode`, chart30Of400Geometry);
+
+        await page.getByRole("button", { name: "Full", exact: true }).click();
+        await page.waitForFunction(() => document.querySelector(".as-chart-window-label")?.textContent.trim() === "400 of 400 days");
+        await waitForChartWidthSync();
+        const full400Geometry = await measureChartGeometry();
+        assertChartUsesAvailableWidth(`${viewport.name} 400-day Full history`, full400Geometry);
+        console.log(`[chart-geometry] ${viewport.name} 400-day 30/full toggle ${JSON.stringify({ thirtyDays: chart30Of400Geometry, fullHistory: full400Geometry })}`);
+
+        await page.locator(".as-forecast-panel").scrollIntoViewIfNeeded();
+        await takeScreenshot(`phase2-5-forecast-full-400-${viewport.name}.jpg`);
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await waitForChartWidthSync();
     await page.getByRole("button", { name: "90 days", exact: true }).click();
     await page.waitForFunction(() => document.querySelector(".as-chart-window-label")?.textContent.trim() === "90 of 400 days");
     let changedOptionsResponse = null;
@@ -431,7 +537,7 @@ try {
         viewports: resolutions.map(({ name, width, height }) => ({ name, width, height })),
         syntheticInventoryRows: 5,
         chartWindows: [30, 90, "full (400 synthetic observations)"],
-        checks: ["live Odoo data", "synthetic provenance", "responsive navigation and route breadcrumb", "chart range and accessible date ranges", "company-id reset with same-name display and late-snapshot rejection", "Odoo connection failure and recovery", "inventory details", "Odoo return navigation", "keyboard drawer", "horizontal overflow"],
+        checks: ["live Odoo data", "synthetic provenance", "responsive navigation and route breadcrumb", "chart range and accessible date ranges", "plot width stays aligned to SVG viewport through 30/full toggles at desktop/tablet/mobile", "company-id reset with same-name display and late-snapshot rejection", "Odoo connection failure and recovery", "inventory details", "Odoo return navigation", "keyboard drawer", "horizontal overflow"],
     }));
 } catch (error) {
     const safeMessage = String(error?.message || error).split("\nCall log:")[0];
