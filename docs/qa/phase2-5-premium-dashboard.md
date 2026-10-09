@@ -25,9 +25,10 @@ The commercial-readiness charter ([issue #7](https://github.com/MouhssineElBoums
 
 | Check | Result | Evidence |
 |---|---|---|
-| Python tests | **24 passed** | `python -m pytest -q` |
+| Python tests | **25 passed** | `python -m pytest -q` |
 | Python compilation | **Passed** | `python -m compileall -q addons ml scripts tests` |
 | Odoo integration tests | **22 test cases; 0 failures, 0 errors** | Fresh isolated Compose project, Odoo `19.0-20260926`, PostgreSQL 16; addon installed using `--test-enable --test-tags=/autostock_ai --stop-after-init --without-demo=true`. The project volumes and container were removed after the run. |
+| GitHub Actions | **Both jobs passed** | Run [37991940492](https://github.com/MouhssineElBoumshouli/autostock-ai/actions/runs/37991940492): Python tests, compilation, and synthetic evaluation passed; Odoo 19 addon installation and integration tests passed against PostgreSQL 16. CI pulls the pinned test images from the public Docker image cache before starting Compose. |
 | Synthetic forecast evaluation | **Completed for 6 labeled synthetic SKUs** | Generated 210-day histories and evaluated a 30-day chronological holdout with `python -m ml.evaluate ... --days 30`. This verifies pipeline execution only; it is not evidence of business forecast accuracy. |
 | Odoo browser QA | **Passed; 0 unexpected console/page errors** | Chromium against the running local Odoo 19 demo database. Two expected browser logs came from the deliberate dashboard-RPC failure used to test unavailable and recovery status. Checked live Odoo values, synthetic provenance, 30/90/full chart ranges, accessible dates, same-name display with a changed company ID, company-bound resets, and a delayed old snapshot arriving after the new company forecast. |
 | Viewport checks | **Passed** | Desktop 1440×1000, tablet 1024×900, and mobile 390×844. Inventory columns remain available through the labeled horizontal-scroll table on mobile. |
