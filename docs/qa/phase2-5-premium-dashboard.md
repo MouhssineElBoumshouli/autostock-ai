@@ -13,25 +13,27 @@ The commercial-readiness charter ([issue #7](https://github.com/MouhssineElBoums
 - Added a responsive AutoStock workspace rail and compact context bar inside the Odoo action. Odoo's native top bar, company switcher, user menu, product records, and access controls remain in place.
 - Showed the active Odoo company and its company logo through the authenticated Odoo image route.
 - Added keyboard-operable mobile navigation with focus entry, focus wrapping, Escape close, and focus return. A live browser check exposed an Owl rerender timing issue; focus now lands after the drawer is rendered.
-- Made chart history selection work at 30 days, 90 days, or the full available history. The SVG resizes with its container, exposes a changing accessible label, and keeps date and value ticks visible.
+- Made chart history selection work at 30 days, 90 days, or every observation returned for the selected history, with the accessible date range included in the chart label. The SVG resizes with its container and keeps date and value ticks visible.
 - Replaced the empty health visualization with an explanatory empty state and added next-step guidance when no tracked products exist.
 - Removed cards that suggested tools not implemented in Odoo.
-- Added an idempotent, database-guarded synthetic automotive inventory seeder and cleanup command. All seeded products are labeled `[SYNTHETIC QA]`; the script writes only those product settings and stock adjustments in the named local demo databases, and creates no customers, suppliers, sales, or purchase orders.
-- Added Playwright browser QA for the installed Odoo dashboard and structural checks for connected navigation, chart controls, and absence of future-feature placeholders.
+- Added an idempotent, database-guarded synthetic automotive inventory seeder. Its `cleanup` action is a **non-destructive reset**: it zeroes quantities and disables AutoStock tracking on labeled `[SYNTHETIC QA]` products, but the products remain in the catalog and Odoo keeps stock adjustment history. It creates no customers, suppliers, sales, or purchase orders.
+- Corrected company-switch detection to compare company IDs, reset company-bound filters and charts, and ignore late forecast snapshots from the previous company. The Odoo regression uses two real companies with separate products and warehouses; the browser regression holds the display name constant while changing the ID. Odoo enforces unique company names, so the backend test does not create duplicate names.
+- Made the appbar breadcrumb consistently identify the Dashboard route and made the Odoo connection status reflect loading, successful dashboard RPCs, failures, and recovery.
+- Extended Playwright browser QA to exercise 400 synthetic history observations, accessible date ranges, same-name display with a changed company ID, company-bound state reset, truthful status failure/recovery, navigation, and absence of future-feature placeholders.
 
 ## Automated checks
 
 | Check | Result | Evidence |
 |---|---|---|
-| Python tests | **22 passed** | `.venv\Scripts\python.exe -m pytest -q` |
-| Python compilation | **Passed** | `.venv\Scripts\python.exe -m compileall -q addons ml scripts tests` |
-| Odoo integration tests | **21 test cases; 0 failures, 0 errors** | Fresh isolated Compose project, Odoo `19.0-20260926`, PostgreSQL 16; addon installed using `--test-enable --test-tags=/autostock_ai --stop-after-init --without-demo=true`. `odoo.tests.result` reports 21 cases; the stats line includes four class setup/teardown timing entries. The project volumes and container were removed after the run. |
+| Python tests | **24 passed** | `python -m pytest -q` |
+| Python compilation | **Passed** | `python -m compileall -q addons ml scripts tests` |
+| Odoo integration tests | **22 test cases; 0 failures, 0 errors** | Fresh isolated Compose project, Odoo `19.0-20260926`, PostgreSQL 16; addon installed using `--test-enable --test-tags=/autostock_ai --stop-after-init --without-demo=true`. The project volumes and container were removed after the run. |
 | Synthetic forecast evaluation | **Completed for 6 labeled synthetic SKUs** | Generated 210-day histories and evaluated a 30-day chronological holdout with `python -m ml.evaluate ... --days 30`. This verifies pipeline execution only; it is not evidence of business forecast accuracy. |
-| Odoo browser QA | **Passed; 0 console/page errors** | Chromium against the running local Odoo 19 demo database. Checked live Odoo values, synthetic provenance, navigation, 30/90/full chart ranges and accessible labels, inventory detail form and return navigation, mobile keyboard focus behavior, and horizontal overflow. |
+| Odoo browser QA | **Passed; 0 unexpected console/page errors** | Chromium against the running local Odoo 19 demo database. Two expected browser logs came from the deliberate dashboard-RPC failure used to test unavailable and recovery status. Checked live Odoo values, synthetic provenance, 30/90/full chart ranges, accessible dates, same-name display with a changed company ID, company-bound resets, and a delayed old snapshot arriving after the new company forecast. |
 | Viewport checks | **Passed** | Desktop 1440×1000, tablet 1024×900, and mobile 390×844. Inventory columns remain available through the labeled horizontal-scroll table on mobile. |
-| Docker Compose configuration | **Passed** | `docker compose config --quiet` |
+| Static checks and Docker Compose configuration | **Passed** | Python compileall, `node --check scripts/qa_dashboard_browser.mjs`, `docker compose config --quiet`, and `git diff --check` |
 
-The browser run used only the local demo database `autostock_phase2_demo`. Its five labeled automotive products had on-hand quantities of 48 front brake pads, 8 oil filters, 0 spark plugs, 15 12V batteries, and 4 cabin air filters. These are explicitly synthetic QA records, not business data or demand observations.
+The browser run used only the local demo database `autostock_phase2_demo`. Its five labeled automotive products had on-hand quantities of 48 front brake pads, 8 oil filters, 0 spark plugs, 15 12V batteries, and 4 cabin air filters. These are explicitly synthetic QA records, not business data or demand observations. For the 400-point chart regression, Playwright expanded the synthetic RPC response in memory; those additional points were not written to Odoo.
 
 ## Screenshot evidence
 
@@ -45,11 +47,13 @@ Screenshots were captured directly to this repository using local Playwright/Chr
 
 The [mobile navigation capture](screenshots/phase2-5/phase2-5-navigation-mobile.jpg) shows the open drawer and visible keyboard focus state.
 
+The [400-day full-history chart capture](screenshots/phase2-5/phase2-5-forecast-full-400-desktop.jpg) verifies the Full control includes every returned observation and keeps its date labels spaced. Its synthetic history extension was applied only to the browser response fixture.
+
 ## Comparison with the approved design
 
 The updated screens use the concept's light surfaces, restrained violet action color, rounded white panels, status colors, left navigation, KPI cards, forecast chart, stock-health view, and inventory table. The tablet layout now stacks forecast and stock-health panels once the Odoo content area becomes too narrow for two readable columns. On mobile, the side rail becomes a keyboard-accessible drawer, KPI cards reflow, chart controls wrap, and the inventory table keeps all fields available through horizontal scrolling.
 
-The concept is an illustrative target, not an application screen. Its AI recommendation cards, forecast-accuracy KPI, generated report action, supplier/purchasing navigation, and reorder actions are not implemented product behavior and therefore are not shown as if they worked. The current page presents only installed Odoo inventory fields and the existing evaluated forecast pipeline. The native Odoo header also remains visible instead of being replaced by the concept's generic top bar. The demo company currently has Odoo's default logo; the workspace uses the active company's own logo when one is configured.
+The concept is an illustrative target, not an application screen. Its AI recommendation cards, forecast-accuracy KPI, generated report action, supplier/purchasing navigation, and reorder actions are not implemented product behavior and therefore are not shown as if they worked. The current page presents only installed Odoo inventory fields and the existing evaluated forecast pipeline. The native Odoo header also remains visible instead of being replaced by the concept's generic top bar. The demo company currently has Odoo's default logo; the workspace uses the active company's own logo when one is configured. The Full chart now spaces three date ticks across long histories; the exact history start/end remain available in the chart's accessible label and history details.
 
 ## Remaining work and limitations
 

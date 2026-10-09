@@ -383,8 +383,14 @@
 .as-mobile-close:focus-visible,
 .as-chart-range button:focus-visible { outline: 3px solid #b9a7fa; outline-offset: 2px; }
 .as-sidebar-footer { display: grid; gap: 5px; margin-top: auto; padding: 15px 7px 0; border-top: 1px solid #eeeeF3; }
-.as-sidebar-status { display: flex; align-items: center; gap: 8px; color: #4b665d; font-size: 12px; font-weight: 650; }
-.as-sidebar-status i { width: 8px; height: 8px; border-radius: 50%; background: #2d9a70; box-shadow: 0 0 0 3px #2d9a701a; }
+.as-sidebar-status { display: flex; align-items: center; gap: 8px; color: #6a6476; font-size: 12px; font-weight: 650; }
+.as-sidebar-status i { width: 8px; height: 8px; border-radius: 50%; background: #b0aabb; box-shadow: 0 0 0 3px #b0aabb1a; }
+.as-sidebar-status.is-connected { color: #4b665d; }
+.as-sidebar-status.is-connected i { background: #2d9a70; box-shadow: 0 0 0 3px #2d9a701a; }
+.as-sidebar-status.is-connecting { color: #8a621e; }
+.as-sidebar-status.is-connecting i { background: #dfa844; box-shadow: 0 0 0 3px #dfa8441a; }
+.as-sidebar-status.is-unavailable { color: #9b3d48; }
+.as-sidebar-status.is-unavailable i { background: #d45c67; box-shadow: 0 0 0 3px #d45c671a; }
 .as-sidebar-footer small { color: var(--as-muted); font-size: 11px; line-height: 1.5; }
 .as-content-column { display: flex; min-width: 0; min-height: 0; flex-direction: column; background: var(--as-bg); }
 .as-appbar { z-index: 2; display: flex; min-height: 64px; flex: 0 0 auto; align-items: center; gap: 14px; padding: 10px 34px; border-bottom: 1px solid var(--as-border); background: #ffffffed; }

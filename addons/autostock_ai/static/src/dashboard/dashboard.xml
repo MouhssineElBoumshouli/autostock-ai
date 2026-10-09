@@ -28,7 +28,12 @@
                     </button>
                 </nav>
                 <div class="as-sidebar-footer">
-                    <span class="as-sidebar-status"><i aria-hidden="true"/> Connected to Odoo</span>
+                    <span t-att-class="'as-sidebar-status is-' + state.connectionStatus" role="status" aria-live="polite">
+                        <i aria-hidden="true"/>
+                        <t t-if="state.connectionStatus === 'connected'">Connected to Odoo</t>
+                        <t t-elif="state.connectionStatus === 'connecting'">Connecting to Odoo</t>
+                        <t t-else="">Odoo connection unavailable</t>
+                    </span>
                     <small>Stock records and company access stay in Odoo.</small>
                 </div>
             </aside>
@@ -37,7 +42,7 @@
                     <button t-if="state.mobileView" t-ref="mobileMenuButton" class="as-menu-toggle" type="button" aria-controls="as-mobile-nav" t-att-aria-expanded="state.navOpen ? 'true' : 'false'" aria-label="Open AutoStock navigation" t-on-click="toggleMobileNav">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
                     </button>
-                    <div class="as-appbar-context"><span>AutoStock AI</span><i aria-hidden="true">/</i><strong t-esc="state.activeSection === 'forecast' ? 'Forecasts' : (state.activeSection === 'inventory' ? 'Inventory' : 'Dashboard')"/></div>
+                    <div class="as-appbar-context"><span>AutoStock AI</span><i aria-hidden="true">/</i><strong>Dashboard</strong></div>
                     <div class="as-appbar-company" t-if="state.forecastOptions">
                         <span class="as-company-caption">Company</span><strong t-esc="state.forecastOptions.company_name"/>
                     </div>
@@ -172,7 +177,7 @@
                                 <select t-if="state.filters.sourceType === 'synthetic_demo'" t-model="state.filters.sku" t-on-change="loadForecastSnapshot" t-att-disabled="state.forecastBusy">
                                     <option t-foreach="state.forecastOptions.demo_skus" t-as="sample" t-key="sample.sku" t-att-value="sample.sku" t-esc="sample.name"/>
                                 </select>
-                                <select t-else="" t-model="state.filters.productId" t-on-change="changeProduct" t-att-disabled="state.forecastBusy || !state.forecastOptions.products.length">
+                                <select t-else="" t-key="'odoo-products-' + state.forecastOptions.company_id" t-model="state.filters.productId" t-on-change="changeProduct" t-att-disabled="state.forecastBusy || !state.forecastOptions.products.length">
                                     <option value="">Choose a tracked part</option>
                                     <option t-foreach="state.forecastOptions.products" t-as="product" t-key="product.id" t-att-value="product.id" t-esc="product.sku + ' · ' + product.name"/>
                                 </select>
@@ -250,7 +255,7 @@
                                 <div class="as-chart-range" role="group" aria-label="History displayed in chart">
                                     <button type="button" data-days="30" t-att-class="state.chartWindowDays === 30 ? 'is-selected' : ''" t-att-aria-pressed="state.chartWindowDays === 30 ? 'true' : 'false'" t-on-click="changeChartWindow">30 days</button>
                                     <button type="button" data-days="90" t-att-class="state.chartWindowDays === 90 ? 'is-selected' : ''" t-att-aria-pressed="state.chartWindowDays === 90 ? 'true' : 'false'" t-on-click="changeChartWindow">90 days</button>
-                                    <button type="button" data-days="210" t-att-class="state.chartWindowDays === 210 ? 'is-selected' : ''" t-att-aria-pressed="state.chartWindowDays === 210 ? 'true' : 'false'" t-on-click="changeChartWindow">Full</button>
+                                    <button type="button" data-days="full" t-att-class="state.chartWindowDays === 'full' ? 'is-selected' : ''" t-att-aria-pressed="state.chartWindowDays === 'full' ? 'true' : 'false'" t-on-click="changeChartWindow">Full</button>
                                 </div>
                                 <span class="as-chart-window-label"><t t-esc="forecastChart.visibleHistoryDays"/> of <t t-esc="forecastChart.totalHistoryDays"/> days</span>
                             </div>

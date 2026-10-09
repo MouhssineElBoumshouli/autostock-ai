@@ -1,8 +1,11 @@
-"""Seed clearly labeled automotive inventory in a disposable local Odoo demo DB.
+"""Seed or non-destructively reset labeled automotive inventory in local QA Odoo.
 
 Run through `odoo shell`; AUTOSTOCK_QA_DEMO_ACTION defaults to `seed` and may
-be set to `cleanup`. This script refuses to run outside the named local QA
-databases and does not create sales, supplier, customer, or purchase records.
+be set to `cleanup`. Cleanup zeroes only the labeled sample stock and disables
+AutoStock tracking, but leaves the QA products in the catalog and preserves
+Odoo's stock adjustment history. This script refuses databases outside the
+explicit local QA allowlist and creates no sales, supplier, customer, or purchase
+records. It does not delete QA products.
 """
 import os
 

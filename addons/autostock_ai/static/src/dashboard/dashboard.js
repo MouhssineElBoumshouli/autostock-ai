@@ -24,6 +24,7 @@ export class AutoStockDashboard extends Component {
         this.orm = useService("orm");
         this.action = useService("action");
         this.destroyed = false;
+        this.forecastSnapshotRequestId = 0;
         this.mobileMenuButton = useRef("mobileMenuButton");
         this.mobileNavDrawer = useRef("mobileNavDrawer");
         this.dashboardScroll = useRef("dashboardScroll");
@@ -37,6 +38,7 @@ export class AutoStockDashboard extends Component {
         };
         this.state = useState({
             loading: true,
+            connectionStatus: "connecting",
             error: null,
             data: null,
             forecastOptions: null,
@@ -82,25 +84,34 @@ export class AutoStockDashboard extends Component {
 
     async load() {
         this.state.loading = true;
+        this.state.connectionStatus = "connecting";
         this.state.error = null;
         try {
             const [data, options] = await Promise.all([
                 this.orm.call("autostock.dashboard", "get_dashboard_data", []),
                 this.orm.call("autostock.forecast.run", "get_forecast_options", []),
             ]);
-            const companyChanged = this.state.forecastOptions?.company_name !== options.company_name;
+            const previousCompanyId = this.state.forecastOptions?.company_id;
+            const companyChanged = previousCompanyId === undefined
+                || String(previousCompanyId) !== String(options.company_id);
             this.state.data = data;
             this.state.forecastOptions = options;
             if (companyChanged) {
                 this.state.forecast = null;
+                this.state.forecastError = null;
+                this.state.forecastNotice = null;
+                this.state.chartWindowDays = 30;
                 this.state.filters.sourceType = DEMO_SOURCE;
-                this.state.filters.productId = options.products[0]?.id ? String(options.products[0].id) : "";
+                this.state.filters.productId = "";
                 this.state.filters.sku = options.demo_skus[0]?.sku || "DEMO-BP-001";
                 this.state.filters.warehouseId = "";
+                this.state.filters.horizon = "30";
                 this.resetHistoryRange();
             }
+            this.state.connectionStatus = "connected";
             await this.loadForecastSnapshot();
         } catch (error) {
+            this.state.connectionStatus = "unavailable";
             this.state.error = "Could not load inventory and forecast controls. Check your permissions and try again.";
             console.error("AutoStock dashboard request failed", error);
         } finally {
@@ -159,7 +170,9 @@ export class AutoStockDashboard extends Component {
         }
         const allActual = run.observations;
         const future = run.predictions;
-        const visibleHistoryDays = Math.min(Number(this.state.chartWindowDays) || 30, allActual.length);
+        const visibleHistoryDays = this.state.chartWindowDays === "full"
+            ? allActual.length
+            : Math.min(Number(this.state.chartWindowDays) || 30, allActual.length);
         const actual = allActual.slice(-visibleHistoryDays);
         const values = [
             ...actual.map((point) => point.units),
@@ -187,13 +200,15 @@ export class AutoStockDashboard extends Component {
         const dateAt = (index) => index < actual.length
             ? actual[index].day
             : future[Math.min(index - actual.length, future.length - 1)].day;
-        const dateIndexes = [
-            0,
-            Math.floor((actual.length - 1) / 2),
-            actual.length - 1,
-            actual.length - 1 + Math.floor(future.length / 2),
-            count - 1,
-        ];
+        const dateIndexes = this.state.chartWindowDays === "full"
+            ? [0, Math.floor((actual.length - 1) / 2), count - 1]
+            : [
+                0,
+                Math.floor((actual.length - 1) / 2),
+                actual.length - 1,
+                actual.length - 1 + Math.floor(future.length / 2),
+                count - 1,
+            ];
         const dateTicks = [...new Set(dateIndexes)].map((index) => {
             const date = dateAt(index);
             return { x: x(index).toFixed(1), date, label: date.slice(5).replace("-", "/") };
@@ -206,7 +221,7 @@ export class AutoStockDashboard extends Component {
         return {
             width,
             viewBox: `0 0 ${width} 220`,
-            accessibleLabel: `Daily delivered units and ${run.horizon_days} day forecast for ${run.sku}, showing ${visibleHistoryDays} of ${allActual.length} history days. Units: ${run.uom}`,
+            accessibleLabel: `Daily delivered units and ${run.horizon_days} day forecast for ${run.sku}, showing ${visibleHistoryDays} of ${allActual.length} history days from ${actual[0].day} through ${actual.at(-1).day}. Units: ${run.uom}`,
             left,
             right,
             historyPath,
@@ -297,8 +312,13 @@ export class AutoStockDashboard extends Component {
     }
 
     changeChartWindow(event) {
-        const days = Number(event.currentTarget.dataset.days);
-        if ([30, 90, 210].includes(days)) {
+        const range = event.currentTarget.dataset.days;
+        if (range === "full") {
+            this.state.chartWindowDays = "full";
+            return;
+        }
+        const days = Number(range);
+        if ([30, 90].includes(days)) {
             this.state.chartWindowDays = days;
         }
     }
@@ -347,6 +367,8 @@ export class AutoStockDashboard extends Component {
         if (!options) {
             return;
         }
+        const requestId = ++this.forecastSnapshotRequestId;
+        const companyId = String(options.company_id);
         const filters = this.state.filters;
         try {
             const result = await this.orm.call(
@@ -364,9 +386,23 @@ export class AutoStockDashboard extends Component {
                     filters.historyEnd || false,
                 ]
             );
+            if (
+                this.destroyed
+                || requestId !== this.forecastSnapshotRequestId
+                || String(this.state.forecastOptions?.company_id) !== companyId
+            ) {
+                return;
+            }
             this.state.forecast = result.run || null;
             this.state.forecastError = null;
         } catch (error) {
+            if (
+                this.destroyed
+                || requestId !== this.forecastSnapshotRequestId
+                || String(this.state.forecastOptions?.company_id) !== companyId
+            ) {
+                return;
+            }
             this.state.forecast = null;
             this.state.forecastError = "Forecast results are unavailable for the selected company or account permissions.";
             console.error("AutoStock forecast snapshot request failed", error);

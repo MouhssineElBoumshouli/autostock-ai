@@ -30,8 +30,24 @@ const browser = await chromium.launch({
     ...(browserExecutable ? { executablePath: browserExecutable } : {}),
 });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce" });
+let companyOptionsTransform = null;
+let releaseStaleSnapshot = null;
+await context.route("**/*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.includes("get_forecast_options") && companyOptionsTransform) {
+        const response = await route.fetch();
+        const payload = await response.json();
+        companyOptionsTransform(payload.result);
+        await route.fulfill({ response, json: payload });
+        return;
+    }
+    await route.continue();
+});
 const page = await context.newPage();
+page.setDefaultTimeout(10000);
+page.setDefaultNavigationTimeout(20000);
 const browserErrors = [];
+let testPhase = "login and dashboard load";
 page.on("console", (message) => {
     if (message.type() === "error") {
         browserErrors.push(`console: ${message.text()}`);
@@ -43,6 +59,12 @@ function assert(condition, message) {
     if (!condition) {
         throw new Error(message);
     }
+}
+
+function shiftUtcDay(value, amount) {
+    const date = new Date(`${value}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + amount);
+    return date.toISOString().slice(0, 10);
 }
 
 async function dashboardActionId() {
@@ -86,6 +108,7 @@ async function openDashboard(actionId) {
         throw error;
     }
     await page.locator(".as-kpis").waitFor({ timeout: 20000 });
+    await page.locator(".as-sidebar-status.is-connected").waitFor({ timeout: 20000 });
 }
 
 async function clickNavigation(label, mobile) {
@@ -117,6 +140,8 @@ try {
 
     const actionId = await dashboardActionId();
     await openDashboard(actionId);
+    await page.locator(".as-sidebar-status.is-connected").waitFor();
+    assert((await page.locator(".as-sidebar-status").innerText()).includes("Connected to Odoo"), "The connected Odoo status was not shown after successful RPCs.");
     const pageText = await page.locator(".as-app").innerText();
     assert(pageText.includes("Live Odoo inventory data"), "Dashboard is not displaying live Odoo inventory data.");
     assert(pageText.includes("DEMO-QA-BP-001"), "The labeled synthetic automotive fixture is not visible in the inventory table.");
@@ -152,6 +177,8 @@ try {
 
         await clickNavigation("Forecasts", viewport.mobile);
         await page.locator(".as-forecast-panel").waitFor();
+        assert((await page.locator(".as-appbar-context strong").innerText()) === "Dashboard", `${viewport.name} breadcrumb did not identify the dashboard route.`);
+        assert((await page.locator(".as-topline h1").innerText()) === "Dashboard", `${viewport.name} page heading no longer identifies the current dashboard page.`);
         await page.locator(".as-forecast-figure").scrollIntoViewIfNeeded();
         await page.getByRole("button", { name: "30 days", exact: true }).click();
         await page.waitForFunction(() => document.querySelector(".as-chart-window-label")?.textContent.trim().startsWith("30 of "));
@@ -166,7 +193,7 @@ try {
         );
         await page.getByRole("button", { name: "Full", exact: true }).click();
         await page.waitForFunction(() => document.querySelector(".as-chart-window-label")?.textContent.trim().startsWith("210 of "));
-        assert((await page.locator(".as-chart-window-label").innerText()).startsWith("210 of "), `${viewport.name} full chart window did not restore all history.`);
+        assert((await page.locator(".as-chart-window-label").innerText()).startsWith("210 of "), `${viewport.name} full chart window did not restore all available history.`);
         await page.getByRole("button", { name: "30 days", exact: true }).click();
         await page.waitForFunction(() => document.querySelector(".as-chart-window-label")?.textContent.trim().startsWith("30 of "));
         await takeScreenshot(`phase2-5-forecast-${viewport.name}.jpg`);
@@ -199,8 +226,190 @@ try {
         }
     }
 
+    testPhase = "400-day full-history chart regression";
     await page.setViewportSize({ width: 1440, height: 1000 });
     await openDashboard(actionId);
+
+    let expandedHistoryRange = null;
+    let extendSyntheticHistory = true;
+    const forecastSnapshotRoute = async (route) => {
+        const response = await route.fetch();
+        const payload = await response.json();
+        const run = payload.result?.run;
+        if (extendSyntheticHistory && run?.source_type === "synthetic_demo" && run.observations?.length === 210) {
+            extendSyntheticHistory = false;
+            const original = run.observations;
+            const prefixStart = shiftUtcDay(original[0].day, -190);
+            const prefix = Array.from({ length: 190 }, (_, index) => {
+                const day = shiftUtcDay(prefixStart, index);
+                const sample = original[index % original.length];
+                return { ...sample, day };
+            });
+            run.observations = [...prefix, ...original];
+            run.history_start = prefix[0].day;
+            run.history_days = run.observations.length;
+            expandedHistoryRange = { first: prefix[0].day, last: original.at(-1).day };
+        }
+        await route.fulfill({ response, json: payload });
+    };
+    await page.route("**/web/dataset/call_kw/autostock.forecast.run/get_forecast_snapshot", forecastSnapshotRoute);
+    await page.getByRole("button", { name: "Refresh inventory data" }).click();
+    await page.waitForFunction(() => document.querySelector(".as-chart-window-label")?.textContent.trim().startsWith("30 of 400"));
+    await page.unroute("**/web/dataset/call_kw/autostock.forecast.run/get_forecast_snapshot", forecastSnapshotRoute);
+    assert(expandedHistoryRange, "The synthetic browser fixture was not extended beyond the original 210-day history.");
+    await page.getByRole("button", { name: "Full", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector(".as-chart-window-label")?.textContent.trim() === "400 of 400 days");
+    const fullHistoryLabel = await page.locator(".as-forecast-chart").getAttribute("aria-label");
+    assert(fullHistoryLabel.includes("400 of 400 history days"), `Full history accessibility label omitted the complete range: ${fullHistoryLabel}`);
+    assert(fullHistoryLabel.includes(`from ${expandedHistoryRange.first} through ${expandedHistoryRange.last}`), `Full history accessibility label omitted its date range: ${fullHistoryLabel}`);
+    assert(await page.locator(".as-forecast-chart .as-chart-date").count() === 3, "Full chart history rendered crowded date labels instead of spaced start, midpoint, and forecast-end ticks.");
+    const firstChartDate = await page.locator(".as-forecast-chart .as-chart-date title").first().textContent();
+    assert(firstChartDate === expandedHistoryRange.first, `The full chart starts at ${firstChartDate}, expected ${expandedHistoryRange.first}.`);
+    await page.locator(".as-forecast-panel").scrollIntoViewIfNeeded();
+    await takeScreenshot("phase2-5-forecast-full-400-desktop.jpg");
+    await page.getByRole("button", { name: "30 days", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector(".as-chart-window-label")?.textContent.trim() === "30 of 400 days");
+    await page.getByRole("button", { name: "90 days", exact: true }).click();
+    await page.waitForFunction(() => document.querySelector(".as-chart-window-label")?.textContent.trim() === "90 of 400 days");
+    let changedOptionsResponse = null;
+    let previousProductId = "";
+    let snapshotRequestCount = 0;
+    let capturedStaleSkuResolve;
+    let staleResponseAppliedResolve;
+    const capturedStaleSku = new Promise((resolve) => { capturedStaleSkuResolve = resolve; });
+    const staleResponseApplied = new Promise((resolve) => { staleResponseAppliedResolve = resolve; });
+    const holdFirstForecastSnapshot = async (route) => {
+        if (snapshotRequestCount++ === 0) {
+            const response = await route.fetch();
+            const payload = await response.json();
+            capturedStaleSkuResolve(payload.result?.run?.sku || null);
+            await new Promise((resolve) => { releaseStaleSnapshot = resolve; });
+            await route.fulfill({ response, json: payload });
+            staleResponseAppliedResolve();
+            return;
+        }
+        await route.continue();
+    };
+    const provideSameNameCompanyOptions = (options) => {
+        if (options?.company_id && options.company_name) {
+            changedOptionsResponse = {
+                companyId: options.company_id + 1000000,
+                companyName: options.company_name,
+                today: options.today_utc,
+            };
+            options.company_id = changedOptionsResponse.companyId;
+            const nextProductIndex = options.products.findIndex((product) => String(product.id) !== previousProductId);
+            if (previousProductId && nextProductIndex > 0) {
+                options.products = [options.products[nextProductIndex], ...options.products.slice(0, nextProductIndex), ...options.products.slice(nextProductIndex + 1)];
+            }
+            changedOptionsResponse.productId = options.products[0]?.id;
+            options.demo_skus = [{ sku: "DEMO-SP-104", name: "Synthetic company switch regression" }];
+        }
+    };
+    testPhase = "same-name company switch while a synthetic chart is visible";
+    await page.route("**/web/dataset/call_kw/autostock.forecast.run/get_forecast_snapshot", holdFirstForecastSnapshot);
+    await page.locator(".as-forecast-form select").nth(1).evaluate((select) => select.dispatchEvent(new Event("change", { bubbles: true })));
+    const capturedSku = await Promise.race([
+        capturedStaleSku,
+        page.waitForTimeout(10000).then(() => null),
+    ]);
+    assert(capturedSku === "DEMO-BP-001", "The browser did not capture the old company's pending forecast snapshot.");
+    companyOptionsTransform = provideSameNameCompanyOptions;
+    await page.getByRole("button", { name: "Refresh inventory data" }).click();
+    await page.waitForFunction(() => document.querySelectorAll(".as-forecast-form select")[1]?.value === "DEMO-SP-104");
+    assert(changedOptionsResponse, "The same-name company response was not exercised.");
+    assert((await page.locator(".as-appbar-company strong").innerText()) === changedOptionsResponse.companyName, "The company display name unexpectedly changed in the same-name regression.");
+    assert((await page.locator(".as-forecast-form select").nth(1).inputValue()) === "DEMO-SP-104", "Company switching did not reset the synthetic SKU to the new company's option.");
+    assert((await page.locator(".as-forecast-form select").nth(2).inputValue()) === "30", "Company switching retained the previous forecast horizon.");
+    assert((await page.locator(".as-sidebar-status").innerText()).includes("Connected to Odoo"), "A successful company refresh did not report Odoo connectivity.");
+    if (!(await page.locator(".as-forecast-chart").count())) {
+        await page.getByRole("button", { name: "Run synthetic demo" }).click();
+        await page.locator(".as-forecast-chart").waitFor({ timeout: 90000 });
+    }
+    releaseStaleSnapshot();
+    await staleResponseApplied;
+    await page.waitForTimeout(100);
+    const currentForecastLabel = await page.locator(".as-forecast-chart").getAttribute("aria-label");
+    assert(currentForecastLabel.includes("for DEMO-SP-104"), "A late response replaced the new company's forecast.");
+    assert(!currentForecastLabel.includes("for DEMO-BP-001"), "A late response restored the previous company's forecast.");
+    await page.unroute("**/web/dataset/call_kw/autostock.forecast.run/get_forecast_snapshot", holdFirstForecastSnapshot);
+    companyOptionsTransform = null;
+
+    await openDashboard(actionId);
+    if (!(await page.locator(".as-forecast-chart").count())) {
+        await page.getByRole("button", { name: "Run synthetic demo" }).click();
+        await page.locator(".as-forecast-chart").waitFor({ timeout: 90000 });
+    }
+    let changedFiltersResponse = null;
+    const remapSameNameCompanyFilters = (options) => {
+        if (options?.company_id && options.company_name) {
+            changedFiltersResponse = {
+                companyId: options.company_id + 2000000,
+                companyName: options.company_name,
+                today: options.today_utc,
+            };
+            options.company_id = changedFiltersResponse.companyId;
+            const nextProductIndex = options.products.findIndex((product) => String(product.id) !== previousProductId);
+            if (nextProductIndex > 0) {
+                options.products = [options.products[nextProductIndex], ...options.products.slice(0, nextProductIndex), ...options.products.slice(nextProductIndex + 1)];
+            }
+            changedFiltersResponse.productId = options.products[0]?.id;
+            options.demo_skus = [{ sku: "DEMO-SP-104", name: "Synthetic company switch regression" }];
+        }
+    };
+    const filterSelects = page.locator(".as-forecast-form select");
+    testPhase = "setting company-bound filters before the same-name switch";
+    await filterSelects.nth(0).selectOption("completed_deliveries");
+    await filterSelects.nth(1).selectOption({ index: 1 });
+    previousProductId = await filterSelects.nth(1).inputValue();
+    const oldWarehouseId = await filterSelects.nth(2).locator("option").nth(1).getAttribute("value");
+    assert(previousProductId && oldWarehouseId, "The demo company must provide a synthetic product and warehouse for the switch test.");
+    await filterSelects.nth(2).selectOption(oldWarehouseId);
+    await filterSelects.nth(3).selectOption("60");
+    const dateFields = page.locator(".as-forecast-form input[type=date]");
+    const activeCompanyToday = await dateFields.nth(1).getAttribute("max");
+    await dateFields.nth(0).fill(shiftUtcDay(activeCompanyToday, -10));
+    await dateFields.nth(1).fill(shiftUtcDay(activeCompanyToday, -2));
+    companyOptionsTransform = remapSameNameCompanyFilters;
+    testPhase = "resetting company-bound filters after the company ID changes";
+    await page.getByRole("button", { name: "Refresh inventory data" }).click();
+    await page.waitForFunction(() => document.querySelectorAll(".as-forecast-form select")[1]?.value === "DEMO-SP-104");
+    assert(changedFiltersResponse, "The product and warehouse reset response was not exercised.");
+    assert((await filterSelects.nth(1).inputValue()) === "DEMO-SP-104", "Company switching did not select the new synthetic SKU.");
+    assert((await filterSelects.nth(2).inputValue()) === "30", "Company switching retained the previous forecast horizon.");
+    assert((await dateFields.nth(0).inputValue()) === shiftUtcDay(changedFiltersResponse.today, -209), "Company switching retained the previous history start date.");
+    assert((await dateFields.nth(1).inputValue()) === changedFiltersResponse.today, "Company switching retained the previous history end date.");
+    const resetForecastLabel = await page.locator(".as-forecast-chart").getAttribute("aria-label");
+    assert(!resetForecastLabel || resetForecastLabel.includes("for DEMO-SP-104"), "Company switching retained the previous company's forecast.");
+    await filterSelects.nth(0).selectOption("completed_deliveries");
+    await page.waitForFunction(() => document.querySelectorAll(".as-forecast-form select")[1]?.options[0]?.textContent === "Choose a tracked part");
+    const switchedProductSelect = filterSelects.nth(1);
+    assert(!(await switchedProductSelect.inputValue()), `Company switching retained the previous company's product selection: ${await switchedProductSelect.inputValue()}.`);
+    assert(String(changedFiltersResponse.productId) !== previousProductId, "The new company filter options did not replace the previous product.");
+    await switchedProductSelect.selectOption({ index: 1 });
+    assert((await switchedProductSelect.inputValue()) === String(changedFiltersResponse.productId), "The new company product could not be selected.");
+    assert((await filterSelects.nth(2).inputValue()) === "", "Company switching retained the previous warehouse.");
+    assert((await filterSelects.nth(3).inputValue()) === "30", "Company switching did not reset the filter horizon.");
+    companyOptionsTransform = null;
+
+    testPhase = "Odoo connection failure and recovery regression";
+    const expectedFailureStart = browserErrors.length;
+    const abortDashboardCall = (route) => route.abort("failed");
+    await page.route("**/web/dataset/call_kw/autostock.dashboard/get_dashboard_data", abortDashboardCall);
+    await page.getByRole("button", { name: "Refresh inventory data" }).click();
+    await page.waitForFunction(() => document.querySelector(".as-sidebar-status.is-unavailable")?.textContent.includes("Odoo connection unavailable"));
+    assert((await page.locator(".as-error").innerText()).includes("Could not load inventory"), "An inventory RPC failure did not produce the dashboard error state.");
+    await page.unroute("**/web/dataset/call_kw/autostock.dashboard/get_dashboard_data", abortDashboardCall);
+    await page.getByRole("button", { name: "Refresh inventory data" }).click();
+    await page.locator(".as-sidebar-status.is-connected").waitFor();
+    await page.waitForFunction(() => !document.querySelector(".as-error"));
+    const expectedFailureLogs = browserErrors.slice(expectedFailureStart);
+    assert(expectedFailureLogs.some((error) => error.includes("AutoStock dashboard request failed")), "The intentional RPC failure was not reported by the dashboard.");
+    assert(
+        expectedFailureLogs.every((error) => error.includes("AutoStock dashboard request failed") || error.includes("net::ERR_FAILED")),
+        `The intentional RPC failure produced an unexpected browser error: ${expectedFailureLogs.join("; ")}`
+    );
+
     const dataRow = page.locator(".as-table tbody tr").filter({ hasText: "DEMO-QA-BP-001" }).first();
     await dataRow.getByRole("button", { name: /Open/ }).click();
     await page.locator(".o_form_view").waitFor({ timeout: 20000 });
@@ -210,18 +419,27 @@ try {
     await backButton.click();
     await page.locator(".as-app").waitFor({ timeout: 20000 });
 
-    assert(browserErrors.length === 0, `Browser reported errors: ${browserErrors.join("; ")}`);
+    const expectedConnectionFailureSet = new Set(expectedFailureLogs);
+    const unexpectedBrowserErrors = browserErrors.filter((error) => !expectedConnectionFailureSet.has(error));
+    assert(unexpectedBrowserErrors.length === 0, `Browser reported unexpected errors: ${unexpectedBrowserErrors.join("; ")}`);
     console.log(JSON.stringify({
         result: "passed",
         database,
         screenshots: screenshotDir,
-        browserErrors: browserErrors.length,
+        browserErrors: unexpectedBrowserErrors.length,
+        expectedConnectionFailureLogs: expectedFailureLogs.length,
         viewports: resolutions.map(({ name, width, height }) => ({ name, width, height })),
         syntheticInventoryRows: 5,
-        chartWindows: [30, 90, 210],
-        checks: ["live Odoo data", "synthetic provenance", "responsive navigation", "chart range controls", "inventory details", "Odoo return navigation", "keyboard drawer", "horizontal overflow"],
+        chartWindows: [30, 90, "full (400 synthetic observations)"],
+        checks: ["live Odoo data", "synthetic provenance", "responsive navigation and route breadcrumb", "chart range and accessible date ranges", "company-id reset with same-name display and late-snapshot rejection", "Odoo connection failure and recovery", "inventory details", "Odoo return navigation", "keyboard drawer", "horizontal overflow"],
     }));
+} catch (error) {
+    const safeMessage = String(error?.message || error).split("\nCall log:")[0];
+    console.error(`${testPhase}: ${error?.name || "Error"}: ${safeMessage}`);
+    throw new Error("Browser QA failed; see the sanitized phase message above.");
 } finally {
+    releaseStaleSnapshot?.();
+    await page.unrouteAll({ behavior: "ignoreErrors" });
     await context.close();
     await browser.close();
 }

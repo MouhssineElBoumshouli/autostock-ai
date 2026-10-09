@@ -386,6 +386,41 @@ class TestAutoStockForecast(TransactionCase):
             f"/web/image/res.company/{self.env.company.id}/logo_web",
         )
 
+    def test_company_ids_keep_company_specific_forecast_options(self):
+        company_a, company_b = self.env["res.company"].create(
+            [
+                {"name": "AutoStock Company A"},
+                {"name": "AutoStock Company B"},
+            ]
+        )
+        warehouse_a = self._warehouse(company_a)
+        warehouse_b = self._warehouse(company_b)
+        product_a = self._product(company_a, f"AS-COMPANY-A-{company_a.id}")
+        product_b = self._product(company_b, f"AS-COMPANY-B-{company_b.id}")
+        user = self._multi_company_user(company_a, company_b)
+        service = self.env["autostock.forecast.run"].with_user(user).with_context(
+            allowed_company_ids=[company_a.id, company_b.id]
+        )
+
+        options_a = service.with_company(company_a).get_forecast_options()
+        options_b = service.with_company(company_b).get_forecast_options()
+
+        self.assertNotEqual(options_a["company_name"], options_b["company_name"])
+        self.assertEqual(options_a["company_id"], company_a.id)
+        self.assertEqual(options_b["company_id"], company_b.id)
+        products_a = {item["id"] for item in options_a["products"]}
+        products_b = {item["id"] for item in options_b["products"]}
+        warehouses_a = {item["id"] for item in options_a["warehouses"]}
+        warehouses_b = {item["id"] for item in options_b["warehouses"]}
+        self.assertIn(product_a.id, products_a)
+        self.assertNotIn(product_a.id, products_b)
+        self.assertIn(product_b.id, products_b)
+        self.assertNotIn(product_b.id, products_a)
+        self.assertIn(warehouse_a.id, warehouses_a)
+        self.assertNotIn(warehouse_a.id, warehouses_b)
+        self.assertIn(warehouse_b.id, warehouses_b)
+        self.assertNotIn(warehouse_b.id, warehouses_a)
+
     def test_forecast_run_creation_cannot_bypass_validated_request(self):
         with self.assertRaises(AccessError):
             self.env["autostock.forecast.run"].create({"name": "unvalidated"})

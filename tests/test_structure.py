@@ -43,6 +43,44 @@ def test_dashboard_navigation_and_chart_controls_are_connected():
     assert "Replenishment review" not in xml
 
 
+def test_dashboard_full_history_company_switch_and_status_are_truthful():
+    xml = (ADDON / "static/src/dashboard/dashboard.xml").read_text(encoding="utf-8")
+    javascript = (ADDON / "static/src/dashboard/dashboard.js").read_text(encoding="utf-8")
+    odoo_tests = (ADDON / "tests/test_forecast.py").read_text(encoding="utf-8")
+
+    assert 'String(previousCompanyId) !== String(options.company_id)' in javascript
+    assert "requestId !== this.forecastSnapshotRequestId" in javascript
+    assert 'this.state.filters.productId = ""' in javascript
+    assert 'this.state.chartWindowDays === "full"' in javascript
+    assert '? [0, Math.floor((actual.length - 1) / 2), count - 1]' in javascript
+    assert 'this.state.chartWindowDays = "full"' in javascript
+    assert "through ${actual.at(-1).day}" in javascript
+    assert "this.state.chartWindowDays = 30" in javascript
+    assert "this.state.filters.warehouseId = \"\"" in javascript
+    assert "this.state.filters.horizon = \"30\"" in javascript
+    assert "<strong>Dashboard</strong>" in xml
+    assert "aria-live=\"polite\"" in xml
+    assert "Odoo connection unavailable" in xml
+    assert "Connected to Odoo" in xml
+    assert "def test_company_ids_keep_company_specific_forecast_options" in odoo_tests
+    assert 'with_company(company_a).get_forecast_options()' in odoo_tests
+    assert 'with_company(company_b).get_forecast_options()' in odoo_tests
+    assert 'self.assertNotIn(product_a.id, products_b)' in odoo_tests
+    assert 'self.assertNotIn(warehouse_a.id, warehouses_b)' in odoo_tests
+
+
+def test_synthetic_inventory_cleanup_is_a_guarded_non_destructive_reset():
+    script = (ROOT / "scripts/seed_odoo_demo_inventory.py").read_text(encoding="utf-8")
+    report = (ROOT / "docs/qa/phase2-5-premium-dashboard.md").read_text(encoding="utf-8")
+
+    assert 'ALLOWED_DATABASES = {"autostock_phase2_demo", "autostock_phase2_qa"}' in script
+    assert 'elif action == "cleanup"' in script
+    assert "does not delete QA products" in script
+    assert "non-destructive reset" in report
+    assert "products remain in the catalog" in report.lower()
+    assert "template.unlink(" not in script
+
+
 def test_inventory_action_allows_users_to_choose_untracked_products():
     actions = etree.parse(str(ADDON / "views/dashboard_actions.xml"))
     action = actions.find(".//record[@id='action_autostock_products']")
