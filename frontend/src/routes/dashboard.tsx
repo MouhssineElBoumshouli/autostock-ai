@@ -143,7 +143,7 @@ export function DashboardPage() {
         <main className="page-content">
           <div className="page-heading">
             <div>
-              <p className="eyebrow">Workspace overview{session.current_company.demo_environment ? ' · Demo environment' : ''}</p>
+              <p className="eyebrow">Workspace overview</p>
               <h1 className="page-title">Your inventory at a glance</h1>
               <p className="page-subtitle">Stock health, demand outlook, and the parts that need attention.</p>
             </div>

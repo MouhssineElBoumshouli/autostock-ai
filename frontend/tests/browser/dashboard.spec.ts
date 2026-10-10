@@ -119,15 +119,29 @@ test('dashboard renders responsively without browser errors or clipped chart wid
   page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()) })
   await installApiFixtures(page)
 
-  for (const viewport of [{ width: 1440, height: 960 }, { width: 1024, height: 768 }, { width: 390, height: 844 }]) {
+  for (const viewport of [{ width: 1440, height: 960 }, { width: 1024, height: 768 }, { width: 390, height: 844 }, { width: 320, height: 800 }]) {
     await page.setViewportSize(viewport)
     await page.goto('/')
     await waitForDashboard(page)
+    await expect(page.locator('.eyebrow')).toHaveText('Workspace overview')
+    await expect(page.getByText('Demo environment', { exact: true })).toHaveCount(1)
+    await expect(page.locator('.demo-pill')).toBeVisible()
+    await expect(page.locator('.forecast-panel .panel-subtitle')).toContainText('Next 30 days')
+    await expect(page.locator('.forecast-panel .panel-subtitle')).not.toContainText('history')
     if (viewport.width === 1440) {
       const firstAlert = page.locator('.alert-item').first()
       await expect(firstAlert.locator('.alert-product-name')).toHaveText('Front Brake Rotor')
       await expect(firstAlert.locator('.alert-product-sku')).toContainText('BRK-440')
       await expect(firstAlert.locator('.alert-product-name')).not.toContainText('BRK-440')
+      await expect(firstAlert.locator('.alert-stock-status')).toHaveText('Low stock')
+      await expect(firstAlert.locator('.alert-location .alert-meta-value')).toHaveText('Central warehouse')
+      await expect(firstAlert.locator('.quantity-copy')).toHaveText('Suggested: 12 Units')
+      await expect(page.locator('.review-policy')).toHaveText('Review reorder settings')
+      const forecastDetails = page.locator('.forecast-details')
+      await forecastDetails.locator('summary').click()
+      await expect(forecastDetails.locator('.forecast-details-panel')).toContainText('Source: Synthetic demo')
+      await expect(forecastDetails.locator('.forecast-details-panel')).toContainText('Not a forecast-quality claim')
+      await forecastDetails.locator('summary').click()
     }
     if (viewport.width === 1440) {
       await page.locator('.chart-area').hover({ position: { x: 150, y: 100 } })

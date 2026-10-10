@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
 import {
-  AlertTriangle, Boxes, CircleCheck, PackageCheck, PackageMinus, PackageSearch, RefreshCw,
+  AlertTriangle, Boxes, CircleCheck, Info, PackageCheck, PackageMinus, PackageSearch, RefreshCw,
 } from 'lucide-react'
 import type { DashboardData, ForecastData, RestockData } from '@/api/contracts'
 import { combineDemandHistory, formatQuantity } from '@/lib/dashboard'
@@ -63,9 +63,9 @@ export function ForecastPanel({ forecast }: { forecast: ForecastData }) {
       <div className="panel-header">
         <div className="panel-heading">
           <h2 id="forecast-title" className="panel-title">Demand outlook</h2>
-          <p className="panel-subtitle">{run.product_name} <span aria-hidden="true">·</span> {run.warehouse_name || 'Company-wide history'} <span aria-hidden="true">·</span> 60-day history + {run.horizon_days}-day outlook</p>
+          <p className="panel-subtitle">{run.product_name} <span aria-hidden="true">·</span> {run.warehouse_name || 'All warehouses'} <span aria-hidden="true">·</span> Next {run.horizon_days} days</p>
         </div>
-          <span className="source-pill" title={run.source_label}>{run.source_type === 'synthetic_demo' ? 'Demo history' : 'Completed deliveries'}</span>
+        <span className="source-pill" title={run.source_label}>{run.source_type === 'synthetic_demo' ? 'Demo history' : 'Completed deliveries'}</span>
       </div>
       {chartData.length ? (
         <div className="chart-area" role="img" aria-label={`Daily units for ${run.product_name}; observed delivery history followed by a forecast with an uncertainty range.`}>
@@ -79,7 +79,16 @@ export function ForecastPanel({ forecast }: { forecast: ForecastData }) {
         <span className="legend-item"><span className="legend-line" /> Forecast</span>
         <span className="legend-item"><span className="legend-band" /> Uncertainty range</span>
       </div>
-      <p className="forecast-context">{run.review_status === 'reviewed' ? 'Reviewed forecast' : 'Saved forecast'} · {run.source_label}. Estimates are planning guidance and may not reflect stockout-censored demand.</p>
+      <div className="forecast-footer">
+        <p className="forecast-context">Planning estimate. Actual demand may differ.</p>
+        <details className="forecast-details">
+          <summary aria-label="About this demand estimate" title="About this demand estimate"><Info size={15} /></summary>
+          <div className="forecast-details-panel">
+            <strong>About this estimate</strong>
+            <p>{run.review_status === 'reviewed' ? 'Reviewed forecast' : 'Saved forecast'}. Source: {run.source_label}. {run.limitations}</p>
+          </div>
+        </details>
+      </div>
     </section>
   )
 }
@@ -143,7 +152,7 @@ export function RestockPanel({ data, warehouseId, onWarehouseChange }: {
       <div className="panel-header restock-header">
         <div className="panel-heading">
           <div className="restock-heading-wrap"><h2 id="restock-title" className="panel-title">Priority restock</h2><span className="restock-count" aria-label={`${data.items.length} alert${data.items.length === 1 ? '' : 's'}`}>{data.items.length}</span></div>
-          <p className="panel-subtitle">Read-only guidance from current Odoo stock and reorder policies</p>
+          <p className="panel-subtitle">Suggested quantities for review; nothing is ordered automatically.</p>
         </div>
         {data.warehouses.length > 1 && (
           <label>
@@ -162,19 +171,22 @@ export function RestockPanel({ data, warehouseId, onWarehouseChange }: {
               <div className="alert-product">
                 <RiskStatusIcon status={item.status} />
                 <div className="alert-product-copy">
-                  <div className="alert-product-name" title={item.name}>{item.name}</div>
-                  <div className="alert-product-sku">{item.sku} <span aria-hidden="true">·</span> {item.status_label}</div>
-                  <div className="alert-mobile-current">On hand {formatQuantity(item.current_qty)} {item.uom}</div>
-                  <div className="alert-mobile-supplier">Supplier · {item.supplier_name || 'Not listed'}</div>
+                  <div className="alert-title-row">
+                    <div className="alert-product-name" title={item.name}>{item.name}</div>
+                    <span className={`alert-stock-status ${item.status === 'out' ? 'out' : item.status === 'shortage' ? 'projected' : 'low'}`}>{item.status_label}</span>
+                  </div>
+                  <div className="alert-product-sku">{item.sku}</div>
+                  <div className="alert-on-hand">On hand <strong>{formatQuantity(item.current_qty)} {item.uom}</strong></div>
                 </div>
               </div>
-              <div className="alert-meta alert-current"><div className="alert-meta-label">On hand</div><div className="alert-meta-value">{formatQuantity(item.current_qty)} {item.uom}</div></div>
-              <div className="alert-meta alert-location"><div className="alert-meta-label">Warehouse</div><div className="alert-meta-value" title={item.warehouse}>{item.warehouse}</div></div>
-              <div className="alert-meta alert-supplier"><div className="alert-meta-label">Supplier</div><div className="alert-meta-value" title={item.supplier_name || undefined}>{item.supplier_name || 'Supplier not listed'}</div></div>
+              <div className="alert-location-details">
+                <div className="alert-meta alert-location"><div className="alert-meta-label">Warehouse</div><div className="alert-meta-value" title={item.warehouse}>{item.warehouse}</div></div>
+                <div className="alert-supplier" title={item.supplier_name || undefined}>Supplier · {item.supplier_name || 'Not listed'}</div>
+              </div>
               <div className="alert-recommendation">
                 {item.recommended_qty !== false
-                  ? <span className="quantity-pill">{formatQuantity(item.recommended_qty)} <small>{item.uom} suggested</small></span>
-                  : <span className="review-policy">Review policy</span>}
+                  ? <p className="quantity-copy">Suggested: <strong>{formatQuantity(item.recommended_qty)} {item.uom}</strong></p>
+                  : <span className="review-policy">Review reorder settings</span>}
                 <div className="alert-reason" title={item.basis_note}>{item.reason}</div>
               </div>
             </article>

@@ -6,9 +6,9 @@
 
 ## Result
 
-The React Dashboard ran against the separate local Odoo showroom database `autostock_showroom_demo` for the fictional Atlas Auto Distribution business. The page fetched the displayed data through the authenticated `/autostock/api/v1/` routes. The browser capture script verified live product search and a warehouse-filtered restock preview, and found zero page errors, console errors, or API failures.
+The React Dashboard ran against the separate local Odoo showroom database `autostock_showroom_demo` for the fictional Atlas Auto Distribution business. The page fetched the displayed data through the authenticated `/autostock/api/v1/` routes. The browser capture script verified live product search and a warehouse-filtered restock preview, and found zero page errors, console errors, or API failures. This capture refresh applies the focused readability polish from the latest live review while retaining the accepted layout and visual direction.
 
-The screenshots below are actual browser captures of the Odoo-backed showroom, not frontend fixtures. They show the 64 tracked parts, current inventory-health counts, a saved delivery-based forecast preview, and five warehouse-level priority restock positions. Restock rows display the human product name separately from the SKU. The company is marked discreetly as a Demo environment. Forecast and reorder values are supplied by Odoo services; the React client does not reimplement those calculations.
+The screenshots below are actual browser captures of the Odoo-backed showroom, not frontend fixtures. They show the 64 tracked parts, current inventory-health counts, a saved delivery-based forecast preview, and five warehouse-level priority restock positions. Each restock card puts the part name, stock status, on-hand quantity, warehouse, and suggested quantity in the main scan path; supplier detail is secondary. The human product name and SKU stay separate. Forecast copy says “Next 30 days,” shows the source type, and places detailed provenance and limitations behind a keyboard-accessible information disclosure. The company has one discreet Demo environment indicator, including on mobile. Forecast and reorder values are supplied by Odoo services; the React client does not reimplement those calculations.
 
 ## Screenshots
 
@@ -22,7 +22,7 @@ Each capture passed the screenshot script's horizontal-overflow check and verifi
 
 ## Design review
 
-The new shell follows the approved `design/dashboard-concept.png` through a compact brand rail, quiet neutral canvas, violet active state, crisp card hierarchy, four glanceable KPIs, a large demand chart, an inventory-health visualization, and prioritized restock guidance. The responsive captures keep the chart readable and retain the product, warehouse, supplier, and quantity details without a giant table.
+The new shell follows the approved `design/dashboard-concept.png` through a compact brand rail, quiet neutral canvas, violet active state, crisp card hierarchy, four glanceable KPIs, a large demand chart, an inventory-health visualization, and prioritized restock guidance. This polish preserves that direction while making restock alerts individual cards rather than a dense row of table fields. The responsive captures keep the chart readable and the product, status, on-hand, warehouse, and suggested quantity easy to scan; supplier detail remains available with less visual weight.
 
 This first PR intentionally has one working Dashboard. It omits the concept's forecast-accuracy claim and future workflow areas such as full Forecasts, Inventory, purchasing, reports, and an assistant. The demo database contains only one authorized company, so company selection is shown but a second live-company switch could not be demonstrated with this showroom. The browser suite tests company-switch refresh behavior with isolated fixtures; Odoo tests exercise authenticated identity, an invalid company rejection, and the standard inventory access gate. No claim of release-grade accessibility or performance audit is made here.
 
@@ -37,7 +37,7 @@ The old Owl/Odoo dashboard was left unchanged. This PR adds the React client alo
 | `npm run typecheck` | Passed |
 | `npm run test:unit` | Passed, 3 tests |
 | `npm run test:contract` | Passed, 5 tests |
-| `npm run test:browser` | Passed, 3 tests covering responsive layout, chart interaction, mobile navigation, company refresh, and product search |
+| `npm run test:browser` | Passed, 3 tests covering 1440, 1024, 390, and 320 px layouts, forecast details, restock hierarchy, chart interaction, mobile navigation, company refresh, and product search |
 | `npm run build` | Passed |
 | Actual showroom screenshot and interaction capture | Passed at 1440, 1024, and 390 px; 5 live restock alerts; warehouse filter and product search passed; no browser or API errors |
 | `python -m pytest -q` | Passed, 38 tests |
