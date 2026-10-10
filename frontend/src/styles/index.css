@@ -831,3 +831,71 @@ html { scroll-behavior: smooth; }
   from { opacity: 0; scale: .985; }
   to { opacity: 1; scale: 1; }
 }
+
+
+/* Gate 4 readability baseline: normal 100% browser zoom must be comfortable for daily work. */
+.forecast-cutoff-label {
+  fill: #7d8497;
+  font-size: 9px;
+  font-weight: 620;
+  letter-spacing: .01em;
+  paint-order: stroke;
+  stroke: rgba(255,255,255,.92);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+@media (min-width: 1051px) {
+  .nav-item { font-size: 14px; }
+  .sidebar-section-title { font-size: 11px; }
+  .assistant-promo h2 { font-size: 14px; }
+  .assistant-promo p { font-size: 13px; }
+  .assistant-cta { font-size: 12px; }
+  .profile-copy strong { font-size: 12px; }
+  .profile-copy small { font-size: 11px; }
+  .search-placeholder { font-size: 14px; }
+  .global-search kbd,.demo-indicator { font-size: 11px; }
+  .page-heading p { font-size: 14px; }
+  .date-range-control,.report-control { font-size: 13px; }
+  .kpi-label { font-size: 13px; }
+  .kpi-note { font-size: 12px; }
+  .kpi-trend { font-size: 11px; }
+  .panel-title-row h2,.health-heading h2,.section-heading .panel-title-row h2 { font-size: 16px; }
+  .panel-heading-copy p { font-size: 13px; }
+  .select-visual { font-size: 12px; }
+  .legend-key { font-size: 11px; }
+  .chart-y-axis,.chart-x-axis { font-size: 12px; }
+  .chart-tooltip small { font-size: 10px; }
+  .chart-tooltip strong { font-size: 11px; }
+  .forecast-cutoff-label { font-size: 10px; }
+  .text-link { font-size: 12px; }
+  .health-donut-hole span { font-size: 11px; }
+  .health-legend li,.health-legend strong,.health-percent { font-size: 13px; }
+  .insight-copy h3 { font-size: 14px; }
+  .insight-copy p { font-size: 13px; }
+  .insight-action { font-size: 12px; }
+  .table-control,.see-all-control { font-size: 11px; }
+  .reorder-table th,.reorder-table td { min-height: 35px; font-size: 12px; }
+  .reorder-table thead th { font-size: 12px; }
+  .part-name { font-size: 12px; }
+  .number-cell strong,.confidence-value { font-size: 11px; }
+  .growth-pill,.risk-pill,.purchase-action,.coverage-footnote { font-size: 10px; }
+}
+
+@media (max-width: 1050px) and (min-width: 761px) {
+  .nav-item { font-size: 13px; }
+  .sidebar-section-title { font-size: 10px; }
+  .page-heading p { font-size: 13px; }
+  .kpi-label { font-size: 11px; }
+  .kpi-note { font-size: 10px; }
+  .panel-heading-copy p { font-size: 11px; }
+  .select-visual { font-size: 11px; }
+  .legend-key { font-size: 10px; }
+  .chart-y-axis,.chart-x-axis { font-size: 10px; }
+  .forecast-cutoff-label { font-size: 9px; }
+  .health-legend li,.health-legend strong,.health-percent { font-size: 12px; }
+  .insight-copy h3 { font-size: 13px; }
+  .insight-copy p { font-size: 11px; }
+  .insight-action { font-size: 10px; }
+  .reorder-table th,.reorder-table td,.reorder-table thead th { font-size: 10px; }
+}
