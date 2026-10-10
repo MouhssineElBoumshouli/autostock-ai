@@ -189,8 +189,7 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradie
 .column-stock,.column-suggested { width: 11%; }
 .column-confidence { width: 13%; }
 .column-risk { width: 9%; }
-.column-action { width: 10%; }
-.column-more { width: 3%; }
+ .column-action { width: 13%; }
 .reorder-table thead { background: #fafafd; }
 .reorder-table th,.reorder-table td { height: 31px; padding: 0 8px; border: 1px solid #eceef3; text-align: left; vertical-align: middle; white-space: nowrap; font-size: 10px; }
 .reorder-table thead th { height: 30px; color: #707a91; font-size: 10px; font-weight: 520; }
@@ -219,7 +218,6 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradie
 .risk-high { color: #d64c5b; background: #ffedf0; }
 .risk-medium { color: #d9892d; background: #fff4e4; }
 .purchase-action { min-width: 85px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #d7cdfd; border-radius: 7px; color: #6848db; background: #fff; font-size: 8px; font-weight: 600; }
-.more-cell { width: 29px; color: #848ca0; text-align: center !important; font-size: 14px !important; letter-spacing: 1px; }
 .mobile-detail { display: none; }
 .coverage-footnote { margin: 5px 14px 0; color: #999fb0; text-align: right; font-size: 8px; }
 
@@ -535,21 +533,21 @@ html { scroll-behavior: smooth; }
 .global-search,.mobile-menu-mark,.nav-item,.sidebar-collapse-toggle,.notification-mark,
 .profile-menu-trigger,.date-range-control,.report-control,.health-details-button,
 .insight-action,.table-control,.see-all-control,.mobile-more-control,.part-name,
-.purchase-action,.row-more-button,.mobile-detail .risk-pill,.drawer-secondary-action,
+.purchase-action,.mobile-detail .risk-pill,.drawer-secondary-action,
 .inline-retry-button { font-family: inherit; }
 .global-search,.mobile-menu-mark,.notification-mark,.profile-menu-trigger,.date-range-control,
 .report-control,.health-details-button,.insight-action,.table-control,.see-all-control,
-.mobile-more-control,.part-name,.purchase-action,.row-more-button,.mobile-detail .risk-pill,
+.mobile-more-control,.part-name,.purchase-action,.mobile-detail .risk-pill,
 .drawer-secondary-action,.inline-retry-button { cursor: pointer; }
 .global-search,.mobile-menu-mark,.notification-mark,.profile-menu-trigger,.date-range-control,
 .report-control,.health-details-button,.insight-action,.table-control,.see-all-control,
-.mobile-more-control,.part-name,.purchase-action,.row-more-button,.mobile-detail .risk-pill {
+.mobile-more-control,.part-name,.purchase-action,.mobile-detail .risk-pill {
   border: 0;
   text-align: inherit;
 }
 .global-search,.mobile-menu-mark,.notification-mark,.profile-menu-trigger,.date-range-control,
 .report-control,.health-details-button,.insight-action,.table-control,.see-all-control,
-.mobile-more-control,.part-name,.purchase-action,.row-more-button,.mobile-detail .risk-pill,
+.mobile-more-control,.part-name,.purchase-action,.mobile-detail .risk-pill,
 .drawer-secondary-action,.inline-retry-button { transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease; }
 .global-search:hover,.date-range-control:hover,.table-control:hover,.see-all-control:hover { border-color: #d7d0f6; color: #5636bd; }
 .global-search:focus-visible,.mobile-menu-mark:focus-visible,.nav-item:focus-visible,
@@ -557,7 +555,7 @@ html { scroll-behavior: smooth; }
 .date-range-control:focus-visible,.report-control:focus-visible,.health-details-button:focus-visible,
 .insight-action:focus-visible,.table-control:focus-visible,.see-all-control:focus-visible,
 .mobile-more-control:focus-visible,.part-name:focus-visible,.purchase-action:focus-visible,
-.row-more-button:focus-visible,.mobile-detail .risk-pill:focus-visible,.drawer-secondary-action:focus-visible,
+.purchase-action:focus-visible,.mobile-detail .risk-pill:focus-visible,.drawer-secondary-action:focus-visible,
 .inline-retry-button:focus-visible { outline: 3px solid rgba(113,72,239,.32); outline-offset: 2px; }
 .nav-item { border: 0; background: transparent; font-family: inherit; text-align: left; cursor: pointer; }
 .nav-item.is-unavailable { cursor: not-allowed; }
@@ -637,8 +635,6 @@ html { scroll-behavior: smooth; }
 .part-name { padding: 0; border-radius: 3px; color: inherit; background: transparent; font-family: inherit; font-size: inherit; font-weight: inherit; line-height: inherit; text-align: left; }
 .part-name:hover { color: #6944e6; }
 .purchase-action { padding: 0; cursor: not-allowed; font-family: inherit; }
-.row-more-button { width: 24px; height: 24px; padding: 0; border-radius: 6px; color: #81899f; background: transparent; font-size: 14px; letter-spacing: 1px; }
-.row-more-button:hover { color: #6844e7; background: #f2efff; }
 .mobile-detail .risk-pill { font-family: inherit; cursor: pointer; }
 .dashboard-chart-state { height: 230px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 14px; }
 .dashboard-chart-state > strong,.table-state > strong { color: #2d3751; font-size: 13px; font-weight: 680; text-align: center; }
@@ -743,7 +739,7 @@ html { scroll-behavior: smooth; }
   .reorder-controls .categories-control,.reorder-controls .see-all-control { display: none; }
   .mobile-more-control { width: 29px; height: 27px; display: inline-grid; place-items: center; padding: 0; border: 1px solid #e6e8f0; border-radius: 7px; color: #5f6a82; background: #fff; font-size: 13px; letter-spacing: 1px; }
   .mobile-detail .risk-pill { min-height: 20px; padding: 0 8px; border: 0; }
-  .row-more-button,.purchase-action { display: none; }
+  .purchase-action { display: none; }
   .interactive-drawer { inset: auto 0 0 !important; width: 100% !important; height: min(90dvh,760px) !important; max-width: none !important; padding-bottom: env(safe-area-inset-bottom,0px) !important; border: 0 !important; border-top: 1px solid #e5e7ee !important; border-radius: 17px 17px 0 0 !important; box-shadow: 0 -14px 48px rgba(31,34,72,.16) !important; }
   .interactive-drawer-header { padding: 20px 19px 14px !important; }
   .interactive-drawer-body { gap: 15px; overflow-y: auto; padding: 16px 19px 24px; }
