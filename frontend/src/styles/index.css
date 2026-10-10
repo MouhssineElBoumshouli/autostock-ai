@@ -899,3 +899,19 @@ html { scroll-behavior: smooth; }
   .insight-action { font-size: 10px; }
   .reorder-table th,.reorder-table td,.reorder-table thead th { font-size: 10px; }
 }
+
+
+/* At tablet width, preserve readable KPI copy instead of compressing five cards into one row. */
+@media (max-width: 1050px) and (min-width: 761px) {
+  .kpi-grid { grid-template-columns: repeat(6,minmax(0,1fr)); }
+  .kpi-card { grid-column: span 2; height: 112px; padding-inline: 12px; }
+  .kpi-card:nth-child(4),.kpi-card:nth-child(5) { grid-column: span 3; }
+  .kpi-label {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    font-size: 11px;
+    line-height: 1.25;
+  }
+  .kpi-note { font-size: 10px; }
+}
