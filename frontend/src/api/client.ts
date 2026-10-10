@@ -1,0 +1,124 @@
+import {
+  dashboardSchema,
+  forecastSchema,
+  searchSchema,
+  sessionSchema,
+  restockSchema,
+  type DashboardData,
+  type ForecastData,
+  type ProductSearchData,
+  type RestockData,
+  type SessionData,
+} from './contracts'
+import type { ZodType } from 'zod'
+
+const database = import.meta.env.VITE_ODOO_DATABASE?.trim()
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly code: 'unauthenticated' | 'forbidden' | 'request' | 'network' | 'contract',
+    readonly status?: number,
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
+async function get<T>(path: string, schema: ZodType<T>, companyId?: number): Promise<T> {
+  const url = new URL(path, window.location.origin)
+  if (companyId) url.searchParams.set('company_id', String(companyId))
+
+  let response: Response
+  try {
+    response = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    })
+  } catch {
+    throw new ApiError('AutoStock could not reach Odoo. Check your connection and retry.', 'network')
+  }
+
+  const contentType = response.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json')) {
+    const body = await response.text()
+    if (body.toLowerCase().includes('/web/login') || body.toLowerCase().includes('log in')) {
+      throw new ApiError('Your Odoo session has ended. Sign in to continue.', 'unauthenticated', response.status)
+    }
+    throw new ApiError('Odoo returned an unexpected response. Refresh the page and try again.', 'request', response.status)
+  }
+
+  const payload: unknown = await response.json()
+  if (!response.ok) {
+    const error = payload as { error?: { code?: string; message?: string } }
+    const code = error.error?.code === 'forbidden' ? 'forbidden' : 'request'
+    throw new ApiError(error.error?.message || 'Odoo could not complete that request.', code, response.status)
+  }
+
+  const parsed = schema.safeParse(payload)
+  if (!parsed.success) {
+    throw new ApiError('Odoo returned data that does not match the supported API contract.', 'contract', response.status)
+  }
+  return parsed.data
+}
+
+export const api = {
+  session: (companyId?: number) => get('/autostock/api/v1/session', sessionSchema, companyId),
+  dashboard: (companyId: number) => get('/autostock/api/v1/dashboard', dashboardSchema, companyId),
+  restock: (companyId: number, warehouseId?: number) => {
+    const suffix = warehouseId ? `?warehouse_id=${warehouseId}` : ''
+    return get(`/autostock/api/v1/dashboard/restock-preview${suffix}`, restockSchema, companyId)
+  },
+  forecast: (companyId: number, horizonDays = 30) => get(`/autostock/api/v1/dashboard/forecast-preview?horizon_days=${horizonDays}`, forecastSchema, companyId),
+  search: (companyId: number, query: string) => {
+    const suffix = new URLSearchParams({ q: query }).toString()
+    return get(`/autostock/api/v1/search/products?${suffix}`, searchSchema, companyId)
+  },
+}
+
+export async function signIn(login: string, password: string): Promise<void> {
+  if (!database) {
+    throw new ApiError('The Odoo database is not configured. Set VITE_ODOO_DATABASE in frontend/.env.local.', 'request')
+  }
+
+  let response: Response
+  try {
+    response = await fetch('/web/session/authenticate', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: { db: database, login, password } }),
+    })
+  } catch {
+    throw new ApiError('AutoStock could not reach Odoo. Check your connection and retry.', 'network')
+  }
+
+  const payload = await response.json() as {
+    result?: { uid?: number | false }
+    error?: { data?: { message?: string }; message?: string }
+  }
+  if (!response.ok || !payload.result?.uid) {
+    const detail = payload.error?.data?.message ?? payload.error?.message
+    throw new ApiError(detail && !detail.toLowerCase().includes('password') ? detail : 'That email or password was not accepted.', 'unauthenticated', response.status)
+  }
+}
+
+export async function signOut(): Promise<void> {
+  try {
+    await fetch('/web/session/destroy', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: {} }),
+    })
+  } catch {
+    // Clearing the browser-side query state below remains a useful sign-out fallback.
+  }
+}
+
+export function friendlyError(error: unknown): string {
+  return error instanceof Error ? error.message : 'Something went wrong while loading your workspace.'
+}
+
+export type { DashboardData, ForecastData, ProductSearchData, RestockData, SessionData }

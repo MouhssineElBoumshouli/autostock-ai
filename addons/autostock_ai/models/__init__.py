@@ -1,3 +1,4 @@
+from . import company
 from . import product_template
 from . import supplierinfo
 from . import dashboard

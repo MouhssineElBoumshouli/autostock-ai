@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 docker-compose.override.yml
+.showroom/
 
 # Python
 __pycache__/
@@ -26,5 +27,9 @@ ml/output/
 .DS_Store
 Thumbs.db
 
-# JavaScript dependencies, if added for local tooling later
+# JavaScript dependencies and generated frontend files
 node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/playwright-report/
+frontend/test-results/

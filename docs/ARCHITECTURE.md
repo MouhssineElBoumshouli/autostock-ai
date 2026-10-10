@@ -11,6 +11,11 @@ Odoo 19 Community
   │    └─ company/warehouse-scoped, read-only inventory-risk analysis and reorder guidance
   └─ standard Odoo ACLs, record rules, active company and warehouse scope
 
+React 19 client (`frontend/`)
+  ├─ Odoo-authenticated session and company selection
+  ├─ Dashboard backed by purpose-built, versioned Odoo API routes
+  └─ TanStack Query and Router; no business calculations are duplicated client-side
+
 Offline laboratory
   ├─ deterministic synthetic dataset generator
   └─ chronological evaluation against simple forecasting baselines
@@ -20,14 +25,15 @@ Offline laboratory
 
 Commercial readiness and premium UX are continuous requirements, tracked in [issue #7](https://github.com/MouhssineElBoumshouli/autostock-ai/issues/7) and [issue #8](https://github.com/MouhssineElBoumshouli/autostock-ai/issues/8). Each phase must preserve these standards while keeping its implementation scope small. A passing PR or screenshot does not establish commercial readiness; see the issues for the full release gates.
 
-## Inventory dashboard
+## Existing Odoo dashboard
 
-1. A stock user opens the AutoStock AI client action.
-2. Owl loads dashboard data through Odoo's authenticated ORM RPC.
-3. The server checks the user's inventory permission, scopes product and stock reads to the active company, and returns live Odoo values.
-4. The UI distinguishes physical on-hand stock and Odoo's `virtual_available` projection from demand forecast output.
+The legacy Owl client action remains unchanged while the React client is reviewed. It is not the foundation for new screens or UI work.
 
 No unrestricted SQL or `sudo()` is used to read business data. Odoo ACLs and record rules remain in force.
+
+## React dashboard foundation
+
+The current React scope and API/security boundaries are described in [Frontend architecture](FRONTEND_ARCHITECTURE.md). The Dashboard calls `GET /autostock/api/v1/session`, `/dashboard`, `/dashboard/restock-preview`, `/dashboard/forecast-preview`, and `/search/products` using the authenticated Odoo session cookie. Routes check inventory permissions, validate requested companies against the user's allowed companies, narrow ORM contexts to the selected company, and call existing Odoo services. Dashboard counts, forecasts and reorder quantities remain server-calculated. The restock preview is read-only; API pagination limits are disclosed in the response and interface.
 
 ## Phase 3A stock-risk analysis and reorder guidance
 
