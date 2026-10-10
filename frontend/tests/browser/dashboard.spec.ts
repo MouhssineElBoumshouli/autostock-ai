@@ -141,7 +141,7 @@ test('dashboard renders responsively without browser errors or clipped chart wid
       await expect(page.locator('.insight-card')).toHaveCount(3)
       await firstRow.getByRole('button', { name: 'Review' }).click()
       await expect(page.getByRole('heading', { name: 'Front Brake Rotor' })).toBeVisible()
-      await expect(page.getByText('Suggested reorder')).toBeVisible()
+      await expect(page.getByText('Suggested reorder', { exact: true })).toBeVisible()
       await page.keyboard.press('Escape')
       await page.getByRole('combobox', { name: 'Forecast horizon' }).selectOption('60')
       await expect(page.getByRole('combobox', { name: 'Forecast horizon' })).toHaveValue('60')
