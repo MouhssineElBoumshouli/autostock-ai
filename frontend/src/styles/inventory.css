@@ -299,3 +299,84 @@
 @media (prefers-reduced-motion: reduce) {
   .inventory-loading-title,.inventory-loading-row { animation: none; }
 }
+
+
+/* Gate 4 owner readability pass: preserve layout, raise everyday text to comfortable sizes. */
+@media (min-width: 761px) {
+  .inventory-eyebrow { font-size: 11px; }
+  .inventory-page-heading p { font-size: 13px; }
+  .inventory-search-button { font-size: 12px; }
+  .inventory-search-button kbd { font-size: 10px; }
+  .inventory-summary-copy > span { font-size: 11px; }
+  .inventory-summary-copy small { font-size: 10px; }
+  .inventory-summary-caveat { font-size: 11px; }
+  .inventory-catalog-title h2 { font-size: 15px; }
+  .inventory-catalog-title p { font-size: 11px; }
+  .inventory-live-mark { font-size: 10px; }
+  .inventory-search-field input,.inventory-supplier-filter input { font-size: 12px; }
+  .inventory-search-field button { font-size: 10px; }
+  .inventory-select-wrap > span,.inventory-supplier-filter > span { font-size: 10px; }
+  .inventory-select-wrap select,.inventory-sort-control select { font-size: 11px; }
+  .inventory-permission-note,.inventory-options-note { font-size: 11px; }
+  .inventory-results-bar > div:first-child { font-size: 11px; }
+  .inventory-results-bar > div:first-child strong { font-size: 13px; }
+  .inventory-refreshing,.inventory-reset-button,.inventory-sort-control > span { font-size: 10px; }
+  .inventory-table th { font-size: 10px; }
+  .inventory-table th span { font-size: 9px; }
+  .inventory-part-copy strong { font-size: 12px; }
+  .inventory-part-copy small { font-size: 10px; }
+  .inventory-cell-sku { font-size: 11px; }
+  .inventory-cell-quantity { font-size: 11px; }
+  .inventory-cell-quantity strong { font-size: 12px; }
+  .inventory-cell-quantity small { font-size: 9px; }
+  .inventory-warehouse-chips > span,.inventory-warehouse-chips small,
+  .inventory-warehouse-empty,.inventory-warehouse-value { font-size: 10px; }
+  .inventory-supplier-value strong { font-size: 10px; }
+  .inventory-supplier-value small,.inventory-muted-value { font-size: 9px; }
+  .inventory-status { font-size: 9px; }
+  .inventory-pagination,.inventory-pagination button,.inventory-coverage-note,.inventory-page-footnote { font-size: 10px; }
+  .inventory-state p,.inventory-table-loading { font-size: 12px; }
+  .inventory-secondary-button,.inventory-inline-error { font-size: 11px; }
+
+  .inventory-detail-identifiers > span { font-size: 11px; }
+  .inventory-detail-section-heading h3 { font-size: 13px; }
+  .inventory-detail-section-heading > span { font-size: 11px; }
+  .inventory-detail-metric > span { font-size: 11px; }
+  .inventory-detail-metric > strong { font-size: 15px; }
+  .inventory-detail-metric > small { font-size: 10px; }
+  .inventory-projection-line { font-size: 11px; }
+  .inventory-warehouse-heading strong { font-size: 12px; }
+  .inventory-warehouse-heading > span { font-size: 9px; }
+  .inventory-warehouse-values > span,.inventory-warehouse-values strong { font-size: 10px; }
+  .inventory-supplier-card > strong { font-size: 12px; }
+  .inventory-supplier-card > span { font-size: 11px; }
+  .inventory-forecast-note > strong,.inventory-forecast-note > p { font-size: 11px; }
+  .inventory-forecast-note > span,.inventory-forecast-note > small { font-size: 10px; }
+  .inventory-recommendation-topline { font-size: 11px; }
+  .inventory-recommendation-topline .inventory-status { font-size: 9px; }
+  .inventory-recommendation-quantity { font-size: 14px; }
+  .inventory-recommendation-card > p,.inventory-disclosure { font-size: 11px; }
+  .inventory-disclosure > small { font-size: 10px; }
+  .inventory-movement-copy strong,.inventory-movement-list > li > b { font-size: 11px; }
+  .inventory-movement-copy > span,.inventory-movement-copy > small,.inventory-movement-footnote { font-size: 10px; }
+  .inventory-inline-note,.inventory-inline-note > strong { font-size: 11px; }
+  .inventory-inline-note > span { font-size: 10px; }
+}
+
+@media (max-width: 760px) {
+  .inventory-summary-copy > span { font-size: 10px; }
+  .inventory-summary-copy small { font-size: 9px; }
+  .inventory-catalog-title p { font-size: 10px; }
+  .inventory-live-mark { font-size: 9px; }
+  .inventory-search-field input { font-size: 11px; }
+  .inventory-select-wrap select { font-size: 10px; }
+  .inventory-results-bar > div:first-child { font-size: 10px; }
+  .inventory-reset-button,.inventory-sort-control select { font-size: 9px; }
+  .inventory-mobile-identity strong { font-size: 11px; }
+  .inventory-mobile-identity small { font-size: 9px; }
+  .inventory-mobile-top .inventory-status { font-size: 8px; }
+  .inventory-mobile-stocks > span { font-size: 9px; }
+  .inventory-mobile-stocks strong { font-size: 10px; }
+  .inventory-mobile-meta { font-size: 9px; }
+  .inventory-pagination,.inventory-pagination button,.inventory-page-footnote { font-size: 9px; }
+}
