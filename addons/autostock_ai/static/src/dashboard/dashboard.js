@@ -152,7 +152,7 @@ export class AutoStockDashboard extends Component {
         return {
             dashboard: "Dashboard",
             forecast: "Forecasts",
-            risks: "Stock risks",
+            risks: "Restock",
             inventory: "Inventory",
         }[this.state.activeSection] || "Dashboard";
     }
@@ -179,6 +179,13 @@ export class AutoStockDashboard extends Component {
                 || Number(right.reorder_needed) - Number(left.reorder_needed)
                 || collator.compare(left.name, right.name);
         });
+    }
+
+    // Show only bounded, explicitly scoped server risk data; never claim global top risks.
+    get dashboardAlerts() {
+        return this.riskRows
+            .filter((row) => row.reorder_needed && Number(row.recommended_qty) > 0)
+            .slice(0, 3);
     }
 
     async loadRiskData() {
@@ -485,56 +492,27 @@ export class AutoStockDashboard extends Component {
         }
     }
 
-    scrollToDashboard() {
-        this.state.activeSection = "dashboard";
+    // Navigation selects a real workspace screen, not a scroll position in one long page.
+    navigateWorkspace(section) {
+        this.state.activeSection = section;
         this.closeMobileNav();
-        const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
-        this.dashboardScroll?.el?.scrollTo({ top: 0, behavior });
+        this.dashboardScroll?.el?.scrollTo({ top: 0, behavior: "instant" });
+        window.requestAnimationFrame(() => {
+            this.dashboardScroll?.el?.querySelector(".as-topline h1")?.focus({ preventScroll: true });
+            this.syncChartWidth();
+        });
     }
 
-    updateActiveSection() {
-        const scroll = this.dashboardScroll?.el;
-        if (!scroll?.isConnected) {
-            return;
-        }
-        if (scroll.scrollTop < 80) {
-            if (this.state.activeSection !== "dashboard") {
-                this.state.activeSection = "dashboard";
-            }
-            return;
-        }
-        const anchor = scroll.getBoundingClientRect().top + 96;
-        let active = "dashboard";
-        for (const section of scroll.querySelectorAll("[data-as-section]")) {
-            if (section.getBoundingClientRect().top <= anchor) {
-                active = section.dataset.asSection;
-            }
-        }
-        if (this.state.activeSection !== active) {
-            this.state.activeSection = active;
-        }
+    scrollToDashboard() {
+        this.navigateWorkspace("dashboard");
     }
 
     scrollToForecast() {
-        this.state.activeSection = "forecast";
-        this.closeMobileNav();
-        window.requestAnimationFrame(() => {
-            const heading = this.dashboardScroll?.el?.querySelector("[data-as-section='forecast'] h2");
-            const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
-            heading?.scrollIntoView({ behavior, block: "start" });
-            heading?.focus({ preventScroll: true });
-        });
+        this.navigateWorkspace("forecast");
     }
 
     scrollToRisks() {
-        this.state.activeSection = "risks";
-        this.closeMobileNav();
-        window.requestAnimationFrame(() => {
-            const heading = this.dashboardScroll?.el?.querySelector("[data-as-section='risks'] .as-risk-title");
-            const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
-            heading?.scrollIntoView({ behavior, block: "start" });
-            heading?.focus({ preventScroll: true });
-        });
+        this.navigateWorkspace("risks");
     }
 
     changeChartWindow(event) {
