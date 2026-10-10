@@ -775,3 +775,76 @@ class AutoStockApiV1(http.Controller):
             "positions": positions,
             "coverage": coverage,
         }
+
+    @http.route(
+        "/autostock/api/v1/inventory/options",
+        type="http",
+        auth="user",
+        methods=["GET"],
+    )
+    def inventory_options(self, **_kwargs):
+        return self._dispatch(self._inventory_options_payload)
+
+    def _inventory_options_payload(self):
+        company = self._selected_company()
+        supplier_query = (request.httprequest.args.get("supplier_q") or "").strip()[:80]
+        result = self._scoped_model("autostock.inventory.catalog", company).get_options(
+            supplier_query=supplier_query
+        )
+        return {"schema_version": 1, "company": self._company_contract(company), **result}
+
+    @http.route(
+        "/autostock/api/v1/inventory",
+        type="http",
+        auth="user",
+        methods=["GET"],
+    )
+    def inventory(self, **_kwargs):
+        return self._dispatch(self._inventory_payload)
+
+    def _inventory_payload(self):
+        company = self._selected_company()
+        args = request.httprequest.args
+        result = self._scoped_model("autostock.inventory.catalog", company).get_inventory_page(
+            query=args.get("q", ""),
+            supplier_query=args.get("supplier_q", ""),
+            status=args.get("status", "all"),
+            warehouse_id=args.get("warehouse_id"),
+            category_id=args.get("category_id"),
+            supplier_id=args.get("supplier_id"),
+            tracked=args.get("tracked", "all"),
+            active=args.get("active", "active"),
+            sort=args.get("sort", "name"),
+            direction=args.get("direction", "asc"),
+            page=args.get("page", 1),
+            page_size=args.get("page_size", 25),
+        )
+        return {"schema_version": 1, "company": self._company_contract(company), **result}
+
+    @http.route(
+        "/autostock/api/v1/products/<int:product_id>/inventory-detail",
+        type="http",
+        auth="user",
+        methods=["GET"],
+    )
+    def product_inventory_detail(self, product_id, **_kwargs):
+        return self._dispatch(
+            lambda: self._product_inventory_detail_payload(product_id)
+        )
+
+    def _product_inventory_detail_payload(self, product_id):
+        company = self._selected_company()
+        warehouse_id = request.httprequest.args.get("warehouse_id")
+        result = self._scoped_model(
+            "autostock.inventory.catalog", company
+        ).get_product_detail(product_id, warehouse_id=warehouse_id)
+        recommendations = [
+            self._risk_item_payload(row)
+            for row in result.pop("recommendation_rows")
+        ]
+        return {
+            "schema_version": 1,
+            "company": self._company_contract(company),
+            **result,
+            "recommendations": recommendations,
+        }

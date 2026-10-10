@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { FileBarChart2 } from 'lucide-react'
-import { ApiError, api, signOut } from '@/api/client'
-import type { DashboardData, RestockData, RiskItem, SessionData } from '@/api/contracts'
-import { LoginScreen } from '@/components/login-screen'
+import { useNavigate } from '@tanstack/react-router'
+import { api } from '@/api/client'
+import type { DashboardData, RestockData, RiskItem } from '@/api/contracts'
 import { DashboardShell, DashboardDateRange, type DashboardSection } from '@/components/gate-one/dashboard-shell'
 import {
   ForecastCard, InsightsSection, InventoryHealthCard, KpiCards, ReorderTable,
@@ -12,6 +12,7 @@ import {
 } from '@/components/gate-one/dashboard-panels'
 import { DetailSheet, type DashboardDrawer } from '@/components/gate-two/detail-sheet'
 import { ProductSearchDialog, type ProductSearchItem } from '@/components/gate-two/product-search-dialog'
+import { WorkspaceSession, type WorkspaceSessionValue } from '@/components/workspace-session'
 
 function scrollToTarget(id: string) {
   document.getElementById(id)?.scrollIntoView({
@@ -59,73 +60,11 @@ function DataError({ message, onRetry }: { message: string; onRetry: () => void 
   return <div className="dashboard-error panel" role="alert"><strong>Dashboard data could not be loaded</strong><p>{message}</p><button className="inline-retry-button" type="button" onClick={onRetry}>Try again</button></div>
 }
 
-function PermissionPage({ session, companyId, onSignOut }: { session: SessionData; companyId: number; onSignOut: () => void }) {
-  const company = session.allowed_companies.find((item) => item.id === companyId) ?? session.current_company
-  return (
-    <main className="login-shell">
-      <section className="login-card" aria-labelledby="permission-title">
-        <h1 className="login-title" id="permission-title">Inventory access is required</h1>
-        <p className="login-copy">Your Odoo user can sign in, but does not have the Inventory access needed to view AutoStock data for {company.name}.</p>
-        <p className="login-foot">Ask an Odoo administrator to review your user groups, then sign in again.</p>
-        <button className="login-submit" type="button" onClick={onSignOut}>Sign out</button>
-      </section>
-    </main>
-  )
-}
-
-function SessionError({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return <main className="route-loading" role="alert"><strong>AutoStock could not open your Odoo session.</strong><p>{message}</p><button className="inline-retry-button" type="button" onClick={onRetry}>Try again</button></main>
-}
-
 export function DashboardPage() {
-  const queryClient = useQueryClient()
-  const [companyId, setCompanyId] = useState<number | undefined>()
-  const sessionQuery = useQuery({
-    queryKey: ['session', companyId ?? 'current'],
-    queryFn: () => api.session(companyId),
-  })
-
-  async function handleSignOut() {
-    await signOut()
-    queryClient.clear()
-    setCompanyId(undefined)
-  }
-
-  function handleSignedIn() {
-    queryClient.invalidateQueries({ queryKey: ['session'] })
-    setCompanyId(undefined)
-  }
-
-  if (sessionQuery.isPending) return <main className="route-loading" role="status">Connecting to your Odoo workspace…</main>
-  if (sessionQuery.isError) {
-    if (sessionQuery.error instanceof ApiError && sessionQuery.error.code === 'unauthenticated') {
-      return <LoginScreen onSignedIn={handleSignedIn} />
-    }
-    return <SessionError message={sessionQuery.error.message} onRetry={() => void sessionQuery.refetch()} />
-  }
-  const session = sessionQuery.data
-  const selectedCompanyId = companyId ?? session.current_company.id
-  if (!session.user.permissions.inventory) {
-    return <PermissionPage session={session} companyId={selectedCompanyId} onSignOut={() => void handleSignOut()} />
-  }
-
-  return (
-    <ReferenceDashboard
-      key={selectedCompanyId}
-      session={session}
-      companyId={selectedCompanyId}
-      onSwitchCompany={setCompanyId}
-      onSignOut={() => void handleSignOut()}
-    />
-  )
+  return <WorkspaceSession>{(workspace) => <ReferenceDashboard {...workspace} key={workspace.companyId} />}</WorkspaceSession>
 }
 
-function ReferenceDashboard({ session, companyId, onSwitchCompany, onSignOut }: {
-  session: SessionData
-  companyId: number
-  onSwitchCompany: (companyId: number) => void
-  onSignOut: () => void
-}) {
+function ReferenceDashboard({ session, companyId, onSwitchCompany, onSignOut }: WorkspaceSessionValue) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchProduct, setSearchProduct] = useState<ProductSearchItem | null>(null)
   const [drawer, setDrawer] = useState<DashboardDrawer>(null)
@@ -137,6 +76,7 @@ function ReferenceDashboard({ session, companyId, onSwitchCompany, onSignOut }: 
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('All')
   const [categoryFilter, setCategoryFilter] = useState('All categories')
   const { toast, showNotice } = useDashboardNotice()
+  const navigate = useNavigate()
 
   useEffect(() => {
     function handleGlobalSearchShortcut(event: KeyboardEvent) {
@@ -192,8 +132,15 @@ function ReferenceDashboard({ session, companyId, onSwitchCompany, onSignOut }: 
 
   function navigateTo(section: DashboardSection) {
     setActiveSection(section)
-    const target = section === 'dashboard' ? 'dashboard-top' : section === 'inventory' ? 'inventory-health' : 'forecast-panel'
-    window.requestAnimationFrame(() => scrollToTarget(target))
+    if (section === 'dashboard') {
+      void navigate({ to: '/' })
+      return
+    }
+    if (section === 'inventory') {
+      void navigate({ to: '/inventory' })
+      return
+    }
+    window.requestAnimationFrame(() => scrollToTarget('forecast-panel'))
   }
 
   function onUnavailable(label: string) {

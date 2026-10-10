@@ -10,23 +10,23 @@ Gate 1 locked the visual composition. Gate 2 adds working interactions using typ
 
 Gate 1's responsive screenshots and reference comparison are stored in [`docs/qa/screenshots/issue-22-gate-1/`](qa/screenshots/issue-22-gate-1/), with its review notes in [`docs/qa/issue-22-gate-1.md`](qa/issue-22-gate-1.md). Gate 2 interaction screenshots and checks are recorded in [`docs/qa/issue-24-gate-2.md`](qa/issue-24-gate-2.md) and [`docs/qa/screenshots/issue-24-gate-2/`](qa/screenshots/issue-24-gate-2/).
 
-## Gate 3 planned session and data boundaries
+## Gate 3 authenticated Odoo data boundaries
 
-After owner approval of the visual replica and fixture interaction prototype, the client can be wired to the authenticated Odoo session and purpose-built `/autostock/api/v1/` routes. The intended data flow is:
+The approved Dashboard and shell use an authenticated Odoo session and purpose-built `/autostock/api/v1/` routes. The data flow is:
 
 ```text
 Browser ── Odoo session cookie ──> /web/session/authenticate
    │
    └── credentials: include ─────> /autostock/api/v1/*
-                                       ├─ current Odoo user and authorized companies
-                                       ├─ autostock.dashboard.get_dashboard_data()
-                                       ├─ autostock.inventory.risk.get_risk_data()
-                                       └─ autostock.forecast.run.get_forecast_snapshot()
+                                       ├─ current user and authorized companies
+                                       ├─ dashboard, forecast and restock previews
+                                       ├─ permission-aware product search and quick view
+                                       └─ inventory catalog and product details
 ```
 
-The browser will hold only the Odoo session cookie. API routes must use `auth="user"` and ORM access without `sudo()`, validate a selected company against `request.env.companies`, and narrow company context with `with_company()` and `allowed_company_ids=[company.id]`. Warehouse filters must be validated by the existing risk service so Odoo ACLs and record rules stay in force.
+The browser holds only the Odoo session cookie. API routes use `auth="user"` and ORM access without `sudo()`, validate a selected company against `request.env.companies`, and narrow company context with `with_company()` and `allowed_company_ids=[company.id]`. Warehouse filters are validated against the selected company so Odoo ACLs and record rules stay in force.
 
-The existing API client and Zod contracts are retained as the Gate 3 integration foundation. Their routes are planned contracts; Gates 1 and 2 do not call them.
+The API client and Zod contracts describe the live routes. Fixture-only Gate 1 and Gate 2 browser journeys remain available for isolated visual and interaction regression checks; the current Dashboard and Inventory routes use authenticated Odoo data.
 
 | Planned route | Source | Purpose |
 | --- | --- | --- |
@@ -35,8 +35,20 @@ The existing API client and Zod contracts are retained as the Gate 3 integration
 | `GET /autostock/api/v1/dashboard/restock-preview` | `autostock.inventory.risk` | Read-only priority positions, warehouse scope and scan coverage |
 | `GET /autostock/api/v1/dashboard/forecast-preview` | `autostock.forecast.run` | Eligible saved forecast or a truthful unavailable/restricted state |
 | `GET /autostock/api/v1/search/products` | `product.product` ORM search | Permission-aware product search |
+| `GET /autostock/api/v1/products/{id}/quick-view` | `product.product` and scoped inventory services | Dashboard product quick view |
+| `GET /autostock/api/v1/inventory/options` | Product, category, warehouse and permitted supplier records | Filter choices for the Inventory route |
+| `GET /autostock/api/v1/inventory` | Product catalog and Odoo stock quantities | Server-side search, filters, sorting, paging, and company/warehouse stock values |
+| `GET /autostock/api/v1/products/{id}/inventory-detail` | Product, stock, supplier, movement, forecast and risk services | Read-only product detail with warehouse balances and available history |
 
 The React client must map server values for display rather than calculate stock, coverage, reorder quantities, lead time, forecast or evaluation metrics. Incomplete coverage and unavailable forecasts must be disclosed plainly.
+
+## Gate 4 Inventory route
+
+Inventory is a real, read-only route within the approved application shell. It keeps server work on the Odoo side: product name, SKU, OEM reference and permitted supplier searches; category, warehouse, status, monitoring and active/archive filters; sorting and pagination; and quantity summaries all come from the authenticated catalog service. Catalog paging is validated with more than 1,000 products so a part beyond the initial page remains searchable and reachable.
+
+The list shows company-wide on-hand, available, reserved and incoming amounts. Selecting a warehouse scopes the stock-status view and provides that warehouse's quantities while preserving a clear label for company totals. The product detail view presents stock by warehouse, permitted supplier terms, meaningful recent stock activity in plain language, and forecast/reorder information only when existing services provide it. Supplier restrictions, incomplete coverage, absent history, and service failures have explicit states. No product edits, receipts, adjustments, or purchasing actions are exposed.
+
+Gate 4 browser evidence and test results are recorded in [`docs/qa/issue-28-gate-4.md`](qa/issue-28-gate-4.md) with real showroom screenshots in [`docs/qa/screenshots/issue-28-gate-4/`](qa/screenshots/issue-28-gate-4/).
 
 ## Local frontend development
 
@@ -46,6 +58,6 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173/`. No Odoo service, login, database, or `.env.local` file is required for Gates 1 or 2. Fixture states can be reviewed with `?fixtureState=loading`, `?fixtureState=empty`, or `?fixtureState=error`.
+Open `http://127.0.0.1:5173/`. The fixture-only Gate 1 and Gate 2 journeys can run without Odoo. To use live Dashboard and Inventory routes, run the local Odoo showroom on `127.0.0.1:8177` (or set `ODOO_PROXY_TARGET` in a local Vite environment file), then sign in with a permitted user. Gate 1 and Gate 2 fixture states can be reviewed with `?fixtureState=loading`, `?fixtureState=empty`, or `?fixtureState=error`.
 
-The frontend gates are `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run test:contract`, `npm run test:browser`, and `npm run build`. The Gate 2 browser journeys verify responsive fit at 1440, 1024 and 390 CSS pixels, keyboard and reduced-motion behavior, zero browser errors, and zero `/autostock/api/` requests. Screenshot evidence is kept with the corresponding gate QA report.
+The frontend gates are `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run test:contract`, `npm run test:browser`, and `npm run build`. Browser journeys verify responsive fit at 1440, 1024 and 390 CSS pixels, keyboard and reduced-motion behavior, zero browser errors, and server-side catalog interactions. Fixture-only journeys explicitly assert zero `/autostock/api/` requests; live showroom smoke checks exercise the authenticated API. Screenshot evidence is kept with the corresponding gate QA report.
