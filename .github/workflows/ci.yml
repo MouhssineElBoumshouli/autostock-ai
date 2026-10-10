@@ -36,6 +36,13 @@ jobs:
       - name: Test that browser QA refuses non-disposable databases before browser or network access
         run: node --test scripts/test_qa_phase3a_browser_guard.mjs
 
+      - name: Check AutoStock Owl and browser QA JavaScript syntax
+        run: |
+          node --input-type=module --check < addons/autostock_ai/static/src/dashboard/dashboard.js
+          node --check scripts/qa_showroom_browser.mjs
+          node --check scripts/qa_phase3a_browser.mjs
+          node --check scripts/qa_dashboard_browser.mjs
+
       - name: Compile Python sources
         run: python -m compileall -q addons ml scripts tests
 
