@@ -122,10 +122,10 @@ async function navigateToRisks(mobile) {
         await page.getByRole("button", { name: "Open AutoStock navigation" }).click();
         const drawer = page.getByRole("dialog", { name: "AutoStock AI navigation" });
         await drawer.waitFor();
-        await drawer.getByRole("button", { name: "Stock risks", exact: true }).click();
+        await drawer.getByRole("button", { name: "Restock", exact: true }).click();
         await drawer.waitFor({ state: "hidden" });
     } else {
-        await page.getByRole("button", { name: "Stock risks", exact: true }).click();
+        await page.getByRole("button", { name: "Restock", exact: true }).click();
     }
     await page.locator(".as-risk-panel").waitFor({ state: "visible" });
     await page.locator(".as-risk-table tbody tr[data-risk-key]").first().waitFor({ state: "attached" });
@@ -189,7 +189,7 @@ try {
 
         await navigateToRisks(viewport.mobile);
         assert(
-            (await page.locator(".as-appbar-context strong").innerText()).trim() === "Stock risks",
+            (await page.locator(".as-appbar-context strong").innerText()).trim() === "Restock",
             `${viewport.name} navigation context did not identify Stock risks.`
         );
         const layoutModes = await page.evaluate(() => ({
