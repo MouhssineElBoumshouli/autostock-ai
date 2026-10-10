@@ -6,12 +6,12 @@ import {
 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
-  DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet'
-import { dateRangeFixtures, notificationFixtures } from '@/data/gate-two-fixtures'
+import type { SessionData } from '@/api/contracts'
 
 export type DashboardSection = 'dashboard' | 'inventory' | 'forecast'
 
@@ -90,7 +90,7 @@ function NavigationItems({
           type="button"
           aria-disabled="true"
           key={label}
-          title={`${label} is not part of this Dashboard preview`}
+          title={`${label} is not available in the current release`}
           onClick={() => { onUnavailable(label); onAfterNavigate?.() }}
         >
           <Icon size={18} strokeWidth={1.85} aria-hidden="true" />
@@ -107,13 +107,16 @@ function Sidebar({
   activeSection,
   onNavigate,
   onUnavailable,
+  user,
 }: {
   collapsed: boolean
   onToggleCollapsed: () => void
   activeSection: DashboardSection
   onNavigate: (section: DashboardSection) => void
   onUnavailable: (label: string) => void
+  user: SessionData['user']
 }) {
+  const initials = user.name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join('').toUpperCase()
   return (
     <aside className={`sidebar-rail${collapsed ? ' is-collapsed' : ''}`} aria-label="AutoStock workspace navigation">
       <Brand />
@@ -134,15 +137,15 @@ function Sidebar({
         <NavigationItems items={operationLinks} activeSection={activeSection} onNavigate={onNavigate} onUnavailable={onUnavailable} />
       </nav>
       <div className="sidebar-bottom">
-        <section className="assistant-promo" aria-label="AI Assistant preview">
+        <section className="assistant-promo" aria-label="AI Assistant">
           <span className="assistant-icon"><Bot size={20} strokeWidth={1.8} /></span>
           <h2>AI Assistant</h2>
-          <p>Get instant insights about your inventory and demand trends.</p>
-          <span className="assistant-cta" title="The assistant is not included in this preview" aria-disabled="true">Ask AI <ArrowRight size={13} /></span>
+          <p>Assistant tools are not available in this release.</p>
+          <span className="assistant-cta" title="The assistant is not available yet" aria-disabled="true">Coming later <ArrowRight size={13} /></span>
         </section>
         <div className="sidebar-profile">
-          <span className="profile-avatar profile-avatar-photo" aria-hidden="true">AM</span>
-          <span className="profile-copy"><strong>Alex Morgan</strong><small>Inventory Manager</small></span>
+          <span className="profile-avatar" aria-hidden="true">{initials}</span>
+          <span className="profile-copy"><strong>{user.name}</strong><small>{user.permissions.inventory_manager ? 'Inventory manager' : user.permissions.inventory ? 'Inventory access' : 'Workspace access'}</small></span>
           <ChevronDown size={15} className="profile-chevron" aria-hidden="true" />
         </div>
       </div>
@@ -151,23 +154,24 @@ function Sidebar({
 }
 
 export function DashboardDateRange({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const options = ['Next 7 days', 'Next 30 days', 'Next 60 days']
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="date-range-control" type="button" aria-label={`Date range: ${value}`}>
+        <button className="date-range-control" type="button" aria-label={`Forecast period: ${value}`}>
           <CalendarDays size={16} aria-hidden="true" /><span className="date-range-value">{value}</span><ChevronDown size={14} aria-hidden="true" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="header-dropdown">
-        <DropdownMenuLabel>Dashboard date range</DropdownMenuLabel>
+        <DropdownMenuLabel>Forecast period</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {dateRangeFixtures.map((option) => (
-          <DropdownMenuItem key={option.value} onSelect={() => onChange(option.value)}>
-            <span className="menu-choice-check">{value === option.value ? '✓' : ''}</span>
-            <span>{option.label}</span>
+        {options.map((option) => (
+          <DropdownMenuItem key={option} onSelect={() => onChange(option)}>
+            <span className="menu-choice-check">{value === option ? '✓' : ''}</span>
+            <span>{option}</span>
           </DropdownMenuItem>
         ))}
-        <p className="menu-footnote">Fixture values remain illustrative.</p>
+        <p className="menu-footnote">Updates the demand forecast.</p>
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -177,38 +181,46 @@ function NotificationsMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="notification-mark" type="button" aria-label="Notifications, 3 sample updates">
-          <Bell size={19} strokeWidth={1.8} aria-hidden="true" /><span className="notification-count">3</span>
+        <button className="notification-mark" type="button" aria-label="Notifications">
+          <Bell size={19} strokeWidth={1.8} aria-hidden="true" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="header-dropdown notification-dropdown">
         <DropdownMenuLabel>Recent updates</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {notificationFixtures.map((notification) => (
-          <div className="notification-preview" key={notification.title}>
-            <span className="notification-preview-dot" />
-            <div><strong>{notification.title}</strong><p>{notification.detail}</p><small>{notification.time}</small></div>
-          </div>
-        ))}
-        <p className="menu-footnote">Sample updates · no live notifications</p>
+        <div className="notification-empty">There are no notifications right now.</div>
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
-function ProfileMenu() {
+function ProfileMenu({ session, companyId, onSwitchCompany, onSignOut }: {
+  session: SessionData
+  companyId: number
+  onSwitchCompany: (companyId: number) => void
+  onSignOut: () => void
+}) {
+  const initials = session.user.name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join('').toUpperCase()
+  const company = session.allowed_companies.find((item) => item.id === companyId) ?? session.current_company
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="profile-menu-trigger" type="button" aria-label="Profile menu for Alex Morgan">
-          <span className="header-avatar" aria-hidden="true">AM</span><ChevronDown className="header-chevron" size={15} aria-hidden="true" />
+        <button className="profile-menu-trigger" type="button" aria-label={`Profile menu for ${session.user.name}`}>
+          <span className="header-avatar" aria-hidden="true">{initials}</span><ChevronDown className="header-chevron" size={15} aria-hidden="true" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="header-dropdown profile-dropdown">
-        <DropdownMenuLabel>Alex Morgan</DropdownMenuLabel>
-        <div className="profile-menu-copy">Inventory Manager<br /><span>Local preview account</span></div>
+        <DropdownMenuLabel>{session.user.name}</DropdownMenuLabel>
+        <div className="profile-menu-copy">{company.name}<br /><span>{session.user.permissions.inventory_manager ? 'Inventory manager' : session.user.permissions.inventory ? 'Inventory access' : 'Workspace access'}</span></div>
         <DropdownMenuSeparator />
-        <div className="profile-menu-status"><Sparkles size={13} aria-hidden="true" />Dashboard preview · fixture data</div>
+        <DropdownMenuLabel>Company</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={String(companyId)} onValueChange={(value) => onSwitchCompany(Number(value))}>
+          {session.allowed_companies.map((item) => (
+            <DropdownMenuRadioItem key={item.id} value={String(item.id)}>{item.name}</DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onSignOut}>Sign out</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -217,27 +229,36 @@ function ProfileMenu() {
 function GlobalHeader({
   onOpenSearch,
   onOpenMobileNav,
+  session,
+  companyId,
+  onSwitchCompany,
+  onSignOut,
 }: {
   onOpenSearch: () => void
   onOpenMobileNav: () => void
+  session: SessionData
+  companyId: number
+  onSwitchCompany: (companyId: number) => void
+  onSignOut: () => void
 }) {
+  const company = session.allowed_companies.find((item) => item.id === companyId) ?? session.current_company
   return (
     <header className="global-header">
       <div className="global-header-main">
         <button className="mobile-menu-mark" type="button" onClick={onOpenMobileNav} aria-label="Open navigation menu"><Menu size={20} /></button>
         <div className="mobile-brand"><Brand /></div>
-        <button className="global-search" type="button" aria-label="Search parts, SKUs, vehicles, or suppliers" onClick={onOpenSearch}>
+        <button className="global-search" type="button" aria-label="Search parts, SKUs, suppliers, or references" onClick={onOpenSearch}>
           <Search size={17} strokeWidth={1.9} aria-hidden="true" />
-          <span className="search-placeholder"><span className="desktop-search-copy">Search parts, SKUs, vehicles, or anything…</span><span className="mobile-search-copy">Search parts or SKUs…</span></span>
+          <span className="search-placeholder"><span className="desktop-search-copy">Search parts, SKUs, suppliers, or references…</span><span className="mobile-search-copy">Search parts or SKUs…</span></span>
           <kbd>Ctrl K</kbd>
         </button>
       </div>
       <div className="global-header-actions">
-        <span className="fixture-indicator" title="All displayed values are local development fixtures for visual review only">
-          <Sparkles size={11} aria-hidden="true" /><span className="fixture-long">Visual preview · fixture data</span><span className="fixture-short">Fixture data</span>
-        </span>
+        {company.demo_environment && <span className="demo-indicator" title="This Odoo company is marked as a demo environment">
+          <Sparkles size={11} aria-hidden="true" /><span className="demo-indicator-long">Demo environment</span><span className="demo-indicator-short">Demo</span>
+        </span>}
         <NotificationsMenu />
-        <ProfileMenu />
+        <ProfileMenu session={session} companyId={companyId} onSwitchCompany={onSwitchCompany} onSignOut={onSignOut} />
       </div>
     </header>
   )
@@ -262,7 +283,7 @@ function MobileNavigationSheet({
         <SheetHeader className="mobile-nav-heading">
           <Brand />
           <SheetTitle className="sr-only">AutoStock navigation</SheetTitle>
-          <SheetDescription className="sr-only">Navigate sections available in this local Dashboard preview.</SheetDescription>
+          <SheetDescription className="sr-only">Navigate the sections available in this AutoStock release.</SheetDescription>
         </SheetHeader>
         <nav className="mobile-nav-list" aria-label="Workspace">
           <NavigationItems items={workspaceLinks} activeSection={activeSection} onNavigate={onNavigate} onUnavailable={onUnavailable} onAfterNavigate={() => onOpenChange(false)} />
@@ -271,7 +292,7 @@ function MobileNavigationSheet({
         <nav className="mobile-nav-list" aria-label="Operations">
           <NavigationItems items={operationLinks} activeSection={activeSection} onNavigate={onNavigate} onUnavailable={onUnavailable} onAfterNavigate={() => onOpenChange(false)} />
         </nav>
-        <p className="mobile-nav-note">Only Dashboard, Inventory overview, and Forecast preview are available in this gate.</p>
+        <p className="mobile-nav-note">Some workspace sections are not available in this release.</p>
       </SheetContent>
     </Sheet>
   )
@@ -287,6 +308,10 @@ export function DashboardShell({
   onOpenSearch,
   mobileNavOpen,
   onMobileNavChange,
+  session,
+  companyId,
+  onSwitchCompany,
+  onSignOut,
 }: {
   children: ReactNode
   collapsed: boolean
@@ -297,13 +322,17 @@ export function DashboardShell({
   onOpenSearch: () => void
   mobileNavOpen: boolean
   onMobileNavChange: (open: boolean) => void
+  session: SessionData
+  companyId: number
+  onSwitchCompany: (companyId: number) => void
+  onSignOut: () => void
 }) {
   return (
     <>
       <div className={`dashboard-frame${collapsed ? ' sidebar-collapsed' : ''}`}>
-        <Sidebar collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} activeSection={activeSection} onNavigate={onNavigate} onUnavailable={onUnavailable} />
+        <Sidebar collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} activeSection={activeSection} onNavigate={onNavigate} onUnavailable={onUnavailable} user={session.user} />
         <div className="dashboard-main">
-          <GlobalHeader onOpenSearch={onOpenSearch} onOpenMobileNav={() => onMobileNavChange(true)} />
+          <GlobalHeader onOpenSearch={onOpenSearch} onOpenMobileNav={() => onMobileNavChange(true)} session={session} companyId={companyId} onSwitchCompany={onSwitchCompany} onSignOut={onSignOut} />
           {children}
         </div>
       </div>

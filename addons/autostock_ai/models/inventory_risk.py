@@ -176,6 +176,7 @@ class AutoStockInventoryRisk(models.AbstractModel):
     def get_risk_data(
         self,
         warehouse_id=False,
+        product_id=False,
         search="",
         supplier_id=False,
         risk_filter="all",
@@ -235,6 +236,14 @@ class AutoStockInventoryRisk(models.AbstractModel):
             ("autostock_enabled", "=", True),
             ("company_id", "in", [False, company.id]),
         ]
+        if product_id:
+            try:
+                product_id = int(product_id)
+            except (TypeError, ValueError) as error:
+                raise ValidationError(_("Choose a valid product.")) from error
+            if product_id <= 0:
+                raise ValidationError(_("Choose a valid product."))
+            product_domain.append(("id", "=", product_id))
         if search:
             product_domain += [
                 "|", "|",
@@ -623,6 +632,7 @@ class AutoStockInventoryRisk(models.AbstractModel):
                 "product_name": product.product_tmpl_id.name,
                 "sku": product.default_code or "—",
                 "reference": product.autostock_oem_reference or "—",
+                "category": product.categ_id.display_name or _("Uncategorized"),
                 "warehouse": warehouse.display_name,
                 "scope_location": scope_location.display_name,
                 "uom": product.uom_id.display_name,
