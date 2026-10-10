@@ -440,4 +440,91 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradie
   .reorder-table tbody tr { grid-template-columns: minmax(0,1fr) 112px; padding-inline: 6px; }
 }
 
+/* Gate 1 readability pass: text sizes only; preserve the approved composition. */
+.nav-item { font-size: 13px; }
+.sidebar-section-title { font-size: 10px; }
+.assistant-promo p { font-size: 12px; }
+.assistant-cta { font-size: 11px; }
+.profile-copy strong { font-size: 11px; }
+.profile-copy small { font-size: 10px; }
+.search-placeholder { font-size: 13px; }
+.global-search kbd { font-size: 10px; }
+.fixture-indicator { font-size: 10px; }
+.notification-count { font-size: 9px; }
+.page-heading p { font-size: 13px; }
+.date-range-control,.report-control { font-size: 12px; }
+.kpi-trend { font-size: 10px; }
+.kpi-label { font-size: 12px; }
+.kpi-note { font-size: 11px; }
+.panel-heading-copy p { font-size: 12px; }
+.select-visual { font-size: 11px; }
+.legend-key { font-size: 10px; }
+.chart-y-axis,.chart-x-axis { font-size: 11px; }
+.chart-tooltip small { font-size: 9px; }
+.chart-tooltip strong { font-size: 10px; }
+.text-link { font-size: 11px; }
+.health-donut-hole span { font-size: 10px; }
+.health-legend li,.health-legend strong,.health-percent { font-size: 12px; }
+.insight-copy h3 { font-size: 13px; }
+.insight-copy p { font-size: 12px; }
+.insight-action { font-size: 11px; }
+.table-control,.see-all-control { font-size: 10px; }
+.reorder-table th,.reorder-table td { font-size: 11px; }
+.reorder-table thead th { font-size: 11px; }
+.part-name { font-size: 11px; }
+.number-cell strong { font-size: 10px; }
+.growth-pill { font-size: 9px; }
+.confidence-value { font-size: 10px; }
+.risk-pill { font-size: 9px; }
+.purchase-action { font-size: 9px; }
+.fixture-footnote { font-size: 9px; }
+
+@media (max-width: 1050px) and (min-width: 761px) {
+  .fixture-indicator,.date-range-control,.report-control { font-size: 9px; }
+  .kpi-label { font-size: 9px; }
+  .kpi-note { font-size: 9px; }
+  .panel-heading-copy p { font-size: 10px; }
+  .select-visual { font-size: 10px; }
+  .legend-key { font-size: 9px; }
+  .health-legend li,.health-legend strong,.health-percent { font-size: 11px; }
+  .insight-copy h3 { font-size: 12px; }
+  .insight-copy p { font-size: 10px; }
+  .insight-action { font-size: 9px; }
+  .reorder-table th,.reorder-table td { font-size: 9px; }
+  .reorder-table thead th { font-size: 9px; }
+}
+
+@media (max-width: 760px) {
+  .fixture-indicator { font-size: 9px; }
+  .report-control { font-size: 0; }
+  .page-heading p { font-size: 12px; }
+  .date-range-control { font-size: 10px; }
+  .kpi-label { font-size: 10px; }
+  .kpi-note { font-size: 10px; }
+  .kpi-trend { font-size: 9px; }
+  .panel-heading-copy p { font-size: 10px; }
+  .select-visual { font-size: 9px; }
+  .legend-key { font-size: 9px; }
+  .chart-y-axis,.chart-x-axis { font-size: 9px; }
+  .health-legend li,.health-legend strong,.health-percent { font-size: 12px; }
+  .section-heading > .text-link { font-size: 9px; }
+  .insight-copy h3 { font-size: 12px; }
+  .insight-copy p { font-size: 11px; }
+  .table-control { font-size: 9px; }
+  .part-name { font-size: 10px; }
+  .mobile-sku { font-size: 9px; }
+  .mobile-detail > span { font-size: 10px; }
+  .mobile-detail > span small { font-size: 9px; }
+  .mobile-detail > span strong { font-size: 10px; }
+  .mobile-detail > span i { font-size: 9px; }
+  .mobile-detail .risk-pill { font-size: 8px; }
+  .fixture-footnote { font-size: 9px; }
+}
+
+@media (max-width: 370px) {
+  .fixture-indicator { font-size: 8px; }
+  .kpi-trend { font-size: 8px; }
+  .legend-key { font-size: 8px; }
+}
+
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }

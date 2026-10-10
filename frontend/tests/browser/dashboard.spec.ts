@@ -37,10 +37,32 @@ test('Gate 1 dashboard matches the reference composition at desktop, tablet, and
       document: document.documentElement.scrollWidth,
       chartWidth: document.querySelector('.chart-plot svg')?.getBoundingClientRect().width ?? 0,
       fixtureLabel: document.querySelector('.fixture-indicator')?.getBoundingClientRect().width ?? 0,
+      text: Object.fromEntries([
+        ['nav', '.nav-item'],
+        ['fixture', '.fixture-indicator'],
+        ['kpiNote', '.kpi-note'],
+        ['legend', '.legend-key'],
+        ['tableHeader', '.reorder-table thead th'],
+        ['mobileSku', '.mobile-sku'],
+        ['mobileDetail', '.mobile-detail > span'],
+        ['reportControl', '.report-control'],
+      ].map(([name, selector]) => [
+        name,
+        Number.parseFloat(getComputedStyle(document.querySelector(selector)!).fontSize),
+      ])),
     }))
     expect(layout.document, `${viewport.name} horizontal overflow`).toBeLessThanOrEqual(viewport.width)
     expect(layout.chartWidth, `${viewport.name} chart width`).toBeGreaterThan(200)
     expect(layout.fixtureLabel, `${viewport.name} visible fixture label`).toBeGreaterThan(0)
+    if (viewport.width === 1440) {
+      expect(layout.text).toMatchObject({ nav: 13, fixture: 10, kpiNote: 11, legend: 10, tableHeader: 11 })
+    }
+    if (viewport.width === 1024) {
+      expect(layout.text).toMatchObject({ nav: 13, fixture: 9, kpiNote: 9, legend: 9, tableHeader: 9 })
+    }
+    if (viewport.width === 390) {
+      expect(layout.text).toMatchObject({ fixture: 9, kpiNote: 10, legend: 9, mobileSku: 9, mobileDetail: 10, reportControl: 0 })
+    }
     if (viewport.width === 390) {
       await expect(page.locator('.mobile-menu-mark')).toBeVisible()
       await expect(page.locator('.mobile-brand .brand-wordmark')).toBeVisible()

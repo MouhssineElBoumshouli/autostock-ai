@@ -8,6 +8,8 @@
 
 The Dashboard has been rebuilt as a fixture-only React screen against [`design/dashboard-concept.png`](../../design/dashboard-concept.png). Its composition follows the reference's compact branded sidebar, global search/header, title and date/report controls, five KPI cards, two-column forecast and inventory-health area, three insight cards, and dense reorder table. No Odoo session or API call is made by this Dashboard. The browser regression records and rejects any `/autostock/api/` request.
 
+The owner-approved Gate 1 visual direction received a focused readability pass after review: small labels, supporting copy, chart legends/captions, and table metadata increased by one or two pixels where appropriate. Headings, KPI values, card dimensions, spacing, proportions, and responsive composition were preserved. Playwright now checks representative computed text sizes at all three target widths.
+
 The visible `Visual preview · fixture data` label and the footer note identify the numbers as development fixtures. In particular, `92.4%` is an illustrative value only; it is not a forecast accuracy result or a business validation claim. The fixture source is [`frontend/src/data/development-dashboard-fixture.ts`](../../frontend/src/data/development-dashboard-fixture.ts).
 
 ## Screenshots
@@ -39,8 +41,8 @@ The screenshots show full-page layout at the stated viewport width. Playwright v
 | `npm run typecheck` | Passed |
 | `npm run test:unit` | Passed, 3 tests |
 | `npm run test:contract` | Passed, 5 tests |
-| `npm run test:browser` | Passed, 1 Playwright test covering 1440, 1024, and 390 px; 5 KPIs, 3 insights, 5 reorder rows, chart width, no overflow, no page errors, and no Odoo API requests |
-| Playwright screenshot capture | Passed; three responsive screenshots and the desktop side-by-side comparison saved above |
+| `npm run test:browser` | Passed, 1 Playwright test covering 1440, 1024, and 390 px; 5 KPIs, 3 insights, 5 reorder rows, computed readability sizes, chart width, no overflow, no page errors, and no Odoo API requests |
+| Playwright screenshot capture | Passed; all three responsive screenshots and the desktop side-by-side comparison refreshed after the readability pass |
 | `npm run build` | Passed; Vite production build completed |
 
 No Odoo installation, integration, data, or business workflow was exercised for this visual gate by design. Gate 1 is not evidence of live inventory or forecasting correctness. Odoo wiring remains gated on owner approval of the visual and interaction gates.
