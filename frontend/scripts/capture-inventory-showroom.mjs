@@ -104,10 +104,19 @@ try {
   await page.locator('[data-testid="inventory-row"]').first().waitFor({ timeout: 15_000 })
 
   const firstSku = (await page.locator('.inventory-cell-sku').first().innerText()).trim()
+  const filteredInventoryResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return url.pathname === '/autostock/api/v1/inventory'
+      && url.searchParams.get('q') === firstSku
+      && response.status() === 200
+  }, { timeout: 30_000 })
   await page.getByRole('searchbox', { name: /Search by part name/ }).fill(firstSku)
-  const filteredRow = page.locator('[data-testid="inventory-row"]').first()
-  await filteredRow.waitFor({ timeout: 20_000 })
-  await expect(filteredRow).toContainText(firstSku)
+  await filteredInventoryResponse
+  await expect(page.locator('.inventory-results-bar > div:first-child > strong')).toHaveText('1', { timeout: 20_000 })
+  await expect(page.locator('.inventory-results-bar > div:first-child > span').first()).toHaveText('part match your filters')
+  const filteredRows = page.locator('[data-testid="inventory-row"]:visible')
+  await expect(filteredRows).toHaveCount(1, { timeout: 20_000 })
+  await expect(filteredRows.first()).toContainText(firstSku)
   captures.push(await capture({ width: 1440, height: 1000 }, 'inventory-filtered-1440.png'))
 
   await page.getByRole('button', { name: 'Clear filters' }).first().click()

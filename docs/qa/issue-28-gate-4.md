@@ -24,7 +24,7 @@ The screenshots use actual Odoo records from the local fictional showroom instal
 | Tablet catalog | [inventory-tablet-1024.png](screenshots/issue-28-gate-4/inventory-tablet-1024.png) | 1024 px; responsive table layout, no page overflow |
 | Mobile catalog | [inventory-mobile-390.png](screenshots/issue-28-gate-4/inventory-mobile-390.png) | 390 px; stacked product cards and filters, no page overflow |
 | Low-stock filter | [inventory-low-stock-1440.png](screenshots/issue-28-gate-4/inventory-low-stock-1440.png) | Live server-side filter shows low-stock parts |
-| SKU search | [inventory-filtered-1440.png](screenshots/issue-28-gate-4/inventory-filtered-1440.png) | Search result returned by Odoo |
+| SKU search | [inventory-filtered-1440.png](screenshots/issue-28-gate-4/inventory-filtered-1440.png) | Capture waits for the completed Odoo `/inventory?q=<SKU>` response, then verifies a result count of 1 and one visible row containing the searched SKU |
 | Product detail, stock | [inventory-product-detail-1440.png](screenshots/issue-28-gate-4/inventory-product-detail-1440.png) | Company totals, warehouse stock, supplier and forecast state |
 | Product detail, restock/activity | [inventory-product-detail-lower-1440.png](screenshots/issue-28-gate-4/inventory-product-detail-lower-1440.png) | Existing read-only restock guidance and truthful recent-activity state |
 | Product detail, mobile | [inventory-product-detail-390.png](screenshots/issue-28-gate-4/inventory-product-detail-390.png) | Mobile bottom drawer remains within the viewport |
@@ -48,7 +48,7 @@ The reference comparison uses [`design/dashboard-concept.png`](../../design/dash
 | Labeled synthetic forecast evaluation | Passed for 6 labeled fixture products. This is an engineering evaluation run only; no business accuracy claim is made. |
 | Odoo 19 with PostgreSQL 16 | Passed in a clean isolated database. Odoo logged 46 `Starting Test` cases and reported 0 failures and 0 errors of 46 tests; the separate broader `odoo.tests.stats` line reports 56. The run includes the 1,001-product case, SKU/name/OEM/supplier search, server-side sorting and paging, category/status/warehouse filters, two-company shared/company-specific products, inventory permissions and mixed-unit stock activity. |
 | Local showroom addon upgrade | Passed for the Atlas Auto Distribution database; `/web/login` returned HTTP 200 after the targeted Odoo restart. |
-| Authenticated showroom screenshot capture | Passed; 25 visible rows out of 64 tracked showroom parts, 10 screenshots, 0 AutoStock API failures, 0 page errors, 0 console errors, and no horizontal overflow at 1440/1024/390 px. |
+| Authenticated showroom screenshot capture | Passed; 25 visible rows out of 64 tracked showroom parts, 10 screenshots, 0 AutoStock API failures, 0 page errors, 0 console errors, and no horizontal overflow at 1440/1024/390 px. The SKU-search capture waits for the matching filtered Odoo response and asserts the one-result label, exactly one visible row, and matching SKU before saving the screenshot. |
 
 Frontend automated browser tests use controlled API responses to exercise boundary states. The committed screenshots and the showroom capture use the authenticated local Odoo installation. The local credential file is read only by the capture script and is not included in the screenshots or commit.
 
