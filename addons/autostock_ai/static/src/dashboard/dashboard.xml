@@ -167,8 +167,8 @@
                         <div class="as-panel-head">
                             <div>
                                 <span class="as-section-kicker">EVALUATED DEMAND</span>
-                                <h2 tabindex="-1">Daily fulfilled sales forecast</h2>
-                                <p>Chronological evaluation compares a trained model with transparent baselines.</p>
+                                <h2 tabindex="-1">Demand outlook</h2>
+                                <p>See what customers may need next. Detailed model information is available if you want it.</p>
                             </div>
                             <span class="as-pill as-pill-planned" t-esc="forecastStateLabel"/>
                         </div>
@@ -291,7 +291,14 @@
                                 </figcaption>
                             </figure>
 
-                            <div class="as-forecast-summary" aria-label="Forecast evaluation details">
+                            <div t-if="forecastDemandSummary" class="as-demand-takeaway" role="status">
+                                <div><span>Expected demand</span><strong>About <t t-esc="forecastDemandSummary.units"/> <t t-esc="forecastDemandSummary.uom"/> in the next <t t-esc="forecastDemandSummary.horizon"/> days</strong></div>
+                                <small>Estimate based on the selected sales history. Actual demand may differ.</small>
+                            </div>
+
+                            <details class="as-model-metrics">
+                                <summary>How was this forecast evaluated? <span>Optional technical details</span></summary>
+                                <div class="as-forecast-summary" aria-label="Forecast evaluation details">
                                 <div><span>Selected method</span><strong t-esc="state.forecast.selected_method"/></div>
                                 <div><span>Baseline</span><strong t-esc="state.forecast.baseline_method"/></div>
                                 <div><span>Baseline MAE</span><strong><t t-esc="state.forecast.baseline_mae"/> <t t-esc="state.forecast.uom"/></strong></div>
@@ -299,7 +306,8 @@
                                 <div><span>Demand pattern</span><strong t-esc="state.forecast.demand_pattern"/></div>
                                 <div><span>Measured holdout</span><strong><t t-esc="state.forecast.evaluation_days"/> / <t t-esc="state.forecast.horizon_days"/> days</strong></div>
                                 <div><span>Evaluation status</span><strong t-esc="state.forecast.evaluation_status"/></div>
-                            </div>
+                                </div>
+                            </details>
                             <p t-if="state.forecast.evaluation_days &lt; state.forecast.horizon_days" class="as-interval-note" role="note">
                                 This forecast extends beyond the measured holdout by <t t-esc="state.forecast.horizon_days - state.forecast.evaluation_days"/> days; those days have no holdout evidence.
                             </p>
