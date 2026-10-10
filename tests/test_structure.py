@@ -62,7 +62,7 @@ def test_dashboard_full_history_company_switch_and_status_are_truthful():
     assert "isSelectedProduct(product)" in javascript
     assert 't-att-selected="isSelectedProduct(product)"' in xml
     assert 't-esc="activeSectionLabel"' in xml
-    assert 'risks: "Stock risks"' in javascript
+    assert 'risks: "Restock"' in javascript
     assert "aria-live=\"polite\"" in xml
     assert "Odoo connection unavailable" in xml
     assert "Connected to Odoo" in xml
@@ -71,6 +71,27 @@ def test_dashboard_full_history_company_switch_and_status_are_truthful():
     assert 'with_company(company_b).get_forecast_options()' in odoo_tests
     assert 'self.assertNotIn(product_a.id, products_b)' in odoo_tests
     assert 'self.assertNotIn(warehouse_a.id, warehouses_b)' in odoo_tests
+
+
+def test_dashboard_forecast_and_restock_are_distinct_views_with_real_data_preview():
+    xml = (ADDON / "static/src/dashboard/dashboard.xml").read_text(encoding="utf-8")
+    javascript = (ADDON / "static/src/dashboard/dashboard.js").read_text(encoding="utf-8")
+    styles = (ADDON / "static/src/dashboard/dashboard.scss").read_text(encoding="utf-8")
+
+    assert 't-att-data-as-view="state.activeSection"' in xml
+    assert 't-on-scroll="updateActiveSection"' not in xml
+    assert 't-on-click="scrollToRisks"' in xml
+    assert 't-foreach="dashboardAlerts"' in xml
+    assert 't-esc="alert.recommended_qty"' in xml
+    assert 't-esc="alert.warehouse"' in xml
+    assert 'this.navigateWorkspace("dashboard")' in javascript
+    assert 'this.navigateWorkspace("forecast")' in javascript
+    assert 'this.navigateWorkspace("risks")' in javascript
+    assert "updateActiveSection()" not in javascript
+    assert 'row.reorder_needed && Number(row.recommended_qty) > 0' in javascript
+    assert ".as-app[data-as-view=\"dashboard\"] .as-risk-panel" in styles
+    assert ".as-app[data-as-view=\"forecast\"] .as-risk-panel" in styles
+    assert ".as-app[data-as-view=\"risks\"] .as-panels" in styles
 
 
 def test_synthetic_inventory_cleanup_is_a_guarded_non_destructive_reset():
