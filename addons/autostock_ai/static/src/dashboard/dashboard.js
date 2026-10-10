@@ -54,6 +54,7 @@ export class AutoStockDashboard extends Component {
             riskWarehouseId: "",
             riskSupplierId: "",
             riskStatusFilter: "all",
+            riskOffset: 0,
             riskHistoryFrom: "",
             riskHistoryTo: "",
             riskSort: "risk",
@@ -122,6 +123,7 @@ export class AutoStockDashboard extends Component {
                 this.state.riskWarehouseId = "";
                 this.state.riskSupplierId = "";
                 this.state.riskStatusFilter = "all";
+                this.state.riskOffset = 0;
                 this.state.riskHistoryFrom = "";
                 this.state.riskHistoryTo = "";
             }
@@ -151,15 +153,7 @@ export class AutoStockDashboard extends Component {
         if (!data) {
             return [];
         }
-        let rows = data.rows || [];
-        if (this.state.riskStatusFilter === "recommendations") {
-            rows = rows.filter((row) => row.reorder_needed);
-        } else if (this.state.riskStatusFilter !== "all") {
-            rows = rows.filter((row) => row.risk === this.state.riskStatusFilter);
-        }
-        if (this.state.riskSupplierId) {
-            rows = rows.filter((row) => String(row.supplier?.id) === String(this.state.riskSupplierId));
-        }
+        const rows = data.rows || [];
         const statusRank = { out: 0, shortage: 1, low: 2, overstock: 3, slow_moving: 4, healthy: 5, policy_missing: 6 };
         const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
         return [...rows].sort((left, right) => {
@@ -194,10 +188,11 @@ export class AutoStockDashboard extends Component {
                 [
                     Number(this.state.riskWarehouseId) || false,
                     this.state.riskSearch,
-                    false,
-                    "all",
+                    Number(this.state.riskSupplierId) || false,
+                    this.state.riskStatusFilter,
                     this.state.riskHistoryFrom || false,
                     this.state.riskHistoryTo || false,
+                    this.state.riskOffset,
                 ]
             );
             if (
@@ -208,12 +203,6 @@ export class AutoStockDashboard extends Component {
                 return;
             }
             this.state.riskData = result;
-            if (
-                this.state.riskSupplierId
-                && !result.suppliers.some((supplier) => String(supplier.id) === String(this.state.riskSupplierId))
-            ) {
-                this.state.riskSupplierId = "";
-            }
         } catch (error) {
             if (this.destroyed || requestId !== this.riskRequestId) {
                 return;
@@ -229,12 +218,14 @@ export class AutoStockDashboard extends Component {
 
     changeRiskSearch(event) {
         this.state.riskSearch = event.currentTarget.value;
+        this.state.riskOffset = 0;
         window.clearTimeout(this.riskSearchTimer);
         this.riskSearchTimer = window.setTimeout(() => this.loadRiskData(), 250);
     }
 
     changeRiskWarehouse(event) {
         this.state.riskWarehouseId = event.currentTarget.value;
+        this.state.riskOffset = 0;
         return this.loadRiskData();
     }
 
@@ -245,15 +236,31 @@ export class AutoStockDashboard extends Component {
         } else if (key === "to") {
             this.state.riskHistoryTo = event.currentTarget.value;
         }
+        this.state.riskOffset = 0;
         return this.loadRiskData();
     }
 
     changeRiskSupplier(event) {
         this.state.riskSupplierId = event.currentTarget.value;
+        this.state.riskOffset = 0;
+        return this.loadRiskData();
     }
 
     changeRiskStatus(event) {
         this.state.riskStatusFilter = event.currentTarget.value;
+        this.state.riskOffset = 0;
+        return this.loadRiskData();
+    }
+
+    changeRiskPage(event) {
+        const pagination = this.state.riskData?.pagination;
+        const direction = Number(event.currentTarget.dataset.direction);
+        const target = direction < 0 ? pagination?.previous_offset : pagination?.next_offset;
+        if (target === false || target === undefined || target === null) {
+            return;
+        }
+        this.state.riskOffset = target;
+        return this.loadRiskData();
     }
 
     changeRiskSort(event) {
@@ -267,6 +274,7 @@ export class AutoStockDashboard extends Component {
         this.state.riskSearch = "";
         this.state.riskSupplierId = "";
         this.state.riskStatusFilter = "all";
+        this.state.riskOffset = 0;
         this.state.riskHistoryFrom = "";
         this.state.riskHistoryTo = "";
         this.state.riskWarehouseId = "";

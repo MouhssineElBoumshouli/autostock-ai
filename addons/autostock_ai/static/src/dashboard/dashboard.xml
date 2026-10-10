@@ -448,15 +448,25 @@
                         <div t-if="state.riskData.supplier_lookup_limited" class="as-risk-caveat" role="note">
                             Vendor lookup reached its safety limit. A planning lead-time assumption is used where vendor terms could not be verified.
                         </div>
-                        <div t-if="state.riskData.truncated" class="as-risk-caveat" role="note">
-                            Showing <strong t-esc="state.riskData.row_count"/> matching product/warehouse rows from a bounded result. Search or choose a warehouse to narrow the list.
+                        <div class="as-risk-page-note" role="note">
+                            <t t-if="state.riskData.pagination.page_count > 1">Risk results load in pages of up to <t t-esc="state.riskData.pagination.page_size"/> warehouse rows. The KPI summary counts all rows on this page after supplier and forecast-history filters, regardless of the selected risk filter. Risk-status matches are applied within this page; check the other pages before concluding no additional matches exist.</t>
+                            <t t-else="">All candidate rows in this selected scope fit on one page. KPI counts include all rows after supplier and forecast-history filters; the risk filter narrows the list only.</t>
+                        </div>
+                        <div t-if="state.riskData.supplier_filter_limited" class="as-risk-caveat" role="note">
+                            The supplier's product-term lookup reached its safety limit. This vendor result and its product count may be incomplete; narrow the search or ask an administrator to review the supplier catalog.
+                        </div>
+                        <div t-if="state.riskData.supplier_options_limited" class="as-risk-caveat" role="note">
+                            The supplier list reached its safety limit and may omit vendors. Search by part or ask an administrator to review supplier terms.
+                        </div>
+                        <div t-if="state.riskData.warehouse_scope_limited" class="as-risk-caveat" role="note">
+                            Only the first <t t-esc="state.riskData.warehouses.length"/> company warehouses are included in the all-warehouse view. Select a warehouse to inspect it directly.
                         </div>
 
                         <div class="as-risk-kpis" aria-label="Stock-risk summary">
-                            <article class="as-risk-kpi as-risk-kpi-red"><span>Out of stock</span><strong t-esc="state.riskData.summary.out"/></article>
-                            <article class="as-risk-kpi as-risk-kpi-amber"><span>Below reorder point</span><strong t-esc="state.riskData.summary.shortage"/></article>
-                            <article class="as-risk-kpi as-risk-kpi-purple"><span>Reorder quantities</span><strong t-esc="state.riskData.recommendation_count"/></article>
-                            <article class="as-risk-kpi"><span>Policy needs review</span><strong t-esc="state.riskData.summary.policy_missing"/></article>
+                            <article class="as-risk-kpi as-risk-kpi-red"><span>Out of stock · this page</span><strong t-esc="state.riskData.summary.out"/></article>
+                            <article class="as-risk-kpi as-risk-kpi-amber"><span>Below reorder point · this page</span><strong t-esc="state.riskData.summary.shortage"/></article>
+                            <article class="as-risk-kpi as-risk-kpi-purple"><span>Reorder quantities · this page</span><strong t-esc="state.riskData.recommendation_count"/></article>
+                            <article class="as-risk-kpi"><span>Policy needs review · this page</span><strong t-esc="state.riskData.summary.policy_missing"/></article>
                         </div>
 
                         <div class="as-risk-toolbar" aria-label="Filter stock-risk guidance">
@@ -468,20 +478,28 @@
                             <button type="button" class="as-link" t-on-click="clearRiskFilters">Clear filters</button>
                         </div>
 
+                        <nav t-if="state.riskData.pagination.page_count > 1" class="as-risk-pagination" aria-label="Stock-risk result pages">
+                            <span>Page <strong t-esc="state.riskData.pagination.page_number"/> of <strong t-esc="state.riskData.pagination.page_count"/> · <t t-esc="state.riskData.pagination.candidate_product_count"/> tracked parts · <t t-esc="state.riskData.pagination.candidate_pair_count"/> candidate warehouse rows in this scope</span>
+                            <div>
+                                <button type="button" class="as-btn as-btn-secondary" data-direction="-1" t-on-click="changeRiskPage" t-att-disabled="!state.riskData.pagination.has_previous || state.riskLoading">Previous page</button>
+                                <button type="button" class="as-btn as-btn-secondary" data-direction="1" t-on-click="changeRiskPage" t-att-disabled="!state.riskData.pagination.has_next || state.riskLoading">Next page</button>
+                            </div>
+                        </nav>
+
                         <div t-if="!state.riskData.warehouses.length" class="as-risk-empty" role="status">
                             <h3>No warehouse is available in this company</h3><p>Ask an Odoo administrator to configure an inventory warehouse for the active company.</p>
                         </div>
                         <div t-elif="!state.riskData.total_products" class="as-risk-empty" role="status">
                             <span class="as-empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></svg></span>
-                            <h3 t-if="state.riskSearch">No tracked part matches this search</h3><h3 t-else="">Track a part to begin risk analysis</h3>
+                            <h3 t-if="state.riskSearch || state.riskSupplierId">No tracked part matches the selected search and supplier</h3><h3 t-else="">Track a part to begin risk analysis</h3>
                             <p>Enable tracking on a storable product, then configure a safety-stock threshold or an Odoo reordering rule. Reorder guidance is not available without a policy.</p>
                             <button type="button" class="as-link" t-on-click="openProducts">Browse products <span aria-hidden="true">↗</span></button>
                         </div>
                         <div t-elif="!riskRows.length" class="as-risk-empty" role="status">
-                            <h3>No product/warehouse rows match these filters</h3><p>Clear the search, supplier, risk, or forecast-history date filters to see more rows.</p><button type="button" class="as-link" t-on-click="clearRiskFilters">Clear filters</button>
+                            <h3>No risk rows match the active filters on this page</h3><p t-if="state.riskData.pagination.page_count > 1">Risk and recommendation filters are evaluated per page. Use Previous page or Next page to check the rest of the selected scope.</p><p t-else="">No rows in the selected search, supplier, warehouse, and history scope match this risk filter.</p><button type="button" class="as-link" t-on-click="clearRiskFilters">Clear filters</button>
                         </div>
                         <t t-else="">
-                            <div class="as-risk-list-heading"><strong><t t-esc="riskRows.length"/> shown</strong><span>Stock quantity is shown in each part's inventory unit.</span><span t-if="state.riskLoading" role="status">Updating…</span></div>
+                            <div class="as-risk-list-heading"><strong><t t-esc="riskRows.length"/> matching rows on this page</strong><span>Stock quantity is shown in each part's inventory unit.</span><span t-if="state.riskLoading" role="status">Updating…</span></div>
                             <div class="as-table-scroll as-risk-desktop-list" role="region" aria-label="Stock risks and read-only reorder guidance" tabindex="0">
                                 <table class="as-table as-risk-table">
                                     <caption class="as-visually-hidden">Read-only product and warehouse risk, available and projected stock, policy trigger, supplier lead time, and reorder quantity.</caption>

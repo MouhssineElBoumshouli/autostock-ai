@@ -9,9 +9,11 @@ from odoo.tools.float_utils import float_round
 
 from .forecast import REAL_SOURCE
 
-MAX_RISK_PRODUCTS = 250
 MAX_RISK_WAREHOUSES = 25
 MAX_RISK_ROWS = 500
+MAX_RISK_PAGE_ROWS = 100
+MAX_SUPPLIER_FILTER_LINES = 20000
+MAX_RISK_SUPPLIER_OPTIONS = 5000
 MAX_FORECAST_CANDIDATES = 2000
 MAX_OPEN_OUTBOUND_MOVES = 50000
 MAX_PLANNING_LEAD_DAYS = 365
@@ -50,7 +52,7 @@ class AutoStockInventoryRisk(models.AbstractModel):
         return True
 
     @api.model
-    def _active_supplier(self, lines, product, company, today):
+    def _active_supplier(self, lines, product, company, today, preferred_supplier_id=False):
         relevant = lines.filtered(
             lambda line: line.product_tmpl_id == product.product_tmpl_id
             and (not line.product_id or line.product_id == product)
@@ -58,6 +60,12 @@ class AutoStockInventoryRisk(models.AbstractModel):
             and (not line.date_start or line.date_start <= today)
             and (not line.date_end or line.date_end >= today)
         )
+        if preferred_supplier_id:
+            requested = relevant.filtered(
+                lambda line: line.partner_id.id == preferred_supplier_id
+            )
+            if requested:
+                relevant = requested
         if not relevant:
             return False
         # Prefer variant-specific and company-specific terms; sequence is the
@@ -72,6 +80,42 @@ class AutoStockInventoryRisk(models.AbstractModel):
                 line.id,
             ),
         )
+
+    @api.model
+    def _supplier_domain(self, company, today, partner_id=False):
+        domain = [("company_id", "in", [False, company.id])]
+        if partner_id:
+            domain.append(("partner_id", "=", partner_id))
+        domain += [
+            "|", ("date_start", "=", False), ("date_start", "<=", today),
+            "|", ("date_end", "=", False), ("date_end", ">=", today),
+        ]
+        return domain
+
+    @api.model
+    def _product_warehouse_page(
+        self, Product, product_domain, warehouses, total_products, offset, limit
+    ):
+        """Fetch a bounded slice from the warehouse-major product result set."""
+        if not total_products:
+            return []
+        pairs = []
+        page_end = offset + limit
+        for warehouse_index, warehouse in enumerate(warehouses):
+            warehouse_start = warehouse_index * total_products
+            warehouse_end = warehouse_start + total_products
+            start = max(offset, warehouse_start)
+            end = min(page_end, warehouse_end)
+            if start >= end:
+                continue
+            page_products = Product.search(
+                product_domain,
+                order="id",
+                offset=start - warehouse_start,
+                limit=end - start,
+            )
+            pairs.extend((product, warehouse) for product in page_products)
+        return pairs
 
     @api.model
     def _forecast_for_pair(self, candidates, *, company, product, warehouse, lead_days, today, now):
@@ -137,13 +181,16 @@ class AutoStockInventoryRisk(models.AbstractModel):
         risk_filter="all",
         history_from=False,
         history_to=False,
+        offset=0,
     ):
-        """Return a bounded, read-only snapshot for the active Odoo company."""
+        """Return one bounded page of read-only guidance for the active company."""
         self._require_inventory_access()
         company = self.env.company
         Scoped = self._company_env(company)
         Product = Scoped.env["product.product"]
         Warehouse = Scoped.env["stock.warehouse"]
+        SupplierInfo = Scoped.env["product.supplierinfo"]
+        can_read_suppliers = self._can_read(SupplierInfo)
         today = fields.Date.today()
         now = fields.Datetime.to_datetime(fields.Datetime.now())
 
@@ -154,6 +201,20 @@ class AutoStockInventoryRisk(models.AbstractModel):
         date_to = fields.Date.to_date(history_to) if history_to else False
         if date_from and date_to and date_from > date_to:
             raise ValidationError(_("Forecast history start must be on or before its end."))
+
+        if supplier_id:
+            try:
+                supplier_id = int(supplier_id)
+            except (TypeError, ValueError) as error:
+                raise ValidationError(_("Choose a valid supplier.")) from error
+            if supplier_id <= 0:
+                raise ValidationError(_("Choose a valid supplier."))
+            if not can_read_suppliers:
+                raise AccessError(_("Your Odoo role cannot read supplier terms for this filter."))
+        try:
+            offset = max(0, int(offset or 0))
+        except (TypeError, ValueError) as error:
+            raise ValidationError(_("Choose a valid stock-risk result page.")) from error
 
         warehouses_domain = [("company_id", "=", company.id)]
         total_warehouses = Warehouse.search_count(warehouses_domain)
@@ -181,25 +242,49 @@ class AutoStockInventoryRisk(models.AbstractModel):
                 ("default_code", "ilike", search),
                 ("autostock_oem_reference", "ilike", search),
             ]
+        supplier_filter_limited = False
+        if supplier_id:
+            supplier_filter_lines = SupplierInfo.search(
+                self._supplier_domain(company, today, supplier_id),
+                order="id",
+                limit=MAX_SUPPLIER_FILTER_LINES + 1,
+            )
+            supplier_filter_limited = len(supplier_filter_lines) > MAX_SUPPLIER_FILTER_LINES
+            supplier_filter_lines = supplier_filter_lines[:MAX_SUPPLIER_FILTER_LINES]
+            general_templates = supplier_filter_lines.filtered(
+                lambda line: not line.product_id
+            ).mapped("product_tmpl_id").ids
+            variant_products = supplier_filter_lines.filtered(
+                lambda line: line.product_id
+            ).mapped("product_id").ids
+            if general_templates or variant_products:
+                product_domain += [
+                    "|",
+                    ("product_tmpl_id", "in", general_templates),
+                    ("id", "in", variant_products),
+                ]
+            else:
+                product_domain.append(("id", "=", 0))
         total_products = Product.search_count(product_domain)
-        products = Product.search(product_domain, order="name, id", limit=MAX_RISK_PRODUCTS)
 
         all_company_warehouses = Warehouse.search(
             warehouses_domain, order="name, id", limit=MAX_RISK_WAREHOUSES
         )
         if warehouse_id and warehouses and warehouses.id not in all_company_warehouses.ids:
             all_company_warehouses |= warehouses
-        total_pairs = total_products * (total_warehouses if not warehouse_id else 1)
-        pairs = [
-            (product, warehouse)
-            for warehouse in warehouses
-            for product in products
-        ][:MAX_RISK_ROWS]
-        truncated = (
-            total_products > len(products)
-            or total_warehouses > len(all_company_warehouses)
-            or total_pairs > len(pairs)
+        total_pairs = total_products * len(warehouses)
+        page_offset = min(offset, max(0, total_pairs - 1)) if total_pairs else 0
+        pairs = self._product_warehouse_page(
+            Product,
+            product_domain,
+            warehouses,
+            total_products,
+            page_offset,
+            MAX_RISK_PAGE_ROWS,
         )
+        products = Product.browse(sorted({product.id for product, _warehouse in pairs}))
+        warehouse_scope_limited = total_warehouses > len(all_company_warehouses)
+        has_next_page = page_offset + len(pairs) < total_pairs
 
         # Preserve native ACLs. If an account cannot read one source, it is
         # omitted and the result says what was unavailable; no sudo is used.
@@ -221,8 +306,6 @@ class AutoStockInventoryRisk(models.AbstractModel):
         for rule in orderpoints:
             orderpoints_by_pair[(rule.product_id.id, rule.warehouse_id.id)].append(rule)
 
-        SupplierInfo = Scoped.env["product.supplierinfo"]
-        can_read_suppliers = self._can_read(SupplierInfo)
         supplier_lines = SupplierInfo.browse()
         if can_read_suppliers and pairs:
             supplier_lines = SupplierInfo.search(
@@ -233,9 +316,10 @@ class AutoStockInventoryRisk(models.AbstractModel):
                     ("product_id", "in", products.ids),
                 ],
                 order="sequence, min_qty, id",
-                limit=MAX_RISK_ROWS * 4,
+                limit=MAX_SUPPLIER_FILTER_LINES + 1,
             )
-        suppliers_lookup_limited = len(supplier_lines) >= MAX_RISK_ROWS * 4
+        suppliers_lookup_limited = len(supplier_lines) > MAX_SUPPLIER_FILTER_LINES
+        supplier_lines = supplier_lines[:MAX_SUPPLIER_FILTER_LINES]
         supplier_lines_by_template = defaultdict(lambda: SupplierInfo.browse())
         for line in supplier_lines:
             supplier_lines_by_template[line.product_tmpl_id.id] |= line
@@ -313,7 +397,11 @@ class AutoStockInventoryRisk(models.AbstractModel):
                 policy_issue = False
 
             selected_supplier = self._active_supplier(
-                supplier_lines_by_template[product.product_tmpl_id.id], product, company, today
+                supplier_lines_by_template[product.product_tmpl_id.id],
+                product,
+                company,
+                today,
+                preferred_supplier_id=supplier_id,
             ) if can_read_suppliers and not suppliers_lookup_limited else False
             if selected_supplier:
                 lead_days = max(0, int(selected_supplier.delay or 0))
@@ -363,7 +451,10 @@ class AutoStockInventoryRisk(models.AbstractModel):
                     ("state", "in", list(OPEN_MOVE_STATES)),
                     ("sale_line_id", "!=", False),
                     ("location_id", "child_of", location.id),
-                    ("location_dest_id.usage", "=", "customer"),
+                    # On multi-step routes, the sale-linked move that leaves
+                    # stock can end at an internal output or transit location.
+                    # Odoo's projected quantity already subtracts that move.
+                    ("location_dest_id.usage", "in", ["internal", "customer"]),
                     ("date", "<=", fields.Datetime.to_string(datetime.combine(latest_receipt, time.max))),
                 ],
                 order="date, id",
@@ -692,21 +783,8 @@ class AutoStockInventoryRisk(models.AbstractModel):
                     row["risk"] = "slow_moving"
                     row["risk_label"] = _(RISK_LABELS["slow_moving"])
 
-        suppliers = {}
-        for row in rows:
-            if row["supplier"]:
-                suppliers[row["supplier"]["id"]] = row["supplier"]["name"]
         before_filters = len(rows)
-        if supplier_id:
-            try:
-                supplier_id = int(supplier_id)
-            except (TypeError, ValueError):
-                supplier_id = 0
-            rows = [row for row in rows if row["supplier"] and row["supplier"]["id"] == supplier_id]
-        if risk_filter == "recommendations":
-            rows = [row for row in rows if row["reorder_needed"]]
-        elif risk_filter != "all":
-            rows = [row for row in rows if row["risk"] == risk_filter]
+        summary_rows = rows
         if date_from or date_to:
             def in_history_range(row):
                 history_end = row["forecast"]["history_end"]
@@ -714,7 +792,13 @@ class AutoStockInventoryRisk(models.AbstractModel):
                     return False
                 value = fields.Date.to_date(history_end)
                 return (not date_from or value >= date_from) and (not date_to or value <= date_to)
-            rows = [row for row in rows if in_history_range(row)]
+            summary_rows = [row for row in summary_rows if in_history_range(row)]
+        if risk_filter == "recommendations":
+            rows = [row for row in summary_rows if row["reorder_needed"]]
+        elif risk_filter != "all":
+            rows = [row for row in summary_rows if row["risk"] == risk_filter]
+        else:
+            rows = summary_rows
 
         rows.sort(
             key=lambda row: (
@@ -726,8 +810,44 @@ class AutoStockInventoryRisk(models.AbstractModel):
         )
 
         summary = {key: 0 for key in RISK_LABELS}
-        for row in rows:
+        for row in summary_rows:
             summary[row["risk"]] += 1
+        supplier_option_lines = SupplierInfo.search(
+            self._supplier_domain(company, today)
+            + [
+                ("product_tmpl_id.active", "=", True),
+                ("product_tmpl_id.is_storable", "=", True),
+                ("product_tmpl_id.autostock_enabled", "=", True),
+                ("product_tmpl_id.company_id", "in", [False, company.id]),
+            ],
+            order="partner_id, id",
+            limit=MAX_RISK_SUPPLIER_OPTIONS + 1,
+        ) if can_read_suppliers else SupplierInfo.browse()
+        supplier_options_limited = len(supplier_option_lines) > MAX_RISK_SUPPLIER_OPTIONS
+        supplier_option_lines = supplier_option_lines[:MAX_RISK_SUPPLIER_OPTIONS]
+        supplier_options = {
+            partner.id: partner.display_name
+            for partner in supplier_option_lines.mapped("partner_id")
+        }
+        page_count = (total_pairs + MAX_RISK_PAGE_ROWS - 1) // MAX_RISK_PAGE_ROWS
+        pagination = {
+            "offset": page_offset,
+            "page_size": MAX_RISK_PAGE_ROWS,
+            "page_number": page_offset // MAX_RISK_PAGE_ROWS + 1 if total_pairs else 0,
+            "page_count": page_count,
+            "candidate_pair_count": total_pairs,
+            "candidate_product_count": total_products,
+            "evaluated_pair_count": len(pairs),
+            "matching_row_count": len(rows),
+            "summary_row_count": len(summary_rows),
+            "has_previous": page_offset > 0,
+            "has_next": has_next_page,
+            "previous_offset": max(0, page_offset - MAX_RISK_PAGE_ROWS) if page_offset else False,
+            "next_offset": page_offset + MAX_RISK_PAGE_ROWS if has_next_page else False,
+            "summary_scope": "current_page_after_supplier_and_history_filters",
+            "supplier_filter_limited": supplier_filter_limited,
+            "warehouse_scope_limited": warehouse_scope_limited,
+        }
         return {
             "company_id": company.id,
             "company_name": company.display_name,
@@ -738,18 +858,22 @@ class AutoStockInventoryRisk(models.AbstractModel):
                 for warehouse in all_company_warehouses
             ],
             "suppliers": [
-                {"id": supplier_id, "name": name}
-                for supplier_id, name in sorted(suppliers.items(), key=lambda item: item[1].casefold())
+                {"id": partner_id, "name": name}
+                for partner_id, name in sorted(supplier_options.items(), key=lambda item: item[1].casefold())
             ],
             "summary": summary,
-            "recommendation_count": sum(1 for row in rows if row["reorder_needed"]),
+            "recommendation_count": sum(1 for row in summary_rows if row["reorder_needed"]),
             "rows": rows,
             "row_count": len(rows),
             "unfiltered_row_count": before_filters,
             "total_products": total_products,
             "total_warehouses": total_warehouses,
             "total_pairs": total_pairs,
-            "truncated": truncated,
+            "truncated": has_next_page or supplier_filter_limited or warehouse_scope_limited,
+            "pagination": pagination,
+            "supplier_filter_limited": supplier_filter_limited,
+            "supplier_options_limited": supplier_options_limited,
+            "warehouse_scope_limited": warehouse_scope_limited,
             "forecast_lookup_limited": forecast_candidates_truncated,
             "forecast_access_available": bool(forecast_access_available),
             "supplier_lookup_limited": suppliers_lookup_limited,

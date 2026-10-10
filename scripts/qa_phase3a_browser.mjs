@@ -71,6 +71,27 @@ async function dashboardActionId() {
     return record.res_id;
 }
 
+let rpcSequence = 10;
+async function callKw(model, method, args, kwargs = {}) {
+    const response = await context.request.post(
+        `${baseUrl}/web/dataset/call_kw/${model}/${method}`,
+        {
+            data: {
+                jsonrpc: "2.0",
+                method: "call",
+                params: { model, method, args, kwargs },
+                id: rpcSequence++,
+            },
+        }
+    );
+    const payload = await response.json();
+    if (!response.ok() || payload.error || payload.result === undefined) {
+        const details = payload.error?.data?.message || payload.error?.message || `HTTP ${response.status()}`;
+        throw new Error(`Odoo ${model}.${method} failed: ${details}`);
+    }
+    return payload.result;
+}
+
 async function screenshot(name) {
     await page.screenshot({
         path: path.join(screenshotDir, name),
@@ -254,7 +275,7 @@ try {
         });
         await page.getByLabel("Forecast history from date").fill(historyDate);
         await page.getByLabel("Forecast history to date").fill(historyDate);
-        await page.getByRole("heading", { name: "No product/warehouse rows match these filters" }).waitFor({ state: "visible" });
+        await page.getByRole("heading", { name: "No risk rows match the active filters on this page" }).waitFor({ state: "visible" });
         await page.getByRole("button", { name: "Clear filters", exact: true }).last().click();
         await page.locator(`${selector}[data-risk-key]`).first().waitFor({ state: "visible" });
 
@@ -272,6 +293,157 @@ try {
             calculatedScenarios: scenarioRows,
             overflow: "none",
         });
+    }
+
+    // Exercise the full Odoo path with a catalog larger than one server page.
+    // The fixture is created and removed through the authenticated Odoo RPC;
+    // it is synthetic, database-local, and never appears in committed screenshots.
+    const initialRiskData = await callKw(
+        "autostock.inventory.risk",
+        "get_risk_data",
+        [false, "", false, "all", false, false, 0]
+    );
+    const scaleCompanyId = initialRiskData.company_id;
+    const scaleWarehouseCount = initialRiskData.warehouses.length;
+    const scalePageCount = Math.ceil((251 * scaleWarehouseCount) / 100);
+    assert(scaleWarehouseCount > 0, "The catalog regression needs at least one active-company warehouse.");
+    const unitRows = await callKw(
+        "ir.model.data",
+        "search_read",
+        [[
+            ["module", "=", "uom"],
+            ["name", "=", "product_uom_unit"],
+        ], ["res_id"]],
+        { limit: 1 }
+    );
+    const unitId = unitRows[0]?.res_id;
+    assert(unitId, "Could not resolve the inventory unit for the synthetic scale fixture.");
+    const scaleSuffix = Date.now().toString();
+    const scalePrefix = `QA3A-SCALE-${scaleSuffix}-`;
+    let scaleProductIds = [];
+    let scaleVendorId = false;
+    let scaleSupplierInfoIds = [];
+    try {
+        scaleVendorId = await callKw("res.partner", "create", [{
+            name: `[SYNTHETIC SCALE] Supplier ${scaleSuffix}`,
+            supplier_rank: 1,
+        }]);
+        scaleProductIds = await callKw(
+            "product.template",
+            "create",
+            [[...Array(251)].map((_, index) => ({
+                name: `[SYNTHETIC SCALE] Automotive part ${String(index + 1).padStart(3, "0")}`,
+                default_code: `${scalePrefix}${String(index + 1).padStart(3, "0")}`,
+                company_id: scaleCompanyId,
+                is_storable: true,
+                uom_id: unitId,
+                autostock_enabled: true,
+                autostock_safety_stock: index === 250 ? 1 : 0,
+                autostock_lead_time_days: 7,
+            }))]
+        );
+        assert(Array.isArray(scaleProductIds) && scaleProductIds.length === 251, "Odoo did not create all 251 synthetic tracked parts.");
+        const supplierInfoCreated = await callKw("product.supplierinfo", "create", [{
+            partner_id: scaleVendorId,
+            product_tmpl_id: scaleProductIds[250],
+            company_id: scaleCompanyId,
+            product_uom_id: unitId,
+            delay: 7,
+            autostock_min_order_qty: 1,
+        }]);
+        scaleSupplierInfoIds = Array.isArray(supplierInfoCreated) ? supplierInfoCreated : [supplierInfoCreated];
+
+        const firstScalePage = await callKw(
+            "autostock.inventory.risk",
+            "get_risk_data",
+            [false, scalePrefix, false, "out", false, false, 0]
+        );
+        const targetSku = `${scalePrefix}251`;
+        assert(firstScalePage.total_products === 251, `Odoo returned ${firstScalePage.total_products} parts for the 251-part search.`);
+        assert(firstScalePage.total_pairs === 251 * scaleWarehouseCount, "The candidate count did not include each selected warehouse.");
+        assert(firstScalePage.rows.length === 100, "The risk service did not keep the first catalog page within its 100-row limit.");
+        assert(firstScalePage.pagination.summary_scope === "current_page_after_supplier_and_history_filters", "The summary scope was not exposed.");
+        assert(firstScalePage.pagination.summary_row_count === 100 && firstScalePage.summary.out === 100,
+            "The out-of-stock KPI did not describe only the current page.");
+        assert(firstScalePage.pagination.has_next, "The first catalog page did not offer continuation.");
+        assert(!firstScalePage.rows.some((row) => row.sku === targetSku), "The last synthetic part unexpectedly appeared in the first page.");
+
+        const laterRiskPage = await callKw(
+            "autostock.inventory.risk",
+            "get_risk_data",
+            [false, scalePrefix, false, "out", false, false, 200]
+        );
+        const laterTarget = laterRiskPage.rows.find((row) => row.sku === targetSku);
+        assert(laterTarget?.risk === "out", "Server-side status filtering failed to find the at-risk part outside the first 250 products.");
+        assert(laterRiskPage.recommendation_count === 1, "The page-scoped recommendation count did not include the later part.");
+
+        const supplierRiskPage = await callKw(
+            "autostock.inventory.risk",
+            "get_risk_data",
+            [false, scalePrefix, scaleVendorId, "out", false, false, 0]
+        );
+        assert(supplierRiskPage.total_products === 1, "Supplier filtering did not search the complete tracked catalog.");
+        assert(supplierRiskPage.row_count === scaleWarehouseCount, "Supplier results were not returned for each in-scope warehouse.");
+        assert(supplierRiskPage.rows.every((row) => row.sku === targetSku && row.supplier?.id === scaleVendorId),
+            "The selected supplier returned an unrelated catalog part.");
+        assert(supplierRiskPage.recommendation_count === scaleWarehouseCount, "Supplier-filtered summary counts were not page-scoped.");
+
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        await page.waitForTimeout(150);
+        await page.getByRole("button", { name: "Refresh stock-risk data" }).click();
+        await page.getByTestId("risk-search").fill(scalePrefix);
+        await page.waitForFunction((count) => document.querySelector(".as-risk-pagination")?.innerText.includes(`Page 1 of ${count}`), scalePageCount);
+        const pagedSummaryNote = await page.locator(".as-risk-page-note").innerText();
+        assert(pagedSummaryNote.includes("regardless of the selected risk filter") && pagedSummaryNote.includes("other pages"),
+            "The multi-page UI did not explain the KPI scope and the need to inspect other pages.");
+        await page.getByTestId("risk-status-filter").selectOption("out");
+        await page.waitForFunction((count) => document.querySelector(".as-risk-pagination")?.innerText.includes(`Page 1 of ${count}`), scalePageCount);
+        for (const pageNumber of [2, 3]) {
+            await page.getByRole("button", { name: "Next page" }).click();
+            await page.waitForFunction(({ number, count }) => (
+                document.querySelector(".as-risk-pagination")?.innerText.includes(`Page ${number} of ${count}`)
+            ), { number: pageNumber, count: scalePageCount });
+        }
+        const desktopSelector = ".as-risk-table tbody tr";
+        await page.locator(`${desktopSelector}[data-risk-sku="${targetSku}"]`).first().waitFor({ state: "visible" });
+        await page.getByTestId("risk-supplier-filter").selectOption(String(scaleVendorId));
+        await page.waitForFunction(({ sku, expectedRows }) => {
+            const rows = [...document.querySelectorAll(".as-risk-table tbody tr[data-risk-key]")];
+            return rows.length === expectedRows
+                && rows.every((node) => node.dataset.riskSku === sku);
+        }, { sku: targetSku, expectedRows: scaleWarehouseCount });
+        const scaleUiRows = page.locator(`${desktopSelector}[data-risk-key]`);
+        const supplierUiCount = await scaleUiRows.count();
+        assert(supplierUiCount === scaleWarehouseCount,
+            `The UI supplier filter returned ${supplierUiCount} rows for ${scaleWarehouseCount} selected warehouses.`);
+        assert(await page.locator(`${desktopSelector}[data-supplier-id="${scaleVendorId}"]`).count() === scaleWarehouseCount,
+            "The UI supplier filter did not keep the selected vendor on every row.");
+        assert(await page.locator(".as-risk-page-note").innerText().then((value) => value.includes("one page")),
+            "The UI did not explain that all rows in the selected supplier scope fit on one page.");
+        const scaleKpis = await page.locator(".as-risk-kpi").allTextContents();
+        assert(scaleKpis[0].includes(String(scaleWarehouseCount)), "The out-of-stock KPI did not reflect supplier-filtered page rows.");
+        assert(scaleKpis[2].includes(String(scaleWarehouseCount)), "The recommendation KPI did not reflect supplier-filtered page rows.");
+        results.push({
+            catalogRegression: "passed",
+            trackedParts: 251,
+            selectedWarehouses: scaleWarehouseCount,
+            supplierPartOutsideFirst250: targetSku,
+            firstPageSummaryRows: firstScalePage.pagination.summary_row_count,
+            serverStatusPage: laterRiskPage.pagination.page_number,
+            vendorFilteredRows: supplierRiskPage.row_count,
+        });
+    } finally {
+        if (scaleSupplierInfoIds.length) {
+            await callKw("product.supplierinfo", "unlink", [scaleSupplierInfoIds]);
+        }
+        if (scaleProductIds.length) {
+            await callKw("product.template", "unlink", [scaleProductIds]);
+        }
+        if (scaleVendorId) {
+            await callKw("res.partner", "unlink", [[scaleVendorId]]);
+        }
+        await page.getByRole("button", { name: "Clear filters", exact: true }).click();
+        await page.waitForFunction(() => document.querySelector(".as-risk-panel")?.innerText.includes("Read-only planning guidance"));
     }
 
     assert(browserErrors.length === 0, `Browser errors: ${JSON.stringify(browserErrors)}`);
