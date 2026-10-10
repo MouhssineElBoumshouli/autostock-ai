@@ -122,7 +122,7 @@ test('collapsed sidebar keeps the brand and expand control separate and discover
   if (!brandBox || !toggleBox) throw new Error('Collapsed navigation controls are not laid out')
   const overlap = !(toggleBox.x >= brandBox.x + brandBox.width || toggleBox.x + toggleBox.width <= brandBox.x || toggleBox.y >= brandBox.y + brandBox.height || toggleBox.y + toggleBox.height <= brandBox.y)
   expect(overlap).toBe(false)
-  await expect(page.getByRole('button', { name: 'Dashboard' })).toHaveAttribute('title', 'Dashboard')
+  await expect(page.getByRole('button', { name: 'Dashboard', exact: true })).toHaveAttribute('title', 'Dashboard')
   expectClean(signals)
 })
 
