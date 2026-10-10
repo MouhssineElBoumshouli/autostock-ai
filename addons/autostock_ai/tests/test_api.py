@@ -114,6 +114,12 @@ class TestAutoStockApiV1(HttpCase):
         self.assertIn("policy_source_label", item)
         self.assertIn("insights", data)
         self.assertEqual(len(data["insights"]), 3)
+        insights = {row["id"]: row for row in data["insights"]}
+        self.assertEqual(insights["stock-review"]["title"], "Part locations to review")
+        self.assertEqual(insights["out-of-stock"]["title"], "Warehouse stockouts")
+        self.assertIn("part location", insights["reorder-suggestions"]["description"].lower())
+        self.assertIn("zero stock", insights["out-of-stock"]["description"].lower())
+        self.assertNotIn("stock position", " ".join(row["description"] for row in data["insights"]).lower())
 
     def test_product_quick_view_reuses_company_scoped_replenishment_data(self):
         template = self.env["product.template"].create(

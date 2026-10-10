@@ -42,16 +42,16 @@ export function DetailSheet({ drawer, health, restock, insights = [], onOpenChan
   const title = product?.name
     ?? (drawer?.type === 'product-loading' || drawer?.type === 'product-error' ? drawer.name : null)
     ?? recommendation?.name
-    ?? (drawer?.type === 'health' ? 'Inventory health' : drawer?.type === 'insights' ? 'Current stock insights' : 'Top restock positions')
+    ?? (drawer?.type === 'health' ? 'Inventory health' : drawer?.type === 'insights' ? 'Current stock insights' : 'Top restock recommendations')
   const description = drawer?.type === 'product'
     ? `Current company details for ${product?.name}.`
     : drawer?.type === 'recommendation'
-      ? `Review the Odoo stock position and the read-only quantity guidance for ${recommendation?.name}.`
+      ? `Review current stock at ${recommendation?.warehouse} and the read-only reorder guidance for ${recommendation?.name}.`
       : drawer?.type === 'health'
         ? 'A closer look at the inventory counts returned for the selected company.'
         : drawer?.type === 'insights'
           ? 'These observations summarize current stock and recommendation coverage.'
-          : 'The five highest priority stock positions found in the current scan.'
+          : 'The five highest-priority part locations found in the current scan.'
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -79,7 +79,7 @@ export function DetailSheet({ drawer, health, restock, insights = [], onOpenChan
           {recommendation && <ProductDetails product={recommendation} onGoToRestock={onGoToRestock} />}
           {drawer?.type === 'health' && health && <HealthDetails health={health} />}
           {drawer?.type === 'recommendations' && restock && (
-            <div className="drawer-product-list" aria-label="Top restock positions">
+            <div className="drawer-product-list" aria-label="Top restock recommendations">
               {restock.items.map((item) => (
                 <button className="drawer-list-product" type="button" key={item.key} onClick={() => onOpenRecommendation(item)}>
                   <span className="drawer-list-icon"><Boxes size={16} aria-hidden="true" /></span>
@@ -87,7 +87,7 @@ export function DetailSheet({ drawer, health, restock, insights = [], onOpenChan
                   <span className={`risk-pill risk-${riskTone(item)}`}>{item.status_label}</span>
                 </button>
               ))}
-              <p className="drawer-note">Showing up to five positions from a bounded, company-scoped scan. {restock.coverage.complete ? 'The scan is complete.' : `${restock.coverage.scanned_locations} of ${restock.coverage.candidate_locations} positions were checked.`}</p>
+              <p className="drawer-note">Showing up to five recommendations from this company scan. {restock.coverage.complete ? 'The scan is complete.' : `${restock.coverage.scanned_locations} of ${restock.coverage.candidate_locations} part locations were checked.`}</p>
               <ReadOnlyFooter />
             </div>
           )}
@@ -113,7 +113,7 @@ function QuickView({ product, onOpenRecommendation, onGoToRestock }: {
       </div>
 
       {firstPosition ? <ProductMetrics product={firstPosition} /> : (
-        <div className="drawer-note"><strong>{product.product.tracked ? 'No visible warehouse position' : 'Not tracked for stock recommendations'}</strong><p>{product.product.tracked ? 'The current company returned no readable stock position for this part.' : 'This part is in the company catalog but is not enabled for AutoStock stock monitoring.'}</p></div>
+        <div className="drawer-note"><strong>{product.product.tracked ? 'No stock details available' : 'Not tracked for stock recommendations'}</strong><p>{product.product.tracked ? 'Stock details are unavailable for this part in the selected company.' : 'This part is in the company catalog but is not enabled for AutoStock stock monitoring.'}</p></div>
       )}
 
       {firstPosition && <ProductSupplier product={firstPosition} />}
@@ -131,9 +131,9 @@ function QuickView({ product, onOpenRecommendation, onGoToRestock }: {
           </div>
         </section>
       )}
-      {!product.coverage.complete && <p className="drawer-note">Warehouse coverage is partial: {product.coverage.scanned_locations} of {product.coverage.candidate_locations} positions were checked.</p>}
+      {!product.coverage.complete && <p className="drawer-note">Warehouse coverage is partial: {product.coverage.scanned_locations} of {product.coverage.candidate_locations} part locations were checked.</p>}
       <div className="drawer-footer-actions">
-        <button className="drawer-secondary-action" type="button" onClick={onGoToRestock}>View restock positions <ArrowRight size={15} aria-hidden="true" /></button>
+        <button className="drawer-secondary-action" type="button" onClick={onGoToRestock}>View restock recommendations <ArrowRight size={15} aria-hidden="true" /></button>
         <span>Purchasing is read-only.</span>
       </div>
     </>
@@ -153,18 +153,18 @@ function ProductDetails({ product, onGoToRestock }: { product: RiskItem; onGoToR
       <ProductSupplier product={product} />
 
       <section className="recommendation-reason">
-        <h3>{product.reorder_needed ? 'Why this recommendation?' : 'Stock position'}</h3>
-        <p>{product.reorder_needed ? product.reason : 'No reorder quantity is currently recommended for this position.'}</p>
+        <h3>{product.reorder_needed ? 'Why this recommendation?' : 'Current stock at this warehouse'}</h3>
+        <p>{product.reorder_needed ? product.reason : 'No order quantity is recommended for this part at this warehouse.'}</p>
         <details className="calculation-disclosure">
           <summary>How calculated?</summary>
           <ul>
             <li>{product.basis_note}</li>
-            <li>Stock policy: {product.policy_source_label}.</li>
+            <li>Reorder rule: {product.policy_source_label}.</li>
             <li>Planning time: {product.lead_time_label}, {product.lead_time_days} days.</li>
             {product.forecast_used && <li>A reviewed delivery forecast contributed demand through the expected receipt date.</li>}
             {product.policy_issue && <li>{product.policy_issue}</li>}
           </ul>
-          <p className="disclosure-footnote">Guidance only. Review the Odoo stock position and policy before acting.</p>
+          <p className="disclosure-footnote">Guidance only. Review stock and the reorder rule before acting.</p>
         </details>
       </section>
 
@@ -184,7 +184,7 @@ function ProductMetrics({ product }: { product: RiskItem }) {
         <Metric label="Current stock" value={formatQuantity(product.current_qty, product.uom)} />
         <Metric label="Available to use" value={formatQuantity(product.free_qty, product.uom)} />
         <Metric label="Suggested order" value={formatQuantity(product.recommended_qty, product.uom)} />
-        <Metric label="Demand to delivery" value={product.forecast_used ? formatQuantity(product.forecast_demand, product.uom) : 'Not available'} />
+        <Metric label="Demand before delivery" value={product.forecast_used ? formatQuantity(product.forecast_demand, product.uom) : 'No forecast'} />
       </div>
 
       <section className="drawer-info-section">
@@ -241,7 +241,7 @@ function InsightDetails({ insights, restock }: { insights: DashboardInsight[]; r
           <span>{insight.action_label} opens the current read-only recommendations.</span>
         </article>
       ))}
-      {restock && <p className="drawer-muted-note">Coverage: {restock.coverage.scanned_locations} of {restock.coverage.candidate_locations} stock positions scanned.</p>}
+      {restock && <p className="drawer-muted-note">Coverage: {restock.coverage.scanned_locations} of {restock.coverage.candidate_locations} part locations scanned.</p>}
       <ReadOnlyFooter />
     </div>
   )

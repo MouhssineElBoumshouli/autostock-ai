@@ -509,8 +509,8 @@ export function ReorderTable({
   ))
   const hasFilters = riskFilter !== 'All' || categoryFilter !== 'All categories'
   const coverageNote = coverage.complete
-    ? `Read-only guidance · scanned ${formatCount(coverage.scanned_locations)} stock positions.`
-    : `Partial scan · ${formatCount(coverage.scanned_locations)} of ${formatCount(coverage.candidate_locations)} stock positions checked; more may need review.`
+    ? `Read-only guidance · scanned ${formatCount(coverage.scanned_locations)} part locations.`
+    : `Partial scan · ${formatCount(coverage.scanned_locations)} of ${formatCount(coverage.candidate_locations)} part locations checked; more may need review.`
 
   return (
     <section className="panel reorder-panel" aria-labelledby="reorder-title" id="reorder-panel">
@@ -533,7 +533,7 @@ export function ReorderTable({
             </colgroup>
             <thead><tr>
               <th className="select-col"><span className="checkbox-visual" aria-hidden="true" /></th>
-              <th>Part</th><th>SKU</th><th>Demand to delivery</th><th>Current stock</th><th>Suggested order</th><th>Data basis</th><th>Risk</th><th>Review</th><th aria-label="More details" />
+              <th>Part</th><th>SKU</th><th>Demand before delivery</th><th>Current stock</th><th>Suggested order</th><th>Based on</th><th>Risk</th><th>Review</th><th aria-label="More details" />
             </tr></thead>
             <tbody>
               {items.map((part) => {
@@ -549,15 +549,15 @@ export function ReorderTable({
                       </button>
                     </th>
                     <td className="sku-cell">{part.sku}</td>
-                    <td className="number-cell"><strong>{part.forecast_used ? formatUnits(Number(part.forecast_demand)) : '—'}</strong><span className="growth-pill" title={part.forecast_used ? 'Reviewed delivery forecast is included in the Odoo recommendation.' : part.forecast_reason || 'No eligible reviewed forecast was available.'}>{part.forecast_used ? 'Reviewed demand' : 'Not available'}</span></td>
+                    <td className="number-cell"><strong>{part.forecast_used ? formatUnits(Number(part.forecast_demand)) : '—'}</strong><span className="growth-pill" title={part.forecast_used ? 'Reviewed delivery forecast is included in the Odoo recommendation.' : part.forecast_reason || 'No eligible reviewed forecast was available.'}>{part.forecast_used ? 'Reviewed demand' : 'No forecast'}</span></td>
                     <td className="stock-cell">{formatQuantity(part.current_qty, part.uom)}</td>
                     <td className="suggested-cell">{formatQuantity(part.recommended_qty, part.uom)}</td>
-                    <td className="confidence-cell"><span className="confidence-value">{part.forecast_used ? 'Stock + demand' : 'Stock + policy'}</span></td>
+                    <td className="confidence-cell"><span className="confidence-value">{part.forecast_used ? 'Stock + demand' : 'Stock + reorder rule'}</span></td>
                     <td><span className={`risk-pill risk-${level.toLowerCase()}`} title={part.status_label}>{riskTableLabel(part)}</span></td>
                     <td className="action-cell"><button className="purchase-action" type="button" onClick={() => onOpenProduct(part)}>Review</button></td>
                     <td className="more-cell"><button className="row-more-button" type="button" aria-label={`Open restock details for ${part.name}`} onClick={() => onOpenProduct(part)}>···</button></td>
                     <td className="mobile-detail">
-                      <span><small>Demand to delivery</small><strong>{part.forecast_used ? `${formatUnits(Number(part.forecast_demand))} ${part.uom}` : 'Not available'}</strong></span>
+                      <span><small>Demand before delivery</small><strong>{part.forecast_used ? `${formatUnits(Number(part.forecast_demand))} ${part.uom}` : 'No forecast'}</strong></span>
                       <span><small>Current</small><strong>{formatQuantity(part.current_qty, part.uom)}</strong></span>
                       <span><small>Suggested</small><strong>{formatQuantity(part.recommended_qty, part.uom)}</strong></span>
                       <button className={`risk-pill risk-${level.toLowerCase()}`} type="button" onClick={() => onOpenProduct(part)} aria-label={`Open ${part.status_label} details for ${part.name}`}>{riskTableLabel(part)}</button>
@@ -582,8 +582,8 @@ function TableEmptyState({ hasFilters, onClearFilters }: { hasFilters: boolean; 
   return (
     <div className="table-state dashboard-empty-state">
       <span className="empty-state-icon"><Boxes size={19} aria-hidden="true" /></span>
-      <strong>{hasFilters ? 'No parts match these filters' : 'No stock positions need review'}</strong>
-      <p>{hasFilters ? 'Try another category or priority, or clear the filters.' : 'No current stock positions meet the configured review conditions.'}</p>
+      <strong>{hasFilters ? 'No parts match these filters' : 'No part locations need review'}</strong>
+      <p>{hasFilters ? 'Try another category or priority, or clear the filters.' : 'No current part locations meet the configured review conditions.'}</p>
       {hasFilters && <button className="inline-retry-button" type="button" onClick={onClearFilters}>Clear filters</button>}
     </div>
   )

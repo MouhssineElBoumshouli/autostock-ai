@@ -8,13 +8,13 @@
 
 The Dashboard now reads the signed-in Odoo user, allowed companies, company inventory summary, saved forecast and read-only stock-risk recommendations from `/autostock/api/v1/`. The controller calls the existing Odoo dashboard, forecast and inventory-risk services; React formats their results and does not recalculate stock, forecast or reorder quantities. API routes require an authenticated Odoo session, keep the selected company in scope, and use Odoo ACLs and record rules.
 
-The Atlas Auto Distribution showroom was used for live browser validation. At capture time Odoo reported 64 tracked parts, 58 in stock, 6 low, 0 out of stock in the company summary, and 60 reorder suggestions across 128 stock positions. The Dashboard shows the five highest-priority positions. These are snapshot values from the local demo database, not business validation or production results. The saved forecast uses completed delivery history; returns remain separately recorded. No forecast-accuracy percentage or other accuracy claim is shown, and unavailable forecast evidence produces an explicit empty state instead of synthetic fallback data. Purchasing remains read-only.
+The Atlas Auto Distribution showroom was used for live browser validation. At capture time Odoo reported 64 tracked parts, 58 in stock, 6 low, 0 out of stock in the company-wide product summary, and 60 reorder suggestions across 128 part locations. The Dashboard shows the five highest-priority part-location recommendations. A part with zero stock at one warehouse can still have stock at another warehouse, so the company-wide “Out of Stock” KPI and the “Warehouse stockouts” insight describe different scopes. These are snapshot values from the local demo database, not business validation or production results. The saved forecast uses completed delivery history; returns remain separately recorded. No forecast-accuracy percentage or other accuracy claim is shown, and unavailable forecast evidence produces an explicit empty state instead of synthetic fallback data. Purchasing remains read-only.
 
-The approved shell, card hierarchy, spacing, typography, forecast/health split, insights and recommendation table remain in place. At 390 px, recommendation facts now stack into one readable column so labels and quantities do not overlap. The desktop and tablet layout keeps the full “Reorder Suggestions” label visible. The only demo wording is the discreet “Demo environment” indicator.
+The approved shell, card hierarchy, spacing, typography, forecast/health split, insights and recommendation table remain in place. At 390 px, recommendation facts now stack into one readable column so labels and quantities do not overlap. The desktop and tablet layout keeps the full “Reorder Suggestions” label visible. This review pass changes only business wording and the disabled report control’s existing visual state: company-wide stock is labeled explicitly, warehouse stockouts identify part locations and explain that stock may exist elsewhere, and the report button uses a muted disabled style. Restock headings now use “Demand before delivery,” “Based on,” “No forecast,” and “Stock + reorder rule.” The only demo wording is the discreet “Demo environment” indicator.
 
 ## Live showroom screenshots
 
-All captures below came from the authenticated Atlas Auto Distribution Odoo database. Screenshot capture verified no horizontal overflow, a forecast plot filling its container, five real recommendation rows, zero page or console errors, and zero failed AutoStock API responses.
+All captures below came from the authenticated Atlas Auto Distribution Odoo database. Screenshot capture verified no horizontal overflow, a forecast plot filling its container, five real recommendation rows, clear company-wide versus warehouse-level stock copy, the disabled report appearance, and zero page or console errors or failed AutoStock API responses. The browser capture assertions checked these copy and disabled-state details at all three widths.
 
 | Evidence | Screenshot | Result |
 | --- | --- | --- |
@@ -36,7 +36,7 @@ The reference comparison retains the approved sidebar and header proportions, fi
 | `npm run typecheck` | Passed |
 | `npm run test:unit` | Passed, 3 tests |
 | `npm run test:contract` | Passed, 5 API contract tests |
-| `npm run test:browser` | Passed, 10 Playwright tests; 1440/1024/390 layouts, keyboard search, forecast controls, reorder details, company scope, loading/empty/error states, reduced motion and mobile fact readability |
+| `npm run test:browser` | Passed, 11 Playwright tests; 1440/1024/390 layouts, company-wide vs warehouse-level stock wording, disabled report styling, restock labels, keyboard search, forecast controls, reorder details, company scope, loading/empty/error states, reduced motion and mobile fact readability |
 | `npm run build` | Passed |
 | `python -m pytest -q` | Passed, 38 tests |
 | `python -m compileall -q addons ml scripts tests` | Passed |

@@ -44,13 +44,13 @@ function createKpis(dashboard: DashboardData, restock: RestockData): DashboardMe
     ? 'Current company stock across all tracked parts'
     : `${formatCount(health.sampled_products)} of ${formatCount(health.total_tracked)} tracked parts counted`
   const restockScope = restock.coverage.complete
-    ? `Across ${formatCount(restock.coverage.scanned_locations)} stock positions`
-    : `Found within ${formatCount(restock.coverage.scanned_locations)} of ${formatCount(restock.coverage.candidate_locations)} positions checked`
+    ? `Across ${formatCount(restock.coverage.scanned_locations)} part locations`
+    : `Checked ${formatCount(restock.coverage.scanned_locations)} of ${formatCount(restock.coverage.candidate_locations)} part locations`
   return [
     { label: 'Total SKUs', value: formatCount(dashboard.kpis.tracked_products), note: 'Active parts enabled for stock monitoring', tone: 'violet', icon: 'boxes', detail: 'The number of active, storable products enabled for AutoStock monitoring in this Odoo company.' },
     { label: 'In Stock', value: formatCount(dashboard.kpis.in_stock), note: stockScope, tone: 'green', icon: 'stock', detail: 'Parts with positive stock above their configured AutoStock safety stock in the current company summary.' },
     { label: 'Low Stock', value: formatCount(dashboard.kpis.low_stock), note: 'At or below configured safety stock', tone: 'amber', icon: 'low', detail: 'Parts with positive stock at or below their configured AutoStock safety stock.' },
-    { label: 'Out of Stock', value: formatCount(dashboard.kpis.out_of_stock), note: 'No on-hand quantity', tone: 'red', icon: 'risk', detail: 'Parts whose current on-hand quantity is zero or below.' },
+    { label: 'Out of Stock', value: formatCount(dashboard.kpis.out_of_stock), note: 'No stock across the company', tone: 'red', icon: 'risk', detail: 'Tracked parts with no stock in any warehouse across the selected company.' },
     { label: 'Reorder Suggestions', value: formatCount(restock.summary.reorder_suggestions), note: restockScope, tone: 'violet', icon: 'review', detail: 'Read-only reorder quantities calculated by the Odoo stock-risk service from visible stock, supplier terms, and reorder policies.' },
   ]
 }
@@ -261,7 +261,7 @@ function ReferenceDashboard({ session, companyId, onSwitchCompany, onSignOut }: 
             </div>
             <div className="dashboard-heading-actions">
               <DashboardDateRange value={dateRange} onChange={changeDateRange} />
-              <button className="report-control" type="button" disabled title="Reports are not included in this release">
+              <button className="report-control" type="button" disabled title="Reports are not available yet">
                 <FileBarChart2 size={15} aria-hidden="true" />Generate Report
               </button>
             </div>

@@ -34,7 +34,7 @@ function stockItem(index: number) {
     status: isOut ? 'out' : high ? 'shortage' : 'low', status_label: isOut ? 'Out of stock' : high ? 'Shortage' : 'Low stock',
     current_qty: current, free_qty: current, reserved_qty: 0, incoming_qty: 0, outgoing_qty: 0,
     projected_qty: current, projected_after_demand: current, forecast_demand: false, forecast_used: false,
-    forecast_reason: 'No reviewed forecast is available for this stock position.', forecast_horizon_days: false,
+    forecast_reason: 'No reviewed forecast is available for this part.', forecast_horizon_days: false,
     forecast_review_status: false, uom: 'Units', recommended_qty: isOut ? 12 : high ? 8 : 6,
     reorder_needed: true, supplier_name: supplier,
     supplier: supplier ? { id: index + 30, name: supplier, lead_days: 8, minimum_qty: 1, minimum_uom: 'Units', price_tier_min_qty: 0, price_tier_uom: 'Units', price: 100, currency: 'MAD', company_specific: true } : false,
@@ -80,15 +80,15 @@ function dashboardData(companyId: number, empty = false) {
     company: company(companyId),
     snapshot_at: new Date().toISOString(),
     kpis: {
-      tracked_products: empty ? 0 : 64, in_stock: empty ? 0 : 47, low_stock: empty ? 0 : 11,
-      out_of_stock: empty ? 0 : 6, reviewed_forecasts: empty ? 0 : 4, reviewed_forecasts_available: true,
+      tracked_products: empty ? 0 : 64, in_stock: empty ? 0 : 58, low_stock: empty ? 0 : 6,
+      out_of_stock: 0, reviewed_forecasts: empty ? 0 : 4, reviewed_forecasts_available: true,
     },
     inventory_health: {
       total_tracked: empty ? 0 : 64, sampled_products: empty ? 0 : 64, complete: true,
       categories: [
-        { key: 'healthy', label: 'In stock', count: empty ? 0 : 47, percent: empty ? 0 : 73 },
-        { key: 'low', label: 'Low stock', count: empty ? 0 : 11, percent: empty ? 0 : 17 },
-        { key: 'out', label: 'Out of stock', count: empty ? 0 : 6, percent: empty ? 0 : 10 },
+        { key: 'healthy', label: 'In stock', count: empty ? 0 : 58, percent: empty ? 0 : 91 },
+        { key: 'low', label: 'Low stock', count: empty ? 0 : 6, percent: empty ? 0 : 9 },
+        { key: 'out', label: 'Out of stock', count: 0, percent: 0 },
       ],
     },
     empty,
@@ -102,9 +102,9 @@ function restockData(companyId: number, empty = false) {
     summary: { priority_locations: empty ? 0 : 5, reorder_suggestions: empty ? 0 : 5, complete: true },
     items: empty ? [] : riskItems,
     insights: [
-      { id: 'reorder-suggestions', title: 'Reorder suggestions', description: empty ? 'No positions have a quantity ready for review.' : '5 stock positions have a quantity ready for review.', icon: 'reorder', action: 'view-reorder', action_label: 'View top 5' },
-      { id: 'stock-review', title: 'Stock positions to review', description: empty ? 'No current positions need a stock review.' : '5 positions are out of stock, at a reorder trigger, or need a policy review.', icon: 'trend', action: 'review-parts', action_label: 'Review parts' },
-      { id: 'out-of-stock', title: 'Out of stock', description: empty ? 'No parts are out of stock.' : '1 stock position currently has no on-hand quantity.', icon: 'vehicle', action: 'view-reorder', action_label: 'View top 5' },
+      { id: 'reorder-suggestions', title: 'Reorder suggestions', description: empty ? 'No part locations have a suggested order ready for review.' : '5 part locations have a suggested order ready for review.', icon: 'reorder', action: 'view-reorder', action_label: 'View top 5' },
+      { id: 'stock-review', title: 'Part locations to review', description: empty ? 'No part locations need review.' : '5 part locations need review because stock is low or empty, or their reorder rules need attention.', icon: 'trend', action: 'review-parts', action_label: 'Review parts' },
+      { id: 'out-of-stock', title: 'Warehouse stockouts', description: empty ? 'No part locations currently have zero stock.' : '1 part location currently has zero stock. This part may still have stock in another warehouse.', icon: 'vehicle', action: 'view-reorder', action_label: 'View top 5' },
     ],
     coverage: { complete: true, scanned_locations: empty ? 0 : 64, candidate_locations: empty ? 0 : 64, scan_limit: 500, flags: { warehouse_scope_limited: false, supplier_filter_limited: false, forecast_lookup_limited: false } },
   }
@@ -366,10 +366,56 @@ test('restock filters and details explain actual calculation fields while remain
   const drawer = page.getByRole('dialog', { name: /Brake Pads \(Front\)/ })
   await expect(drawer).toBeVisible()
   await expect(drawer.getByRole('heading', { name: 'Why this recommendation?' })).toBeVisible()
+  await expect(drawer).toContainText('Demand before delivery')
+  await expect(drawer).toContainText('No forecast')
   await expect(drawer).toContainText('Northline Auto Supply')
   await drawer.getByText('How calculated?').click()
   await expect(drawer).toContainText('Quantity comes from current Odoo stock and the configured reorder policy.')
   await expect(drawer.getByRole('button', { name: /Create PO/ })).toHaveCount(0)
+  expectClean(signals)
+})
+
+test('business copy distinguishes company stock from warehouse stockouts and shows Reports as unavailable', async ({ page }) => {
+  const signals = observePage(page)
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto('/')
+
+  const companyOutOfStock = page.locator('.kpi-card').filter({ hasText: 'Out of Stock' })
+  await expect(companyOutOfStock).toContainText('No stock across the company')
+  const warehouseStockouts = page.locator('.insight-card').filter({ has: page.getByRole('heading', { name: 'Warehouse stockouts' }) })
+  await expect(warehouseStockouts).toContainText('1 part location currently has zero stock.')
+  await expect(warehouseStockouts).toContainText('This part may still have stock in another warehouse.')
+
+  const reorderPanel = page.locator('#reorder-panel')
+  await expect(reorderPanel.getByRole('columnheader', { name: 'Demand before delivery' })).toBeVisible()
+  await expect(reorderPanel.getByRole('columnheader', { name: 'Based on' })).toBeVisible()
+  await expect(reorderPanel.locator('tbody tr').first()).toContainText('No forecast')
+  await expect(reorderPanel.locator('tbody tr').first()).toContainText('Stock + reorder rule')
+
+  const report = page.locator('.report-control')
+  await expect(report).toBeDisabled()
+  await expect(report).toHaveAttribute('title', 'Reports are not available yet')
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 1024, height: 820 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport)
+    await expectNoHorizontalOverflow(page, viewport.width)
+    const style = await report.evaluate((button) => {
+      const computed = getComputedStyle(button)
+      return {
+        backgroundColor: computed.backgroundColor,
+        backgroundImage: computed.backgroundImage,
+        boxShadow: computed.boxShadow,
+        color: computed.color,
+        cursor: computed.cursor,
+        opacity: computed.opacity,
+      }
+    })
+    expect(style.backgroundColor).toBe('rgb(239, 240, 245)')
+    expect(style.backgroundImage).toBe('none')
+    expect(style.boxShadow).toBe('none')
+    expect(style.color).not.toBe('rgb(255, 255, 255)')
+    expect(style.cursor).toBe('not-allowed')
+    expect(style.opacity).toBe('1')
+  }
   expectClean(signals)
 })
 
@@ -412,17 +458,18 @@ test('date range, inventory health, insight actions, and company switch use the 
 
   await page.getByRole('button', { name: 'See details' }).click()
   const healthDrawer = page.getByRole('dialog', { name: 'Inventory health' })
-  await expect(healthDrawer).toContainText('73%')
+  await expect(healthDrawer).toContainText('91%')
   await expect(healthDrawer).toContainText('All 64 tracked parts are included.')
   await page.keyboard.press('Escape')
 
   await page.getByRole('button', { name: 'See all insights' }).click()
   const insights = page.getByRole('dialog', { name: 'Current stock insights' })
-  await expect(insights).toContainText('5 stock positions have a quantity ready for review.')
+  await expect(insights).toContainText('5 part locations have a suggested order ready for review.')
+  await expect(insights).toContainText('This part may still have stock in another warehouse.')
   await page.keyboard.press('Escape')
 
   await page.locator('#reorder-panel').getByRole('button', { name: 'View top 5' }).click()
-  await expect(page.getByRole('dialog', { name: 'Top restock positions' })).toContainText('Brake Pads (Front)')
+  await expect(page.getByRole('dialog', { name: 'Top restock recommendations' })).toContainText('Brake Pads (Front)')
   await page.keyboard.press('Escape')
 
   await page.getByRole('button', { name: 'Profile menu for Alex Morgan' }).click()
@@ -444,7 +491,7 @@ test('loading, empty, and recoverable error responses have clear user states', a
   apiModes.set(page, 'empty')
   await page.reload()
   await expect(page.getByText('No forecast to show yet')).toBeVisible()
-  await expect(page.getByText('No stock positions need review')).toBeVisible()
+  await expect(page.getByText('No part locations need review', { exact: true })).toBeVisible()
 
   apiModes.set(page, 'error')
   await page.reload()

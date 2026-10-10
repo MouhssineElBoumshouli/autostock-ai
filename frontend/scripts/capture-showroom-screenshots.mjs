@@ -62,15 +62,28 @@ async function captureDashboard(viewport) {
       plotWidth: plot?.getBoundingClientRect().width ?? 0,
       plotContainerWidth: plotContainer?.getBoundingClientRect().width ?? 0,
       kpis: Array.from(document.querySelectorAll('.kpi-card .kpi-value'), (node) => node.textContent?.trim() ?? ''),
-      restockPositions: document.querySelectorAll('.reorder-table tbody tr').length,
+      recommendationRows: document.querySelectorAll('.reorder-table tbody tr').length,
+      dashboardText: document.querySelector('main')?.innerText ?? '',
     }
   })
   if (layout.pageWidth > viewport.width) throw new Error(`Dashboard overflows horizontally at ${viewport.width}px.`)
   if (layout.plotWidth < layout.plotContainerWidth - 2) throw new Error(`Forecast plot does not fill the available width at ${viewport.width}px.`)
   if (layout.kpis.length !== 5) throw new Error(`Expected five live KPI cards at ${viewport.width}px.`)
+  if (/stock positions/i.test(layout.dashboardText)) throw new Error(`Technical stock-position wording is visible at ${viewport.width}px.`)
+  if (!/part locations/i.test(layout.dashboardText)) throw new Error(`Part-location scope is missing at ${viewport.width}px.`)
+  const report = page.locator('.report-control')
+  await expect(report).toBeDisabled()
+  await expect(report).toHaveAttribute('title', 'Reports are not available yet')
+  const reportStyle = await report.evaluate((button) => {
+    const style = getComputedStyle(button)
+    return { backgroundColor: style.backgroundColor, backgroundImage: style.backgroundImage, boxShadow: style.boxShadow, cursor: style.cursor }
+  })
+  if (reportStyle.backgroundColor !== 'rgb(239, 240, 245)' || reportStyle.backgroundImage !== 'none' || reportStyle.boxShadow !== 'none' || reportStyle.cursor !== 'not-allowed') {
+    throw new Error(`Generate Report does not look disabled at ${viewport.width}px.`)
+  }
   const fileName = `dashboard-${viewport.name}.png`
   await page.screenshot({ path: path.join(outputDirectory, fileName), fullPage: true, animations: 'disabled' })
-  return { viewport: viewport.width, plotWidth: Math.round(layout.plotWidth), restockPositions: layout.restockPositions, fileName }
+  return { viewport: viewport.width, plotWidth: Math.round(layout.plotWidth), recommendationRows: layout.recommendationRows, fileName }
 }
 
 try {
@@ -93,6 +106,13 @@ try {
   await page.locator('.health-donut').waitFor({ timeout: 45_000 })
   await page.locator('.reorder-table tbody tr').first().waitFor({ timeout: 45_000 })
   await expect(page.getByText('Demo environment', { exact: true })).toBeVisible()
+  await expect(page.locator('.kpi-card').filter({ hasText: 'Out of Stock' })).toContainText('No stock across the company')
+  const warehouseStockouts = page.locator('.insight-card').filter({ has: page.getByRole('heading', { name: 'Warehouse stockouts' }) })
+  await expect(warehouseStockouts).toContainText(/part locations? currently have zero stock/i)
+  await expect(warehouseStockouts).toContainText(/may still have stock in another warehouse/i)
+  const reorderPanel = page.locator('#reorder-panel')
+  await expect(reorderPanel.getByRole('columnheader', { name: 'Demand before delivery' })).toBeVisible()
+  await expect(reorderPanel.getByRole('columnheader', { name: 'Based on' })).toBeVisible()
 
   const evidence = []
   for (const viewport of [
@@ -154,8 +174,8 @@ try {
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`)
   if (consoleErrors.length) throw new Error(`Browser console errors: ${consoleErrors.join(' | ')}`)
   if (failedApiResponses.length) throw new Error(`Odoo API errors: ${failedApiResponses.join(' | ')}`)
-  for (const item of evidence) console.log(`Captured ${item.fileName}: ${item.viewport}px, chart ${item.plotWidth}px, ${item.restockPositions} real restock positions.`)
-  console.log('Authenticated showroom interactions passed: product search and quick view, 7-day forecast selection, reorder details, and mobile navigation. Page/console errors: 0. API failures: 0.')
+  for (const item of evidence) console.log(`Captured ${item.fileName}: ${item.viewport}px, chart ${item.plotWidth}px, ${item.recommendationRows} live recommendation rows.`)
+  console.log('Authenticated showroom interactions passed: product search and quick view, 7-day forecast selection, reorder details, and mobile navigation. Company-wide and warehouse-level stock copy, disabled report state, and restock labels were checked at every viewport. Page/console errors: 0. API failures: 0.')
 } finally {
   await context.close()
   await browser.close()

@@ -228,7 +228,7 @@ class AutoStockApiV1(http.Controller):
             return row.get("policy_source_label") or _(
                 "A reorder trigger or target needs to be reviewed."
             )
-        return _("This stock location needs a review.")
+        return _("This part location needs a review.")
 
     @staticmethod
     def _dashboard_priority(row):
@@ -346,8 +346,42 @@ class AutoStockApiV1(http.Controller):
             if row["reorder_needed"] and row["recommended_qty"] > 0
         )
         out_of_stock = sum(1 for row in priority_rows if row["risk"] == "out")
+        if reorder_suggestions == 0:
+            reorder_description = _("No part locations have a suggested order ready for review.")
+        elif reorder_suggestions == 1:
+            reorder_description = _("1 part location has a suggested order ready for review.")
+        else:
+            reorder_description = _(
+                "%(count)s part locations have a suggested order ready for review.",
+                count=reorder_suggestions,
+            )
+
+        review_count = len(priority_rows)
+        if review_count == 0:
+            review_description = _("No part locations need review.")
+        elif review_count == 1:
+            review_description = _(
+                "1 part location needs review because stock is low or empty, or its reorder rule needs attention."
+            )
+        else:
+            review_description = _(
+                "%(count)s part locations need review because stock is low or empty, or their reorder rules need attention.",
+                count=review_count,
+            )
+
+        if out_of_stock == 0:
+            out_of_stock_description = _("No part locations currently have zero stock.")
+        elif out_of_stock == 1:
+            out_of_stock_description = _(
+                "1 part location currently has zero stock. This part may still have stock in another warehouse."
+            )
+        else:
+            out_of_stock_description = _(
+                "%(count)s part locations currently have zero stock. Some of those parts may still have stock in another warehouse.",
+                count=out_of_stock,
+            )
         limited_note = (
-            _(" More positions may exist beyond the current scan limit.")
+            _(" More part locations may need review beyond this scan.")
             if not complete
             else ""
         )
@@ -355,32 +389,23 @@ class AutoStockApiV1(http.Controller):
             {
                 "id": "reorder-suggestions",
                 "title": _("Reorder suggestions"),
-                "description": (
-                    _("%(count)s stock positions have a quantity ready for review.", count=reorder_suggestions)
-                    + limited_note
-                ),
+                "description": reorder_description + limited_note,
                 "icon": "reorder",
                 "action": "view-reorder",
                 "action_label": _("View top 5"),
             },
             {
                 "id": "stock-review",
-                "title": _("Stock positions to review"),
-                "description": (
-                    _("%(count)s positions are out of stock, at a reorder trigger, or need a policy review.", count=len(priority_rows))
-                    + limited_note
-                ),
+                "title": _("Part locations to review"),
+                "description": review_description + limited_note,
                 "icon": "trend",
                 "action": "review-parts",
                 "action_label": _("Review parts"),
             },
             {
                 "id": "out-of-stock",
-                "title": _("Out of stock"),
-                "description": (
-                    _("%(count)s stock positions currently have no on-hand quantity.", count=out_of_stock)
-                    + limited_note
-                ),
+                "title": _("Warehouse stockouts"),
+                "description": out_of_stock_description + limited_note,
                 "icon": "vehicle",
                 "action": "view-reorder",
                 "action_label": _("View top 5"),

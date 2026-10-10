@@ -615,6 +615,7 @@ html { scroll-behavior: smooth; }
 .date-range-control { overflow: hidden; font-family: inherit; cursor: pointer; }
 .date-range-value { overflow: hidden; text-overflow: ellipsis; }
 .report-control { cursor: not-allowed; }
+.report-control:disabled { color: #7c8393; background: #eff0f5; border: 1px solid #dfe2ea; box-shadow: none; opacity: 1; }
 .select-visual { position: relative; font-family: inherit; }
 .product-select-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .select-visual select { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; cursor: pointer; opacity: 0; }

@@ -78,9 +78,9 @@ describe('Odoo v1 API contracts', () => {
         calculation_basis: 'No reliable quantity calculated.',
       }],
       insights: [
-        { id: 'reorder-suggestions', title: 'Reorder suggestions', description: '1 position.', icon: 'reorder', action: 'view-reorder', action_label: 'View top 5' },
-        { id: 'stock-review', title: 'Stock positions to review', description: '1 position.', icon: 'trend', action: 'review-parts', action_label: 'Review parts' },
-        { id: 'out-of-stock', title: 'Out of stock', description: '1 position.', icon: 'vehicle', action: 'view-reorder', action_label: 'View top 5' },
+        { id: 'reorder-suggestions', title: 'Reorder suggestions', description: '1 part location has a suggested order ready for review.', icon: 'reorder', action: 'view-reorder', action_label: 'View top 5' },
+        { id: 'stock-review', title: 'Part locations to review', description: '1 part location needs review.', icon: 'trend', action: 'review-parts', action_label: 'Review parts' },
+        { id: 'out-of-stock', title: 'Warehouse stockouts', description: '1 part location currently has zero stock.', icon: 'vehicle', action: 'view-reorder', action_label: 'View top 5' },
       ],
       coverage: { complete: true, scanned_locations: 1, candidate_locations: 1, scan_limit: 500, flags: {} },
     })
