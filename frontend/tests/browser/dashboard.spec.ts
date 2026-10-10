@@ -17,14 +17,14 @@ const datesAgo = (days: number) => {
   return date.toISOString().slice(0, 10)
 }
 
-function responseForCompany(id: number) {
+function responseForCompany(id: number, horizon = 30) {
   const company = id === 2 ? makeCompany(2, 'Second Test Company') : makeCompany(1, 'Fixture Auto Parts')
   const history = Array.from({ length: 60 }, (_, index) => ({
     date: datesAgo(59 - index),
     units: index % 9 === 0 ? 0 : (index % 5) + 1,
   }))
   const endDate = new Date(`${history.at(-1)?.date}T12:00:00Z`)
-  const predictions = Array.from({ length: 30 }, (_, index) => {
+  const predictions = Array.from({ length: horizon }, (_, index) => {
     const date = new Date(endDate)
     date.setUTCDate(date.getUTCDate() + index + 1)
     const units = (index % 4) + 2
@@ -57,7 +57,7 @@ function responseForCompany(id: number) {
       schema_version: 1, company, status: 'available', reason_code: false, message: false,
       forecast: {
         id: 19, product_name: 'Front Brake Rotor', sku: 'BRK-440', warehouse_name: 'Central warehouse',
-        horizon_days: 30, uom: 'Units', source_type: 'synthetic_demo', source_label: 'Synthetic demo',
+        horizon_days: horizon, uom: 'Units', source_type: 'synthetic_demo', source_label: 'Synthetic demo',
         review_status: 'reviewed', evaluation_status: 'baseline_only',
         history_start: history[0].date, history_end: history.at(-1)!.date,
         history, predictions, limitations: 'Frontend browser fixture. Not a forecast-quality claim.',
@@ -67,6 +67,7 @@ function responseForCompany(id: number) {
       schema_version: 1, company, warehouse_id: false,
       warehouses: [{ id: 1, name: 'Central warehouse' }, { id: 2, name: 'North depot' }],
       as_of: '2026-10-10 12:00 UTC', read_only: true,
+      summary: { priority_locations: 9, reorder_suggestions: 6, complete: true },
       items: [
         { key: '1:1', product_id: 1, template_id: 1, name: 'Front Brake Rotor', sku: 'BRK-440', warehouse_id: 1, warehouse: 'Central warehouse', status: 'low', status_label: 'Low stock', current_qty: 3, uom: 'Units', recommended_qty: 12, supplier_name: 'Fixture supplier', reason: 'Stock has reached the configured reorder trigger.', basis_note: 'Frontend browser fixture.', },
         { key: '2:1', product_id: 2, template_id: 2, name: 'Oil Filter Cartridge', sku: 'FLT-210', warehouse_id: 1, warehouse: 'Central warehouse', status: 'out', status_label: 'Out of stock', current_qty: 0, uom: 'Units', recommended_qty: 20, supplier_name: 'Fixture supplier', reason: 'No stock is on hand at this warehouse.', basis_note: 'Frontend browser fixture.', },
@@ -87,8 +88,10 @@ async function installApiFixtures(page: Page) {
     await route.fulfill({ json: responseForCompany(companyId).restock })
   })
   await page.route('**/autostock/api/v1/dashboard/forecast-preview**', async (route) => {
-    const companyId = Number(new URL(route.request().url()).searchParams.get('company_id') || 1)
-    await route.fulfill({ json: responseForCompany(companyId).forecast })
+    const url = new URL(route.request().url())
+    const companyId = Number(url.searchParams.get('company_id') || 1)
+    const horizon = Number(url.searchParams.get('horizon_days') || 30)
+    await route.fulfill({ json: responseForCompany(companyId, horizon).forecast })
   })
   await page.route((url) => new URL(url).pathname === '/autostock/api/v1/dashboard', async (route) => {
     const companyId = Number(new URL(route.request().url()).searchParams.get('company_id') || 1)
@@ -105,9 +108,10 @@ async function installApiFixtures(page: Page) {
 }
 
 async function waitForDashboard(page: Page) {
-  await expect(page.getByRole('heading', { name: 'Your inventory at a glance' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Demand outlook' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Priority restock' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Demand Forecast' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Insights & Recommendations' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Reorder Recommendations' })).toBeVisible()
   await expect(page.locator('.chart-area svg')).toBeVisible()
   await expect(page.locator('.health-chart-wrap svg')).toBeVisible()
 }
@@ -123,20 +127,25 @@ test('dashboard renders responsively without browser errors or clipped chart wid
     await page.setViewportSize(viewport)
     await page.goto('/')
     await waitForDashboard(page)
-    await expect(page.locator('.eyebrow')).toHaveText('Workspace overview')
     await expect(page.getByText('Demo environment', { exact: true })).toHaveCount(1)
     await expect(page.locator('.demo-pill')).toBeVisible()
-    await expect(page.locator('.forecast-panel .panel-subtitle')).toContainText('Next 30 days')
-    await expect(page.locator('.forecast-panel .panel-subtitle')).not.toContainText('history')
+    await expect(page.locator('.kpi-card')).toHaveCount(5)
+    await expect(page.locator('.forecast-panel .panel-subtitle')).toContainText('next 30 days')
+    await expect(page.getByRole('combobox', { name: 'Forecast horizon' })).toHaveValue('30')
     if (viewport.width === 1440) {
-      const firstAlert = page.locator('.alert-item').first()
-      await expect(firstAlert.locator('.alert-product-name')).toHaveText('Front Brake Rotor')
-      await expect(firstAlert.locator('.alert-product-sku')).toContainText('BRK-440')
-      await expect(firstAlert.locator('.alert-product-name')).not.toContainText('BRK-440')
-      await expect(firstAlert.locator('.alert-stock-status')).toHaveText('Low stock')
-      await expect(firstAlert.locator('.alert-location .alert-meta-value')).toHaveText('Central warehouse')
-      await expect(firstAlert.locator('.quantity-copy')).toHaveText('Suggested: 12 Units')
-      await expect(page.locator('.review-policy')).toHaveText('Review reorder settings')
+      const firstRow = page.locator('.reorder-row').first()
+      await expect(firstRow.locator('.reorder-part strong')).toHaveText('Front Brake Rotor')
+      await expect(firstRow.locator('.reorder-part span')).toHaveText('BRK-440')
+      await expect(firstRow).toContainText('Central warehouse')
+      await expect(firstRow).toContainText('12 Units')
+      await expect(page.locator('.insight-card')).toHaveCount(3)
+      await firstRow.getByRole('button', { name: 'Review' }).click()
+      await expect(page.getByRole('heading', { name: 'Front Brake Rotor' })).toBeVisible()
+      await expect(page.getByText('Suggested reorder')).toBeVisible()
+      await page.keyboard.press('Escape')
+      await page.getByRole('combobox', { name: 'Forecast horizon' }).selectOption('60')
+      await expect(page.getByRole('combobox', { name: 'Forecast horizon' })).toHaveValue('60')
+      await expect(page.locator('.forecast-panel .panel-subtitle')).toContainText('next 60 days')
       const forecastDetails = page.locator('.forecast-details')
       await forecastDetails.locator('summary').click()
       await expect(forecastDetails.locator('.forecast-details-panel')).toContainText('Source: Synthetic demo')
@@ -183,7 +192,7 @@ test('company switcher scopes the refreshed dashboard to the selected company', 
   await page.getByLabel('Current company').selectOption('2')
   await expect(page.getByLabel('Current company')).toHaveValue('2')
   await expect(page.getByText('18', { exact: true })).toBeVisible()
-  await expect(page.locator('.workspace-context')).toContainText('Second Test Company')
+  await expect(page.getByLabel('Current company')).toContainText('Second Test Company')
 })
 
 test('global product search returns an Odoo-backed result and opens its product record', async ({ page }) => {
