@@ -89,6 +89,11 @@ def test_dashboard_forecast_and_restock_are_distinct_views_with_real_data_previe
     assert 'this.navigateWorkspace("risks")' in javascript
     assert "updateActiveSection()" not in javascript
     assert 'row.reorder_needed && Number(row.recommended_qty) > 0' in javascript
+    assert 't-if="forecastDemandSummary"' in xml
+    assert 't-esc="forecastDemandSummary.units"' in xml
+    assert 'class="as-model-metrics"' in xml
+    assert "get forecastDemandSummary()" in javascript
+    assert "numbers.some((value) => !Number.isFinite(value) || value < 0)" in javascript
     assert ".as-app[data-as-view=\"dashboard\"] .as-risk-panel" in styles
     assert ".as-app[data-as-view=\"forecast\"] .as-risk-panel" in styles
     assert ".as-app[data-as-view=\"risks\"] .as-panels" in styles
