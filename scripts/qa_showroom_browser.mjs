@@ -235,6 +235,11 @@ try {
         }
 
         await navigate("Forecasts", viewport.mobile);
+        await page.locator(".as-demand-takeaway").waitFor({ state: "visible" });
+        assert(await page.locator(".as-demand-takeaway").innerText().then((value) => value.includes("Expected demand")),
+            "Forecast page did not show a plain-language demand total.");
+        assert(await page.locator(".as-model-metrics").isVisible(),
+            "Forecast evaluation details should be available on demand.");
         assert.equal(await page.locator(".as-kpis").isVisible(), false,
             "Forecasts should be its own screen, without Dashboard KPIs.");
         assert.equal(await page.locator(".as-risk-panel").isVisible(), false,
