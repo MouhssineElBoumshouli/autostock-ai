@@ -135,7 +135,7 @@ test('dashboard renders responsively without browser errors or clipped chart wid
     if (viewport.width === 1440) {
       const firstRow = page.locator('.reorder-row').first()
       await expect(firstRow.locator('.reorder-part strong')).toHaveText('Front Brake Rotor')
-      await expect(firstRow.locator('.reorder-part span')).toHaveText('BRK-440')
+      await expect(firstRow.locator('.reorder-part > div > span')).toHaveText('BRK-440')
       await expect(firstRow).toContainText('Central warehouse')
       await expect(firstRow).toContainText('12 Units')
       await expect(page.locator('.insight-card')).toHaveCount(3)
