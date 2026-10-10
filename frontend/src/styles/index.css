@@ -570,8 +570,27 @@ body {
   .kpi-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .kpi-grid .kpi-card:nth-child(4),
   .kpi-grid .kpi-card:nth-child(5) { grid-column: span 1; }
-  .reorder-head,
-  .reorder-row { grid-template-columns: minmax(190px,1.4fr) minmax(120px,.8fr) minmax(135px,.9fr) 82px 96px 86px 66px; gap: 8px; }
+
+  /* Tablet: keep recommendations readable without horizontal page scrolling. */
+  .reorder-head { display: none; }
+  .reorder-row {
+    grid-template-columns: minmax(180px,1.45fr) minmax(112px,.9fr) minmax(90px,.7fr) minmax(92px,.72fr) 70px;
+    gap: 8px 12px;
+    margin-bottom: 8px;
+    border: 1px solid #ececf3;
+    border-radius: 11px;
+  }
+  .reorder-supplier { display: none; }
+  .reorder-cell.numeric { display: none; }
+  .mobile-field-label {
+    display: block;
+    margin-bottom: 2px;
+    color: #9299a7;
+    font-size: 8px;
+    font-weight: 650;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
 }
 @media (max-width: 900px) {
   .search-trigger { width: min(520px,55vw); }
