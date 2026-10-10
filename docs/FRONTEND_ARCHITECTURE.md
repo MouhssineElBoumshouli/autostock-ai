@@ -1,51 +1,51 @@
-# React frontend foundation
+# React frontend architecture
 
-The React client in [`frontend/`](../frontend/) is the new AutoStock user interface direction. It uses React 19, TypeScript, Vite, Tailwind CSS 4, Shadcn/Radix primitives, TanStack Router and TanStack Query. Selected UI foundations are vendored from [`satnaing/shadcn-admin`](https://github.com/satnaing/shadcn-admin) under the preserved MIT notice in [`frontend/LICENSES/`](../frontend/LICENSES/). Demo pages and mock business records are excluded.
+The React 19 + TypeScript client in [`frontend/`](../frontend/) is AutoStock AI's new UI direction. It uses Vite, Tailwind CSS 4, Shadcn/Radix primitives and TanStack Router. Selected foundations from [`satnaing/shadcn-admin`](https://github.com/satnaing/shadcn-admin) retain the MIT notice in [`frontend/LICENSES/`](../frontend/LICENSES/); its demo pages are not used.
 
-## Scope of this first frontend PR
+## Issue #22 visual reset: Gate 1
 
-The only completed application screen is the Dashboard. The shell contains a dashboard link, a product search dialog, an authorized-company selector, the Odoo connection state and account sign-out. Inventory, full Forecasts, Restock, Phase 3B, purchasing, reports and the assistant are future work and are not shown as placeholder destinations.
+The Dashboard in Gate 1 is a visual replica built against [`design/dashboard-concept.png`](../design/dashboard-concept.png). It renders from the typed development-only fixture in [`frontend/src/data/development-dashboard-fixture.ts`](../frontend/src/data/development-dashboard-fixture.ts). The fixture values are illustrative, are not Odoo records or evaluated business results, and appear with a visible preview label. The Dashboard does not import the Odoo API client, make network requests, or depend on the backend's response shape.
 
-The existing Owl implementation remains in the addon unchanged during this foundation PR. The new API and React app are developed alongside it so the new client can be reviewed before a later cutover.
+The navigation, search, date range, report, insight and reorder controls are visual-only in this gate. Inventory, Warehouses, Suppliers, Forecasts, Restock/Purchasing, Reports and Assistant workflows are not implemented. Do not connect fixture values to Odoo until the owner approves Gates 1 and 2.
 
-## Session and data flow
+Playwright captures the running frontend at 1440, 1024 and 390 CSS pixels and produces a desktop side-by-side comparison with the approved image. Evidence is stored in [`docs/qa/screenshots/issue-22-gate-1/`](qa/screenshots/issue-22-gate-1/), with the review notes in [`docs/qa/issue-22-gate-1.md`](qa/issue-22-gate-1.md).
+
+## Gate 3 planned session and data boundaries
+
+After approval of the visual replica and interaction prototype, the client can be wired to the authenticated Odoo session and purpose-built `/autostock/api/v1/` routes. The intended data flow is:
 
 ```text
 Browser ── Odoo session cookie ──> /web/session/authenticate
    │
    └── credentials: include ─────> /autostock/api/v1/*
-                                      │
-                                      ├─ current Odoo user and authorized companies
-                                      ├─ autostock.dashboard.get_dashboard_data()
-                                      ├─ autostock.inventory.risk.get_risk_data()
-                                      └─ autostock.forecast.run.get_forecast_snapshot()
+                                       ├─ current Odoo user and authorized companies
+                                       ├─ autostock.dashboard.get_dashboard_data()
+                                       ├─ autostock.inventory.risk.get_risk_data()
+                                       └─ autostock.forecast.run.get_forecast_snapshot()
 ```
 
-The browser holds only the Odoo session cookie. The React app does not store or receive a database password after sign-in. Each API route uses `auth="user"`, ORM access with no `sudo()`, validates the selected company against `request.env.companies`, and creates a company-scoped ORM environment with `with_company()` and `allowed_company_ids=[company.id]`. Warehouse filters are passed to the existing risk service, which validates ownership and continues to enforce Odoo record rules.
+The browser will hold only the Odoo session cookie. API routes must use `auth="user"` and ORM access without `sudo()`, validate a selected company against `request.env.companies`, and narrow company context with `with_company()` and `allowed_company_ids=[company.id]`. Warehouse filters must be validated by the existing risk service so Odoo ACLs and record rules stay in force.
 
-All dashboard values come from existing server-side calculations. The frontend maps those responses for display and validates their versioned shape with Zod. It does not calculate on-hand stock, inventory coverage, reorder quantities, supplier lead time, forecasts, or forecast evaluation. Bounded backend data is labeled as partial when the service says its coverage is incomplete. Restock previews are read-only.
+The existing API client and Zod contracts are retained as the Gate 3 integration foundation. Their routes are planned contracts; Gate 1 does not call them.
 
-The API surface is:
-
-| Route | Source | Purpose |
+| Planned route | Source | Purpose |
 | --- | --- | --- |
-| `GET /autostock/api/v1/session` | Odoo session and company records | User identity, permissions, active/authorized companies and demo-environment label |
-| `GET /autostock/api/v1/dashboard` | `autostock.dashboard` | KPI counts and sampled/complete inventory-health summary |
-| `GET /autostock/api/v1/dashboard/restock-preview` | `autostock.inventory.risk` | Up to five read-only priority positions, optional company warehouse filter, and scan coverage |
-| `GET /autostock/api/v1/dashboard/forecast-preview` | `autostock.forecast.run` | A completed eligible forecast snapshot, or a truthful unavailable/restricted result |
-| `GET /autostock/api/v1/search/products` | `product.product` ORM search | Small active-company product search, respecting inventory permissions |
+| `GET /autostock/api/v1/session` | Odoo session and company records | User identity, permissions, active/authorized companies, demo label |
+| `GET /autostock/api/v1/dashboard` | `autostock.dashboard` | KPI counts and inventory health |
+| `GET /autostock/api/v1/dashboard/restock-preview` | `autostock.inventory.risk` | Read-only priority positions, warehouse scope and scan coverage |
+| `GET /autostock/api/v1/dashboard/forecast-preview` | `autostock.forecast.run` | Eligible saved forecast or a truthful unavailable/restricted state |
+| `GET /autostock/api/v1/search/products` | `product.product` ORM search | Permission-aware product search |
 
-Each response includes `schema_version: 1`. Contract tests run in frontend CI; Odoo `HttpCase` tests exercise the controller contracts and permission boundaries against Odoo 19 and PostgreSQL 16.
+The React client must map server values for display rather than calculate stock, coverage, reorder quantities, lead time, forecast or evaluation metrics. Incomplete coverage and unavailable forecasts must be disclosed plainly.
 
-## Local development
+## Local Gate 1 development
 
 ```powershell
 cd frontend
-Copy-Item .env.example .env.local
 npm ci
 npm run dev
 ```
 
-The default Vite proxy target is `http://127.0.0.1:8177` and its showroom database is `autostock_showroom_demo`. Override `ODOO_PROXY_TARGET` and `VITE_ODOO_DATABASE` in the ignored `.env.local` file for another local Odoo instance. Sign in using a normal Odoo user account. Do not put passwords in `.env.local`, source control, or screenshots.
+Open `http://127.0.0.1:5173/`. No Odoo service, login, database, or `.env.local` file is required for Gate 1.
 
-The review gates are `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run test:contract`, `npm run test:browser`, and `npm run build`. Browser tests run against explicit frontend-only fixtures; the visual QA screenshots are captured separately against the authenticated local Odoo showroom.
+The frontend gates are `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run test:contract`, `npm run test:browser`, and `npm run build`. The Gate 1 browser test also verifies there are no `/autostock/api/` requests and saves the three requested screenshots and desktop comparison.

@@ -1,13 +1,14 @@
-# AutoStock React client
+# AutoStock AI frontend — Issue #22 Gate 1
 
-The Vite development server proxies authenticated Odoo routes and web-session requests to the local Odoo service. Set `ODOO_PROXY_TARGET` and `VITE_ODOO_DATABASE` in `.env.local` if your Odoo host or database differs from the showroom defaults in `.env.example`.
+This branch runs a design-review Dashboard from typed local development fixtures. The Dashboard makes no Odoo/API requests and does not require an Odoo server or login. Fixture values are explicitly labeled in the interface and are not business validation.
 
 ```powershell
-Copy-Item .env.example .env.local
 npm ci
 npm run dev
 ```
 
-Sign in with an Odoo user account. The client uses Odoo's session cookie and current user's access rules. It does not store the password. Its only application screen in this PR is the Dashboard; other product areas will be added in reviewed milestones.
+Open `http://127.0.0.1:5173/` to review the page. The fixture source is `src/data/development-dashboard-fixture.ts`. Other product screens and the visible controls are not implemented in Gate 1.
 
-Use `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run test:contract`, `npm run test:browser`, and `npm run build` for local checks. The source attribution and MIT notice for selected upstream components are in [`UPSTREAM.md`](UPSTREAM.md) and [`LICENSES/`](LICENSES/).
+Run `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run test:contract`, `npm run test:browser`, and `npm run build` for the frontend checks. `npm run test:browser` captures the desktop, tablet and mobile layouts, plus the side-by-side comparison with the approved concept in `../design/dashboard-concept.png`, under `../docs/qa/screenshots/issue-22-gate-1/`.
+
+The selected upstream component foundation and MIT license notice are documented in [`UPSTREAM.md`](UPSTREAM.md) and [`LICENSES/`](LICENSES/). Odoo session/API plumbing remains in the codebase for a later, owner-approved integration gate; it is not used by the Gate 1 Dashboard.
