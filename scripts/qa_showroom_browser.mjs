@@ -84,6 +84,18 @@ async function takeScreenshot(name) {
     });
 }
 
+async function assertWorkspaceHeading(label) {
+    await page.waitForFunction((expectedLabel) => {
+        const heading = document.querySelector(".as-topline h1");
+        return heading && document.activeElement === heading && heading.textContent.trim() === expectedLabel;
+    }, label, { timeout: 5000 });
+    const breadcrumb = page.locator(".as-appbar-context strong");
+    assert.equal((await breadcrumb.innerText()).trim(), label,
+        `The app bar breadcrumb did not identify ${label}.`);
+    const clipped = await breadcrumb.evaluate((element) => element.scrollWidth > element.clientWidth + 1);
+    assert.equal(clipped, false, `The ${label} app bar breadcrumb was clipped at ${await page.evaluate(() => window.innerWidth)}px.`);
+}
+
 async function navigate(label, mobile) {
     if (mobile) {
         await page.getByRole("button", { name: "Open AutoStock navigation" }).click();
@@ -105,6 +117,7 @@ async function navigate(label, mobile) {
             : ".as-risk-table tbody tr[data-risk-key]";
         await page.locator(riskSelector).first().waitFor({ state: "visible" });
     }
+    await assertWorkspaceHeading(label);
 }
 
 async function assertNoOverflow(viewportName) {
@@ -193,6 +206,7 @@ try {
         { name: "desktop", width: 1440, height: 1000, mobile: false },
         { name: "tablet", width: 1024, height: 900, mobile: false },
         { name: "mobile", width: 390, height: 844, mobile: true },
+        { name: "compact-mobile", width: 320, height: 780, mobile: true },
     ];
 
     for (const viewport of viewports) {
@@ -209,6 +223,7 @@ try {
             await page.getByRole("dialog", { name: "AutoStock AI navigation" })
                 .getByRole("button", { name: "Dashboard", exact: true }).click();
             await page.getByRole("dialog", { name: "AutoStock AI navigation" }).waitFor({ state: "hidden" });
+            await assertWorkspaceHeading("Dashboard");
         }
         await page.locator(".as-page-scroll").evaluate((element) => { element.scrollTop = 0; });
         await page.waitForTimeout(150);
@@ -217,6 +232,20 @@ try {
         assert.equal(await page.locator(".as-risk-panel").isVisible(), false,
             "Dashboard unexpectedly showed the detailed Restock table.");
         await takeScreenshot(`showroom-dashboard-${viewport.name}.jpg`);
+
+        await page.locator(".as-overview-actions").scrollIntoViewIfNeeded();
+        await page.locator(".as-overview-card").first().waitFor({ state: "visible" });
+        const dashboardPreviewCards = await page.locator(".as-overview-card").count();
+        assert(dashboardPreviewCards > 0 && dashboardPreviewCards <= 3,
+            `Dashboard should show a bounded, live restock preview: ${dashboardPreviewCards} cards.`);
+        await assertNoOverflow(`${viewport.name} dashboard restock preview`);
+        await takeScreenshot(`showroom-dashboard-restock-preview-${viewport.name}.jpg`);
+        await page.locator(".as-page-scroll").evaluate((element) => { element.scrollTop = 0; });
+        await page.locator(".as-overview-actions .as-overview-card .as-link").first().click();
+        await page.locator(".as-risk-panel").waitFor({ state: "visible" });
+        assert.equal((await page.locator(".as-topline h1").innerText()).trim(), "Restock",
+            "Dashboard's restock explanation link did not open the Restock workspace.");
+        await navigate("Forecasts", viewport.mobile);
 
         if (viewport.name === "desktop") {
             await page.getByRole("button", { name: "Inventory", exact: true }).click();
@@ -240,6 +269,13 @@ try {
             "Forecast page did not show a plain-language demand total.");
         assert(await page.locator(".as-model-metrics").isVisible(),
             "Forecast evaluation details should be available on demand.");
+        const modelMetrics = page.locator(".as-model-metrics");
+        await modelMetrics.locator("summary").click();
+        assert(await modelMetrics.evaluate((element) => element.open),
+            `${viewport.name}: the optional forecast evaluation details did not open.`);
+        assert((await modelMetrics.innerText()).includes("Baseline MAE"),
+            "Opening forecast evaluation details did not reveal its comparison metrics.");
+        await modelMetrics.locator("summary").click();
         assert.equal(await page.locator(".as-kpis").isVisible(), false,
             "Forecasts should be its own screen, without Dashboard KPIs.");
         assert.equal(await page.locator(".as-risk-panel").isVisible(), false,
@@ -259,6 +295,9 @@ try {
         }
         await page.getByLabel("Horizon").selectOption("30");
         await page.waitForFunction(() => document.querySelector(".as-forecast-result-head h3")?.innerText.includes("30 day"));
+        await page.locator(".as-page-scroll").evaluate((element) => { element.scrollTop = 0; });
+        await page.waitForTimeout(150);
+        await takeScreenshot(`showroom-forecasts-overview-${viewport.name}.jpg`);
         await page.getByRole("button", { name: "Full", exact: true }).click();
         await page.getByText("180 of 180 days", { exact: true }).waitFor({ state: "visible" });
         await page.locator(".as-forecast-figure").scrollIntoViewIfNeeded();
@@ -302,6 +341,9 @@ try {
         assert(forecastRisk.recommended_qty > 0, "The selected Odoo stock/policy scenario did not produce a calculated recommendation.");
         const riskEvidence = page.locator(rowSelector).first().locator("details.as-risk-evidence");
         const riskSummary = riskEvidence.locator("summary");
+        await page.locator(".as-page-scroll").evaluate((element) => { element.scrollTop = 0; });
+        await page.waitForTimeout(150);
+        await takeScreenshot(`showroom-restock-${viewport.name}.jpg`);
         await riskSummary.scrollIntoViewIfNeeded();
         await page.waitForTimeout(250);
         await riskSummary.click();
@@ -318,6 +360,8 @@ try {
             defaultForecast: selectedForecast,
             forecastHistoryDays: 180,
             chartHorizonsChecked: [7, 30, 60],
+            navigationFocus: "active workspace heading",
+            dashboardPreviewCards,
             riskWarehouse: centralOption.label,
             riskSource: "reviewed real Odoo delivery forecast",
             recommendedQty: forecastRisk.recommended_qty,
