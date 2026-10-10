@@ -96,8 +96,8 @@ function ProductInventoryDetails({ data, locale, timezone, selectedWarehouseId }
           <span>Across all visible warehouses</span>
         </div>
         <div className="inventory-detail-metrics">
-          <Metric label="On hand" value={quantity(stock.on_hand, product.uom)} />
-          <Metric label="Available" value={quantity(stock.available, product.uom)} note="Ready to use" />
+          <Metric label="On hand" value={quantity(stock.on_hand, product.uom)} note="Physical stock" />
+          <Metric label="Available to use" value={quantity(stock.available, product.uom)} note="Not reserved" />
           <Metric label="Reserved" value={quantity(stock.reserved, product.uom)} note="For active work" />
           <Metric label="Incoming" value={quantity(stock.incoming, product.uom)} note="Expected receipts" />
         </div>
@@ -122,7 +122,7 @@ function ProductInventoryDetails({ data, locale, timezone, selectedWarehouseId }
                 </div>
                 <div className="inventory-warehouse-values">
                   <span>On hand <strong>{quantity(warehouse.on_hand, product.uom)}</strong></span>
-                  <span>Available <strong>{quantity(warehouse.available, product.uom)}</strong></span>
+                  <span>Available to use <strong>{quantity(warehouse.available, product.uom)}</strong></span>
                   <span>Reserved <strong>{quantity(warehouse.reserved, product.uom)}</strong></span>
                   <span>Incoming <strong>{quantity(warehouse.incoming, product.uom)}</strong></span>
                   <span>Outgoing <strong>{quantity(warehouse.outgoing, product.uom)}</strong></span>
