@@ -42,6 +42,7 @@ describe('Odoo v1 API contracts', () => {
       warehouses: [],
       as_of: '2026-10-10 12:00 UTC',
       read_only: true,
+      summary: { priority_locations: 6, reorder_suggestions: 6, complete: true },
       items: Array.from({ length: 6 }, (_, index) => ({
         key: `part-${index}`, product_id: index + 1, template_id: index + 1, name: 'Test part', sku: 'T-1',
         warehouse_id: 1, warehouse: 'Test warehouse', status: 'low', status_label: 'Low stock', current_qty: 1,
@@ -60,6 +61,7 @@ describe('Odoo v1 API contracts', () => {
       warehouses: [{ id: 1, name: 'Central warehouse' }],
       as_of: '2026-10-10 12:00 UTC',
       read_only: true,
+      summary: { priority_locations: 1, reorder_suggestions: 1, complete: true },
       items: [{
         key: 'part-1', product_id: 1, template_id: 1, name: 'Ignition Coil', sku: 'AT-01-003',
         warehouse_id: 1, warehouse: 'Central warehouse', status: 'out', status_label: 'Out of stock',
