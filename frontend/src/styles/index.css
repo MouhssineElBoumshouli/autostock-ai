@@ -570,7 +570,7 @@ html { scroll-behavior: smooth; }
 .sidebar-collapse-toggle { position: absolute; z-index: 2; top: 25px; right: 9px; width: 25px; height: 25px; display: grid; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 7px; color: #8189a0; background: rgba(255,255,255,.96); opacity: 0; transition: opacity 140ms ease, background-color 140ms ease, color 140ms ease; }
 .sidebar-rail:hover .sidebar-collapse-toggle,.sidebar-collapse-toggle:focus-visible,.sidebar-rail.is-collapsed .sidebar-collapse-toggle { opacity: 1; }
 .sidebar-collapse-toggle:hover { color: #6844e7; background: #f2efff; }
-.dashboard-frame.sidebar-collapsed { grid-template-columns: 82px minmax(0,1fr); }
+.dashboard-frame.sidebar-collapsed { grid-template-columns: 94px minmax(0,1fr); }
 .sidebar-rail.is-collapsed { padding-inline: 8px; }
 .sidebar-rail.is-collapsed .brand-lockup { justify-content: center; padding-inline: 0; }
 .sidebar-rail.is-collapsed .brand-wordmark,.sidebar-rail.is-collapsed .nav-item > span,
@@ -582,7 +582,7 @@ html { scroll-behavior: smooth; }
 .sidebar-rail.is-collapsed .sidebar-bottom { width: 100%; }
 .sidebar-rail.is-collapsed .sidebar-collapse-toggle {
   top: 24px;
-  right: -13px;
+  right: -15px;
   border-color: #e3e5ee;
   background: #fff;
   box-shadow: 0 5px 16px rgba(35,38,85,.12);
@@ -729,7 +729,7 @@ html { scroll-behavior: smooth; }
 .search-dialog-footer kbd { min-width: 17px; padding: 2px 4px; border: 1px solid #e9eaf0; border-radius: 4px; color: #66718a; background: #fbfbfd; text-align: center; font-size: 9px; }
 
 @media (max-width: 1190px) and (min-width: 761px) {
-  .dashboard-frame.sidebar-collapsed { grid-template-columns: 76px minmax(0,1fr); }
+  .dashboard-frame.sidebar-collapsed { grid-template-columns: 94px minmax(0,1fr); }
 }
 
 @media (max-width: 760px) {
