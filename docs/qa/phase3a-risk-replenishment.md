@@ -25,7 +25,7 @@
 | JavaScript syntax | **Passed** for both browser QA scripts (`node --check`) |
 | Odoo 19 addon integration suite with PostgreSQL 16 | **Passed**; 0 failures and 0 errors across 31 addon tests, including the >250-part catalog, real scheduled receipts, fully/partially reserved customer deliveries, and a two-step pick/ship forecast reconciliation |
 | Docker Compose configuration | **Passed** (`docker compose config --quiet`) |
-| GitHub Actions, correction revision | **Pending push**; Python and Odoo 19 jobs will be recorded after this revision runs |
+| GitHub Actions, run 20 | **Passed**; Python and Odoo 19/PostgreSQL 16 integration jobs succeeded ([run](https://github.com/MouhssineElBoumshouli/autostock-ai/actions/runs/38008423146)) |
 | Synthetic offline 30-day forecast evaluation | **6/6 evaluated**; mean baseline MAE **1.90185**, selected-model MAE **2.24713** |
 | Actual Odoo browser QA: desktop 1440×1000, tablet 1024×900, mobile 390×844 | **Passed**; all 5 synthetic scenarios and filters verified; no page overflow or browser errors |
 | Catalog scale regression in Odoo and browser | **Passed**; 251 labeled synthetic tracked parts, server pages of 100 warehouse rows, later-page status match and vendor filter finding the final SKU; page-scoped KPI semantics confirmed |
