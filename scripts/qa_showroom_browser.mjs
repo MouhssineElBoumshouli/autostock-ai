@@ -98,7 +98,7 @@ async function navigate(label, mobile) {
         await page.locator(".as-forecast-panel").waitFor({ state: "visible" });
         await page.locator(".as-forecast-result-head h3").waitFor({ state: "visible" });
     }
-    if (label === "Stock risks") {
+    if (label === "Restock") {
         await page.locator(".as-risk-panel").waitFor({ state: "visible" });
         const riskSelector = await page.evaluate(() => window.innerWidth <= 1100)
             ? ".as-risk-mobile-card[data-risk-key]"
@@ -158,6 +158,13 @@ try {
     await page.locator(".as-kpis").waitFor({ timeout: 30000 });
     await page.locator(".as-sidebar-status.is-connected").waitFor({ timeout: 30000 });
     await page.locator(".as-demo-environment").waitFor({ state: "visible" });
+    await page.locator(".as-overview-actions").waitFor({ state: "visible" });
+    assert.equal(await page.locator(".as-risk-panel").isVisible(), false,
+        "Detailed risk table must not clutter the Dashboard view.");
+    assert.equal(await page.locator(".as-table-panel").isVisible(), false,
+        "The full inventory table must be in Inventory, not dumped on the Dashboard.");
+    assert(await page.locator(".as-panels").isVisible(),
+        "The Dashboard must retain a real forecast chart preview and stock health.");
     assert.match(await page.locator(".as-demo-environment").getAttribute("title"), /Fictional/);
     assert((await page.locator(".as-table-panel tbody tr").count()) >= 10,
         "Live Odoo inventory table did not show the populated showroom.");
@@ -206,6 +213,9 @@ try {
         await page.locator(".as-page-scroll").evaluate((element) => { element.scrollTop = 0; });
         await page.waitForTimeout(150);
         await assertNoOverflow(`${viewport.name} dashboard`);
+        await page.locator(".as-overview-actions").waitFor({ state: "visible" });
+        assert.equal(await page.locator(".as-risk-panel").isVisible(), false,
+            "Dashboard unexpectedly showed the detailed Restock table.");
         await takeScreenshot(`showroom-dashboard-${viewport.name}.jpg`);
 
         if (viewport.name === "desktop") {
@@ -225,6 +235,10 @@ try {
         }
 
         await navigate("Forecasts", viewport.mobile);
+        assert.equal(await page.locator(".as-kpis").isVisible(), false,
+            "Forecasts should be its own screen, without Dashboard KPIs.");
+        assert.equal(await page.locator(".as-risk-panel").isVisible(), false,
+            "Forecasts unexpectedly displayed the Restock table.");
         const selectedForecast = await page.locator(".as-forecast-result-head h3").innerText();
         assert(selectedForecast.includes("AT-FLT-001") && selectedForecast.includes("30 day"),
             `${viewport.name} did not open the stored real-history demo forecast: ${selectedForecast}`);
@@ -255,7 +269,11 @@ try {
         await takeScreenshot(`showroom-forecast-evidence-${viewport.name}.jpg`);
         await page.locator(".as-forecast-details summary").click();
 
-        await navigate("Stock risks", viewport.mobile);
+        await navigate("Restock", viewport.mobile);
+        assert.equal(await page.locator(".as-panels").isVisible(), false,
+            "Restock unexpectedly displayed the complete forecasting page.");
+        assert.equal((await page.locator(".as-appbar-context strong").innerText()).trim(), "Restock",
+            "Breadcrumb should identify the selected Restock view.");
         const warehouseFilter = page.getByTestId("risk-warehouse-filter");
         const centralOption = await warehouseFilter.locator("option").evaluateAll((optionsInSelect) => {
             const match = optionsInSelect.find((option) => option.textContent.includes("Atlas Central Warehouse"));
