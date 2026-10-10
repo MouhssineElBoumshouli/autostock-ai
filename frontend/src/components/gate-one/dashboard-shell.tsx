@@ -78,6 +78,7 @@ function NavigationItems({
           type="button"
           aria-current={activeSection === section ? 'page' : undefined}
           key={label}
+          title={label}
           onClick={() => { onNavigate(section); onAfterNavigate?.() }}
         >
           <Icon size={18} strokeWidth={1.85} aria-hidden="true" />
