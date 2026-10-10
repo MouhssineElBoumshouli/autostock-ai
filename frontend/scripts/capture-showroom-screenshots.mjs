@@ -47,7 +47,7 @@ page.on('response', (response) => {
 try {
   await page.goto(frontendUrl, { waitUntil: 'domcontentloaded' })
   const loginTitle = page.getByRole('heading', { name: 'Welcome back' })
-  const dashboardTitle = page.getByRole('heading', { name: 'Your inventory at a glance' })
+  const dashboardTitle = page.getByRole('heading', { name: 'Dashboard' })
   const initialScreen = await Promise.race([
     loginTitle.waitFor({ state: 'visible', timeout: 60_000 }).then(() => 'login'),
     dashboardTitle.waitFor({ state: 'visible', timeout: 60_000 }).then(() => 'dashboard'),
@@ -62,7 +62,7 @@ try {
   await page.locator('.kpi-card').first().waitFor()
   await page.locator('.chart-area svg').waitFor({ timeout: 45_000 })
   await page.locator('.health-chart-wrap svg').waitFor({ timeout: 45_000 })
-  await page.locator('.alert-item').first().waitFor({ timeout: 45_000 })
+  await page.locator('.reorder-row').first().waitFor({ timeout: 45_000 })
   if (!await page.getByText('Demo environment', { exact: false }).first().isVisible().catch(() => false)) {
     throw new Error('The signed-in company is not marked as a demo environment; no screenshot was written.')
   }
@@ -93,12 +93,12 @@ try {
         svgWidth,
         containerWidth,
         kpis: Array.from(document.querySelectorAll('.kpi-card .kpi-value'), (node) => node.textContent?.trim() ?? ''),
-        restockAlerts: document.querySelectorAll('.alert-item').length,
+        restockAlerts: document.querySelectorAll('.reorder-row').length,
       }
     })
     if (layout.pageWidth > viewport.width) throw new Error(`Dashboard overflows horizontally at ${viewport.width}px.`)
     if (layout.svgWidth < layout.containerWidth - 4) throw new Error(`Forecast plot is narrower than its container at ${viewport.width}px.`)
-    if (layout.kpis.length !== 4) throw new Error(`Expected four live KPI cards at ${viewport.width}px.`)
+    if (layout.kpis.length !== 5) throw new Error(`Expected five live KPI cards at ${viewport.width}px.`)
     const file = path.join(outputDirectory, `dashboard-${viewport.name}.png`)
     await page.screenshot({ path: file, fullPage: true, animations: 'disabled' })
     evidence.push({ viewport: viewport.width, chartWidth: Math.round(layout.svgWidth), kpis: layout.kpis, restockAlerts: layout.restockAlerts, file: path.basename(file) })
@@ -123,14 +123,14 @@ try {
       })
       await warehousePicker.selectOption(warehouseId)
       if (!(await filteredResponse).ok()) throw new Error('The selected company warehouse filter failed.')
-      await page.locator('.alert-item').first().waitFor({ timeout: 20_000 })
-      const alertWarehouses = await page.locator('.alert-item .alert-location .alert-meta-value').allTextContents()
+      await page.locator('.reorder-row').first().waitFor({ timeout: 20_000 })
+      const alertWarehouses = await page.locator('.reorder-row .reorder-warehouse').allTextContents()
       if (!alertWarehouses.length || alertWarehouses.some((name) => !name.includes(warehouseName))) {
         throw new Error('The restock preview included an item outside the selected showroom warehouse.')
       }
       await warehousePicker.selectOption('')
-      await page.waitForFunction((count) => document.querySelectorAll('.alert-item').length === count, evidence[0].restockAlerts)
-      if (await page.locator('.alert-item').count() !== evidence[0].restockAlerts) {
+      await page.waitForFunction((count) => document.querySelectorAll('.reorder-row').length === count, evidence[0].restockAlerts)
+      if (await page.locator('.reorder-row').count() !== evidence[0].restockAlerts) {
         throw new Error('The all-warehouses preview did not restore its original results.')
       }
     }
