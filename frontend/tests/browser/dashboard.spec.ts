@@ -92,6 +92,38 @@ test('Ctrl/Cmd+K searches fixture product metadata and opens a keyboard-selected
   expectClean(signals)
 })
 
+
+test('search dialog stays fully inside the viewport even after page scrolling', async ({ page }) => {
+  const signals = observePage(page)
+  await page.setViewportSize({ width: 1440, height: 800 })
+  await page.goto('/')
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+  await page.keyboard.press('Control+k')
+  const dialog = page.getByRole('dialog', { name: 'Search AutoStock' })
+  await expect(dialog).toBeVisible()
+  const box = await dialog.boundingBox()
+  if (!box) throw new Error('Search dialog has no layout box')
+  expect(box.y).toBeGreaterThanOrEqual(8)
+  expect(box.y + box.height).toBeLessThanOrEqual(792)
+  expectClean(signals)
+})
+
+test('collapsed sidebar keeps the brand and expand control separate and discoverable', async ({ page }) => {
+  const signals = observePage(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  await page.getByRole('button', { name: /Collapse navigation/ }).click()
+  const brand = page.locator('.sidebar-rail .brand-symbol')
+  const toggle = page.getByRole('button', { name: /Expand navigation/ })
+  const brandBox = await brand.boundingBox()
+  const toggleBox = await toggle.boundingBox()
+  if (!brandBox || !toggleBox) throw new Error('Collapsed navigation controls are not laid out')
+  const overlap = !(toggleBox.x >= brandBox.x + brandBox.width || toggleBox.x + toggleBox.width <= brandBox.x || toggleBox.y >= brandBox.y + brandBox.height || toggleBox.y + toggleBox.height <= brandBox.y)
+  expect(overlap).toBe(false)
+  await expect(page.getByRole('button', { name: 'Dashboard' })).toHaveAttribute('title', 'Dashboard')
+  expectClean(signals)
+})
+
 test('forecast product and horizon controls update the chart and expose hover and keyboard details', async ({ page }) => {
   const signals = observePage(page)
   await page.setViewportSize({ width: 1024, height: 820 })
