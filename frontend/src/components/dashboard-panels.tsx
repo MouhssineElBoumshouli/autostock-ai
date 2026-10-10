@@ -251,7 +251,7 @@ export function RestockPanel({ data, warehouseId, onWarehouseChange }: {
                   <RiskStatusIcon status={item.status} />
                   <div><strong>{item.name}</strong><span>{item.sku}</span></div>
                 </div>
-                <div className="reorder-cell"><span className="mobile-field-label">Warehouse</span>{item.warehouse}</div>
+                <div className="reorder-cell reorder-warehouse"><span className="mobile-field-label">Warehouse</span>{item.warehouse}</div>
                 <div className="reorder-cell reorder-supplier"><span className="mobile-field-label">Supplier</span>{item.supplier_name || 'Not listed'}</div>
                 <div className="reorder-cell numeric"><span className="mobile-field-label">On hand</span>{formatQuantity(item.current_qty)} {item.uom}</div>
                 <div className="reorder-cell recommendation-cell"><span className="mobile-field-label">Suggested</span>{item.recommended_qty !== false ? <strong>{formatQuantity(item.recommended_qty)} {item.uom}</strong> : 'Review policy'}</div>
