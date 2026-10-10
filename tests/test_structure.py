@@ -58,7 +58,8 @@ def test_dashboard_full_history_company_switch_and_status_are_truthful():
     assert "this.state.chartWindowDays = 30" in javascript
     assert "this.state.filters.warehouseId = \"\"" in javascript
     assert "this.state.filters.horizon = \"30\"" in javascript
-    assert "<strong>Dashboard</strong>" in xml
+    assert 't-esc="activeSectionLabel"' in xml
+    assert 'risks: "Stock risks"' in javascript
     assert "aria-live=\"polite\"" in xml
     assert "Odoo connection unavailable" in xml
     assert "Connected to Odoo" in xml

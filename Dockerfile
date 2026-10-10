@@ -8,7 +8,7 @@ RUN mkdir -p /opt/autostock-ai/ml \
         -r /tmp/autostock-ai-runtime-requirements.txt \
     && rm /tmp/autostock-ai-runtime-requirements.txt
 
-COPY ml/__init__.py ml/forecast.py ml/synthetic.py /opt/autostock-ai/ml/
+COPY ml/__init__.py ml/forecast.py ml/synthetic.py ml/inventory_risk.py /opt/autostock-ai/ml/
 
 ENV PYTHONPATH="/opt/autostock-ai/python:/opt/autostock-ai"
 

@@ -15,12 +15,15 @@ Built as a new project concept for Bounaim Auto, separate from SmartImport. This
 - Automotive product metadata: OEM reference, priority, safety stock, planning lead time, enable/disable tracking.
 - Read-only **Owl dashboard** based on Odoo stock, with four KPI cards, inventory health summary, and product table.
 - Odoo demand forecasts for 7, 30, or 60 days from a bounded history of completed customer deliveries and linked returns, with provenance, baseline metrics, explicit assumptions, and review status.
+- Read-only stock-risk and reorder guidance scoped to the active company and warehouse, using Odoo on-hand/reservations/open moves, native reordering rules and multiples, supplier lead times and explicitly maintained MOQ terms, and only fresh, fully evaluated, manager-reviewed exact-scope forecasts.
 - A scheduled worker evaluates queued forecasts; browser requests do not train models. Standard Odoo access rules and active-company scope apply.
 - A labeled synthetic demo that is isolated from Odoo sale, stock, and supplier records.
 - Offline **scikit-learn demand forecasting**, chronological holdout evaluation, trailing-mean / seasonal-naive / Croston SBA baselines, and clearly labeled heuristic ranges.
 - Python and Odoo integration tests, an isolated PostgreSQL 16 + Odoo 19 GitHub Actions job, and project/QA documentation.
 
-**Not implemented:** stockout-risk recommendations, reorder quantities, report generator, assistant, simulator, budget optimizer, full mockup-matching visual polish, production deployment, and comprehensive security review. Forecast demand is fulfilled-sales history, so stockouts can censor demand. The model and heuristic ranges have not been calibrated against approved business data.
+The Phase 3A recommendation screen is read-only. It does not create RFQs, purchase orders, or stock moves. When a reliable real forecast is absent, the screen either shows an explicitly labeled Odoo-policy baseline that excludes demand not yet recorded in Odoo, or withholds a numeric quantity when policy, permission, or source data is missing. Synthetic chart forecasts never feed real inventory guidance. Vendor price-break quantity and the separate AutoStock supplier MOQ are not treated as interchangeable. The [Phase 3A QA report](docs/qa/phase3a-risk-replenishment.md) records the integration, calculation, browser and visual checks.
+
+**Not implemented:** budget optimizer, what-if simulator, report generator, assistant, complete mockup-matching visual polish, production deployment, and comprehensive security review. Forecast demand is fulfilled-sales history, so stockouts can censor demand. A single chronological holdout and heuristic ranges do not establish calibrated real-world accuracy. AutoStock AI is not described as production-ready until the commercial release requirements have been completed and independently verified.
 
 ## Start Odoo on Windows (Docker Desktop + WSL2)
 
@@ -56,7 +59,7 @@ For the Odoo flow, install the addon, configure the earliest date with verified 
 
 1. **Foundation:** Odoo project setup, read-only inventory dashboard, product metadata, offline ML experiment, tests, design/spec. Validated in PR #1.
 2. **Data & ML:** completed delivery/return aggregation, provenance, chronological baseline evaluation, permission-aware forecast storage, scheduled worker, forecast chart, and synthetic demo. Implemented in Phase 2; see the [QA report](docs/qa/phase2-demand-forecast.md) for evidence and limitations.
-3. **Decision tools:** stockout risk, human-approved replenishment quantities, constraint-based budget optimizer, what-if simulation.
+3. **Decision tools:** stockout-risk analysis and read-only, human-reviewable reorder guidance delivered in Phase 3A; constraint-based budget optimizer and what-if simulation remain later milestones.
 4. **AI explanations & reports:** controlled read-only natural-language queries; print-quality PDF management report with executive summary, evidence, tables, forecasts, assumptions, and a technical appendix.
 5. **Experience & release quality:** implement the full approved design consistently throughout Odoo; keyboard/mobile/accessibility checks, end-to-end tests, backup and operational documentation.
 

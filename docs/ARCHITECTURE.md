@@ -7,7 +7,8 @@ Odoo 19 Community
   │    ├─ product metadata and read-only inventory dashboard
   │    ├─ validated forecast request and source snapshot
   │    ├─ forecast run, daily observations, forecast points, review metadata
-  │    └─ bounded scheduled worker using the shared Python forecaster
+  │    ├─ bounded scheduled worker using the shared Python forecaster
+  │    └─ company/warehouse-scoped, read-only inventory-risk analysis and reorder guidance
   └─ standard Odoo ACLs, record rules, active company and warehouse scope
 
 Offline laboratory
@@ -27,6 +28,17 @@ Commercial readiness and premium UX are continuous requirements, tracked in [iss
 4. The UI distinguishes physical on-hand stock and Odoo's `virtual_available` projection from demand forecast output.
 
 No unrestricted SQL or `sudo()` is used to read business data. Odoo ACLs and record rules remain in force.
+
+## Phase 3A stock-risk analysis and reorder guidance
+
+1. The dashboard calls `autostock.inventory.risk.get_risk_data` through the authenticated Odoo ORM. The service requires inventory access, narrows the environment to the active company, and validates any selected warehouse against that company.
+2. Tracked products are limited to shared products and products owned by the active company. Stock quantities are read with Odoo's warehouse/location and receipt-date context; inventory reservations are shown separately and are not subtracted a second time from `virtual_available`.
+3. Odoo reordering rules supply the trigger, target, location and replenishment multiple. Multiple rules for one product/warehouse, unreadable rules, missing triggers/targets, invalid policy and bounded lookups withhold numeric advice.
+4. A selected active vendor term supplies lead time; otherwise the product planning assumption is labeled and used. `product.supplierinfo.min_qty` remains a native price break; a separate AutoStock MOQ field is used as the contractual minimum. Both MOQ and the native replenishment multiple are converted to the product inventory unit before round-up.
+5. Only completed, real, manager-reviewed forecasts can add demand through the vendor lead-time window. Company, product and warehouse must match exactly; source and history must be fresh; the complete daily horizon must exist; and the holdout evaluation must cover the full forecast horizon. Synthetic runs, stale results, partial history and unsupported evaluations are excluded with a stated reason.
+6. Odoo's projected stock already includes confirmed outgoing stock moves. The service reconciles future sale-linked outbound quantities and subtracts only forecast demand not already represented in those moves. If required access or bounded data is unavailable, the numeric recommendation is withheld or falls back to explicitly labeled visible Odoo policy only.
+
+The result is read-only planning evidence. Phase 3A does not create purchase quotations, purchase orders, supplier commitments, stock moves or quants. It never presents a forecast as guaranteed accuracy. See the [Phase 3A QA report](qa/phase3a-risk-replenishment.md) for test and browser evidence.
 
 ## Forecast request and data source
 
@@ -53,10 +65,10 @@ The scheduled worker uses the same forecasting code as the offline lab. The requ
 
 The synthetic demo creates a forecast run with `source_type=synthetic_demo`, no Odoo product relation, and generated daily observations. It does not read or write sale orders, stock moves, quants, or supplier records. Synthetic runs remain clearly labeled in the UI and may be deleted with the scoped ORM cleanup documented in [Phase 2 QA](qa/phase2-demand-forecast.md).
 
-## Next milestone
+## Later milestones
 
-- Stockout and slow-moving analysis that separates fulfilled-sales forecasts from Odoo's projected inventory.
-- Human-reviewed replenishment proposals with explicit lead-time, open-order, budget, and approval constraints.
+- Further decision tools, budget constraints and simulation remain outside Phase 3A and follow their own reviewed issues.
+- Phase 3A's reorder guidance remains human-reviewed and read-only until later approved purchasing work.
 - Additional real-data evaluation only after a consented dataset and evaluation protocol are approved.
 
 ## Production blockers
