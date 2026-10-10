@@ -362,7 +362,9 @@ test('restock filters and details explain actual calculation fields while remain
   await expect(page.locator('.reorder-table tbody tr')).toHaveCount(1)
   await expect(page.locator('.reorder-table tbody')).toContainText('BP-001')
 
-  await page.getByRole('button', { name: /Open restock details for Brake Pads \(Front\)/ }).click()
+  const brakeRow = page.locator('.reorder-table tbody tr').filter({ hasText: 'Brake Pads (Front)' })
+  await expect(brakeRow.locator('.row-more-button')).toHaveCount(0)
+  await brakeRow.getByRole('button', { name: 'Review' }).click()
   const drawer = page.getByRole('dialog', { name: /Brake Pads \(Front\)/ })
   await expect(drawer).toBeVisible()
   await expect(drawer.getByRole('heading', { name: 'Why this recommendation?' })).toBeVisible()
