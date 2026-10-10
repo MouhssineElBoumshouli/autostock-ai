@@ -17,7 +17,8 @@ Built as a new project concept for Bounaim Auto, separate from SmartImport. This
 - Odoo demand forecasts for 7, 30, or 60 days from a bounded history of completed customer deliveries and linked returns, with provenance, baseline metrics, explicit assumptions, and review status.
 - Read-only stock-risk and reorder guidance scoped to the active company and warehouse, using Odoo on-hand/reservations/open moves, native reordering rules and multiples, supplier lead times and explicitly maintained MOQ terms, and only fresh, fully evaluated, manager-reviewed exact-scope forecasts.
 - A scheduled worker evaluates queued forecasts; browser requests do not train models. Standard Odoo access rules and active-company scope apply.
-- A labeled synthetic demo that is isolated from Odoo sale, stock, and supplier records.
+- A separately guarded local Atlas Auto Distribution showroom database with a generated catalogue, two warehouses, fictional suppliers, and 180 days of completed Odoo sale/delivery records. Its charts and stock guidance are computed by the installed Odoo and AutoStock workflows.
+- An optional synthetic forecast sample that remains isolated from Odoo sale, stock, and supplier records.
 - Offline **scikit-learn demand forecasting**, chronological holdout evaluation, trailing-mean / seasonal-naive / Croston SBA baselines, and clearly labeled heuristic ranges.
 - Python and Odoo integration tests, an isolated PostgreSQL 16 + Odoo 19 GitHub Actions job, and project/QA documentation.
 
@@ -26,6 +27,22 @@ The Phase 3A recommendation screen is read-only. It does not create RFQs, purcha
 **Not implemented:** budget optimizer, what-if simulator, report generator, assistant, complete mockup-matching visual polish, production deployment, and comprehensive security review. Forecast demand is fulfilled-sales history, so stockouts can censor demand. A single chronological holdout and heuristic ranges do not establish calibrated real-world accuracy. AutoStock AI is not described as production-ready until the commercial release requirements have been completed and independently verified.
 
 ## Start Odoo on Windows (Docker Desktop + WSL2)
+
+### Open the populated local showroom
+
+For a ready-to-explore business scenario, use the one-command Windows setup in the [showroom guide](docs/SHOWROOM_GUIDE.md). From PowerShell in the repository folder:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start_showroom_demo.ps1
+```
+
+The script starts its own PostgreSQL 16 and Odoo 19 services on an available localhost port, creates `autostock_showroom_demo`, installs AutoStock AI, prepares the fictional business, runs the real forecast worker, and opens the login page. It leaves other Odoo containers and databases alone. Credentials are generated for this local demo and saved in the ignored `.showroom\credentials.txt` file.
+
+Every company, customer, supplier, product, stock count and sale in that showroom is fictional. Sales and deliveries are actual Odoo records in the isolated demo database; forecast metrics are calculated from that generated history and do not establish real-world accuracy.
+
+Stop the showroom and retain its data with `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start_showroom_demo.ps1 -Stop`. The optional `-Reset` switch asks you to type the exact showroom database name and removes only that database.
+
+### Start the general local development stack
 
 1. Install **Docker Desktop** and enable the WSL2 backend. Open a terminal in the project folder.
 2. Create `.env`: PowerShell `Copy-Item .env.example .env` (or bash `cp .env.example .env`). **Edit `.env` to set a strong unique POSTGRES_PASSWORD**. Do not commit this file.
@@ -63,7 +80,7 @@ For the Odoo flow, install the addon, configure the earliest date with verified 
 4. **AI explanations & reports:** controlled read-only natural-language queries; print-quality PDF management report with executive summary, evidence, tables, forecasts, assumptions, and a technical appendix.
 5. **Experience & release quality:** implement the full approved design consistently throughout Odoo; keyboard/mobile/accessibility checks, end-to-end tests, backup and operational documentation.
 
-See [CODEX_START_HERE.md](CODEX_START_HERE.md), [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md), and [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+See the [showroom walkthrough](docs/SHOWROOM_GUIDE.md), [CODEX_START_HERE.md](CODEX_START_HERE.md), [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md), and [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
 ## Source references
 

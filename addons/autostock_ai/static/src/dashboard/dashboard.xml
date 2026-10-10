@@ -49,6 +49,10 @@
                     <div class="as-appbar-company" t-if="state.forecastOptions">
                         <span class="as-company-caption">Company</span><strong t-esc="state.forecastOptions.company_name"/>
                     </div>
+                    <span t-if="state.forecastOptions &amp;&amp; state.forecastOptions.demo_environment"
+                          class="as-demo-environment" role="note"
+                          t-att-aria-label="state.forecastOptions.demo_environment_note"
+                          t-att-title="state.forecastOptions.demo_environment_note">Demo environment</span>
                 </header>
                 <div class="as-page-scroll" t-ref="dashboardScroll" t-on-scroll="updateActiveSection">
                     <div class="as-page-content">
@@ -181,8 +185,8 @@
                                     <option t-foreach="state.forecastOptions.demo_skus" t-as="sample" t-key="sample.sku" t-att-value="sample.sku" t-esc="sample.name"/>
                                 </select>
                                 <select t-else="" t-key="'odoo-products-' + state.forecastOptions.company_id" t-model="state.filters.productId" t-on-change="changeProduct" t-att-disabled="state.forecastBusy || !state.forecastOptions.products.length">
-                                    <option value="">Choose a tracked part</option>
-                                    <option t-foreach="state.forecastOptions.products" t-as="product" t-key="product.id" t-att-value="product.id" t-esc="product.sku + ' · ' + product.name"/>
+                                    <option value="" t-att-selected="!state.filters.productId">Choose a tracked part</option>
+                                    <option t-foreach="state.forecastOptions.products" t-as="product" t-key="product.id" t-att-value="product.id" t-att-selected="isSelectedProduct(product)" t-esc="product.name"/>
                                 </select>
                             </label>
                             <label t-if="state.filters.sourceType === 'completed_deliveries'" class="as-filter-field as-filter-span">

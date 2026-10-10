@@ -2,11 +2,14 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { assertDisposableQADatabase } from "./qa_phase3a_browser_guard.mjs";
+
+const baseUrl = (process.env.AUTOSTOCK_QA_URL || "http://127.0.0.1:8176").replace(/\/$/, "");
+const database = process.env.AUTOSTOCK_QA_DB || "autostock_phase3a_qa";
+assertDisposableQADatabase(database);
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
-const baseUrl = (process.env.AUTOSTOCK_QA_URL || "http://127.0.0.1:8176").replace(/\/$/, "");
-const database = process.env.AUTOSTOCK_QA_DB || "autostock_phase3a_qa";
 const login = process.env.AUTOSTOCK_QA_LOGIN;
 const password = process.env.AUTOSTOCK_QA_PASSWORD;
 const browserExecutable = process.env.AUTOSTOCK_QA_BROWSER;
@@ -69,6 +72,19 @@ async function dashboardActionId() {
     const record = payload.result?.[0];
     assert(response.ok() && record?.res_id, "Could not resolve the installed AutoStock dashboard action.");
     return record.res_id;
+}
+
+async function authenticatedDatabase() {
+    const response = await context.request.post(`${baseUrl}/web/session/get_session_info`, {
+        data: { jsonrpc: "2.0", method: "call", params: {}, id: 2 },
+    });
+    const payload = await response.json();
+    const actualDatabase = payload.result?.db;
+    assert(
+        response.ok() && actualDatabase === database,
+        `Authenticated Odoo session is using ${actualDatabase || "an unknown database"}; expected ${database}.`
+    );
+    return actualDatabase;
 }
 
 let rpcSequence = 10;
@@ -142,6 +158,7 @@ try {
     await page.locator('input[name="password"], #password').first().fill(password);
     await page.locator('form button[type="submit"]').click();
     await page.locator(".o_main_navbar").waitFor({ timeout: 30000 });
+    await authenticatedDatabase();
 
     const actionId = await dashboardActionId();
     await page.goto(`${baseUrl}/web#action=${actionId}`, { waitUntil: "domcontentloaded" });
@@ -433,14 +450,34 @@ try {
             vendorFilteredRows: supplierRiskPage.row_count,
         });
     } finally {
+        const cleanupFailures = [];
         if (scaleSupplierInfoIds.length) {
-            await callKw("product.supplierinfo", "unlink", [scaleSupplierInfoIds]);
+            try {
+                await callKw("product.supplierinfo", "unlink", [scaleSupplierInfoIds]);
+            } catch (error) {
+                cleanupFailures.push(`supplier term IDs ${scaleSupplierInfoIds.join(", ")}: ${error.message}`);
+            }
         }
         if (scaleProductIds.length) {
-            await callKw("product.template", "unlink", [scaleProductIds]);
+            try {
+                await callKw("product.template", "unlink", [scaleProductIds]);
+            } catch (error) {
+                cleanupFailures.push(`product template IDs ${scaleProductIds.join(", ")}: ${error.message}`);
+            }
         }
         if (scaleVendorId) {
-            await callKw("res.partner", "unlink", [[scaleVendorId]]);
+            try {
+                await callKw("res.partner", "unlink", [[scaleVendorId]]);
+            } catch (error) {
+                cleanupFailures.push(`vendor partner ID ${scaleVendorId}: ${error.message}`);
+            }
+        }
+        if (cleanupFailures.length) {
+            process.exitCode = 1;
+            console.error(
+                `WARNING: QA fixture cleanup was incomplete in ${database}. `
+                + `${cleanupFailures.join("; ")} Remove only these listed fixture records after signing in to ${database}.`
+            );
         }
         await page.getByRole("button", { name: "Clear filters", exact: true }).click();
         await page.waitForFunction(() => document.querySelector(".as-risk-panel")?.innerText.includes("Read-only planning guidance"));

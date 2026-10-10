@@ -852,6 +852,7 @@ class AutoStockInventoryRisk(models.AbstractModel):
             "company_id": company.id,
             "company_name": company.display_name,
             "company_logo_url": f"/web/image/res.company/{company.id}/logo_web",
+            "demo_environment": bool(company.autostock_demo_environment),
             "warehouse_id": warehouse_id or False,
             "warehouses": [
                 {"id": warehouse.id, "name": warehouse.display_name}

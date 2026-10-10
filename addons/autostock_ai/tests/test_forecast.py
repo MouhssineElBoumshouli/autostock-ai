@@ -381,10 +381,33 @@ class TestAutoStockForecast(TransactionCase):
 
         self.assertEqual(options["company_id"], self.env.company.id)
         self.assertEqual(options["company_name"], self.env.company.display_name)
+        self.assertFalse(options["demo_environment"])
+        self.assertFalse(options["demo_environment_note"])
         self.assertEqual(
             options["company_logo_url"],
             f"/web/image/res.company/{self.env.company.id}/logo_web",
         )
+
+    def test_demo_environment_indicator_is_company_scoped_and_truthful(self):
+        company_a, company_b = self.env["res.company"].create(
+            [
+                {"name": "AutoStock Demo Company", "autostock_demo_environment": True},
+                {"name": "AutoStock Business Company"},
+            ]
+        )
+        user = self._multi_company_user(company_a, company_b)
+        Forecast = self.env["autostock.forecast.run"].with_user(user).with_context(
+            allowed_company_ids=[company_a.id, company_b.id]
+        )
+
+        demo_options = Forecast.with_company(company_a).get_forecast_options()
+        business_options = Forecast.with_company(company_b).get_forecast_options()
+
+        self.assertTrue(demo_options["demo_environment"])
+        self.assertIn("Fictional", demo_options["demo_environment_note"])
+        self.assertIn("no real-world accuracy claim", demo_options["demo_environment_note"])
+        self.assertFalse(business_options["demo_environment"])
+        self.assertFalse(business_options["demo_environment_note"])
 
     def test_company_ids_keep_company_specific_forecast_options(self):
         company_a, company_b = self.env["res.company"].create(
@@ -420,6 +443,65 @@ class TestAutoStockForecast(TransactionCase):
         self.assertNotIn(warehouse_a.id, warehouses_b)
         self.assertIn(warehouse_b.id, warehouses_b)
         self.assertNotIn(warehouse_b.id, warehouses_a)
+
+    def test_demo_forecast_default_is_reviewed_real_history_in_active_company(self):
+        company = self.env["res.company"].create(
+            {"name": "AutoStock Showroom Test", "autostock_demo_environment": True}
+        )
+        warehouse = self._warehouse(company)
+        start = self.today - timedelta(days=119)
+        company.write({"autostock_history_complete_from": start})
+        warehouse.write({"autostock_history_complete_from": start})
+        product = self._product(company, f"AS-SHOWROOM-{company.id}")
+        product.write({"create_date": fields.Datetime.to_string(datetime.combine(start, time.min))})
+        for offset in (105, 60, 15):
+            _, delivery = self._sale_order(company, warehouse, product, quantity=3, state="done")
+            delivery.move_ids.write(
+                {"date": fields.Datetime.to_string(datetime.combine(start + timedelta(days=offset), time(10)))}
+            )
+
+        groups = [
+            self.env.ref("base.group_user"),
+            self.env.ref("stock.group_stock_manager"),
+            self.env.ref("sales_team.group_sale_manager"),
+        ]
+        manager = self.env["res.users"].create(
+            {
+                "name": "AutoStock Showroom Manager",
+                "login": f"autostock-showroom-{company.id}",
+                "company_id": company.id,
+                "company_ids": [Command.set([company.id])],
+                "group_ids": [Command.set([group.id for group in groups])],
+            }
+        )
+        Forecast = (
+            self.env["autostock.forecast.run"]
+            .with_user(manager)
+            .with_company(company)
+            .with_context(allowed_company_ids=[company.id])
+        )
+        self.assertFalse(Forecast.get_forecast_options()["demo_forecast"])
+
+        queued = Forecast.request_forecast(product.id, 30, start, self.today, warehouse.id)
+        run = self.env["autostock.forecast.run"].browse(queued["id"])
+        run._process_queued_run()
+        run.invalidate_recordset()
+        self.assertEqual(run.state, "completed", run.failure_reason)
+        run.with_user(manager).action_mark_reviewed()
+
+        Forecast.seed_synthetic_demo("DEMO-BP-001", 30, start, self.today)
+        options = Forecast.get_forecast_options()
+        self.assertEqual(
+            options["demo_forecast"],
+            {
+                "product_id": product.id,
+                "warehouse_id": warehouse.id,
+                "horizon_days": 30,
+                "history_start": start.isoformat(),
+                "history_end": self.today.isoformat(),
+            },
+        )
+        self.assertTrue(options["demo_environment"])
 
     def test_forecast_run_creation_cannot_bypass_validated_request(self):
         with self.assertRaises(AccessError):

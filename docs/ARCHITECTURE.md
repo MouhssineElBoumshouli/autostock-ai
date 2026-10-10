@@ -63,7 +63,11 @@ The scheduled worker uses the same forecasting code as the offline lab. The requ
 
 ## Synthetic demo separation and cleanup
 
-The synthetic demo creates a forecast run with `source_type=synthetic_demo`, no Odoo product relation, and generated daily observations. It does not read or write sale orders, stock moves, quants, or supplier records. Synthetic runs remain clearly labeled in the UI and may be deleted with the scoped ORM cleanup documented in [Phase 2 QA](qa/phase2-demand-forecast.md).
+The forecast screen's optional synthetic mode creates a run with `source_type=synthetic_demo`, no Odoo product relation, and generated daily observations. It does not read or write sale orders, stock moves, quants, or supplier records. Synthetic runs remain clearly labeled in the UI and may be deleted with the scoped ORM cleanup documented in [Phase 2 QA](qa/phase2-demand-forecast.md).
+
+Phase 3A.5 also provides a distinct, local-only **showroom database** (`autostock_showroom_demo`). Its company, products, suppliers, stock counts, customers, sale orders and completed deliveries are fictional records stored in that separate Odoo database. Sale orders are confirmed and deliveries are completed through Odoo; AutoStock then uses its existing validated request, worker, evaluation and manager-review paths. Reorder guidance reads the resulting Odoo stock, policy, supplier and eligible reviewed-forecast records. The showroom is marked on its company, and its starter uses a dedicated Compose project, PostgreSQL data volume, Odoo filestore volume, exact database filter and localhost-only port. It never copies these records into another company or database.
+
+Showroom forecasts and evaluation values are workflow examples computed from generated fulfilled-sales records. They do not establish real-world demand or model accuracy. Do not use showroom data in a live business installation. The database seeder refuses any database name except `autostock_showroom_demo`, and its repeated run is a no-op once the seed version is recorded.
 
 ## Later milestones
 

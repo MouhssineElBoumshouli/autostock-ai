@@ -50,14 +50,17 @@ def test_dashboard_full_history_company_switch_and_status_are_truthful():
 
     assert 'String(previousCompanyId) !== String(options.company_id)' in javascript
     assert "requestId !== this.forecastSnapshotRequestId" in javascript
-    assert 'this.state.filters.productId = ""' in javascript
+    assert 'this.state.filters.productId = demoForecast ? String(demoForecast.product_id) : ""' in javascript
     assert 'this.state.chartWindowDays === "full"' in javascript
     assert '? [0, Math.floor((actual.length - 1) / 2), count - 1]' in javascript
     assert 'this.state.chartWindowDays = "full"' in javascript
     assert "through ${actual.at(-1).day}" in javascript
     assert "this.state.chartWindowDays = 30" in javascript
-    assert "this.state.filters.warehouseId = \"\"" in javascript
-    assert "this.state.filters.horizon = \"30\"" in javascript
+    assert "this.state.filters.warehouseId = demoForecast?.warehouse_id" in javascript
+    assert ': "";' in javascript
+    assert 'this.state.filters.horizon = String(demoForecast?.horizon_days || 30)' in javascript
+    assert "isSelectedProduct(product)" in javascript
+    assert 't-att-selected="isSelectedProduct(product)"' in xml
     assert 't-esc="activeSectionLabel"' in xml
     assert 'risks: "Stock risks"' in javascript
     assert "aria-live=\"polite\"" in xml
@@ -89,6 +92,31 @@ def test_odoo_ci_uses_public_docker_hub_cache_mirror():
     assert "docker tag mirror.gcr.io/library/postgres:16 postgres:16" in workflow
     assert "docker pull mirror.gcr.io/library/odoo:19.0-20260926" in workflow
     assert "docker tag mirror.gcr.io/library/odoo:19.0-20260926 odoo:19.0" in workflow
+
+
+def test_showroom_fixture_refuses_every_database_except_its_isolated_demo():
+    seed = (ROOT / "scripts/seed_showroom_demo.py").read_text(encoding="utf-8")
+
+    assert 'SHOWROOM_DATABASE = "autostock_showroom_demo"' in seed
+    assert "if env.cr.dbname != SHOWROOM_DATABASE" in seed
+    assert seed.index("if env.cr.dbname != SHOWROOM_DATABASE") < seed.index(
+        'parameters = env["ir.config_parameter"]'
+    )
+
+
+def test_phase3a_browser_fixture_guard_runs_before_browser_setup_and_checks_session_database():
+    script = (ROOT / "scripts/qa_phase3a_browser.mjs").read_text(encoding="utf-8")
+    guard_call = script.index("assertDisposableQADatabase(database)")
+    playwright_load = script.index('require(process.env.PLAYWRIGHT_MODULE || "playwright")')
+    screenshot_write = script.index("await mkdir(screenshotDir")
+    login_navigation = script.index('await page.goto(`${baseUrl}/web/login?db=')
+    session_check = script.index("await authenticatedDatabase()")
+    scale_write = script.index('callKw("res.partner", "create"')
+
+    assert guard_call < playwright_load < screenshot_write < login_navigation < session_check < scale_write
+    assert 'actualDatabase === database' in script
+    assert 'web/session/get_session_info' in script
+    assert 'WARNING: QA fixture cleanup was incomplete' in script
 
 
 def test_inventory_action_allows_users_to_choose_untracked_products():

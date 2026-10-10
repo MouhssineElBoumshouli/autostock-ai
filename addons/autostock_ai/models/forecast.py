@@ -51,6 +51,17 @@ REAL_LIMITATIONS = (
 class ResCompany(models.Model):
     _inherit = "res.company"
 
+    autostock_demo_environment = fields.Boolean(
+        string="AutoStock demo environment",
+        default=False,
+        copy=False,
+        help=(
+            "Show a discreet demo indicator in AutoStock AI. Records in this company may be "
+            "fictional and generated; forecast results are workflow examples, not a claim of "
+            "real-world accuracy."
+        ),
+    )
+
     autostock_history_complete_from = fields.Date(
         string="AutoStock complete sales history from",
         help=(
@@ -377,10 +388,42 @@ class AutoStockForecastRun(models.Model):
         warehouses = self.env["stock.warehouse"].search(
             [("company_id", "=", company.id)], order="name, id", limit=100
         )
+        demo_forecast = False
+        if company.autostock_demo_environment:
+            run = self.search(
+                [
+                    ("company_id", "=", company.id),
+                    ("source_type", "=", REAL_SOURCE),
+                    ("state", "=", "completed"),
+                    ("review_status", "=", "reviewed"),
+                    ("horizon_days", "=", "30"),
+                ],
+                order="create_date desc, id desc",
+                limit=1,
+            )
+            if (
+                run
+                and run.product_id.id in products.ids
+                and (not run.warehouse_id or run.warehouse_id.id in warehouses.ids)
+            ):
+                demo_forecast = {
+                    "product_id": run.product_id.id,
+                    "warehouse_id": run.warehouse_id.id or False,
+                    "horizon_days": int(run.horizon_days),
+                    "history_start": run.history_start_date.isoformat(),
+                    "history_end": run.history_end_date.isoformat(),
+                }
         return {
             "company_id": company.id,
             "company_name": company.display_name,
             "company_logo_url": f"/web/image/res.company/{company.id}/logo_web",
+            "demo_environment": bool(company.autostock_demo_environment),
+            "demo_environment_note": (
+                _("Fictional business records and generated forecast examples; no real-world accuracy claim.")
+                if company.autostock_demo_environment
+                else False
+            ),
+            "demo_forecast": demo_forecast,
             "today_utc": fields.Date.today().isoformat(),
             "coverage_start": company.autostock_history_complete_from.isoformat()
             if company.autostock_history_complete_from

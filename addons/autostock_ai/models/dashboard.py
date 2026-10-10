@@ -69,6 +69,9 @@ class AutoStockDashboard(models.AbstractModel):
                 })
 
         return {
+            "company_id": company.id,
+            "company_name": company.display_name,
+            "demo_environment": bool(company.autostock_demo_environment),
             "kpis": {"total": len(products), **counts},
             "rows": rows,
             "total_tracked": total_tracked,

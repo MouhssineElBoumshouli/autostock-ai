@@ -109,16 +109,25 @@ export class AutoStockDashboard extends Component {
             this.state.data = data;
             this.state.forecastOptions = options;
             if (companyChanged) {
+                const demoForecast = options.demo_environment ? options.demo_forecast : false;
                 this.state.forecast = null;
                 this.state.forecastError = null;
                 this.state.forecastNotice = null;
                 this.state.chartWindowDays = 30;
-                this.state.filters.sourceType = DEMO_SOURCE;
-                this.state.filters.productId = "";
-                this.state.filters.sku = options.demo_skus[0]?.sku || "DEMO-BP-001";
-                this.state.filters.warehouseId = "";
-                this.state.filters.horizon = "30";
+                this.state.filters.sourceType = demoForecast ? REAL_SOURCE : DEMO_SOURCE;
+                this.state.filters.productId = demoForecast ? String(demoForecast.product_id) : "";
+                this.state.filters.sku = demoForecast
+                    ? ""
+                    : (options.demo_skus[0]?.sku || "DEMO-BP-001");
+                this.state.filters.warehouseId = demoForecast?.warehouse_id
+                    ? String(demoForecast.warehouse_id)
+                    : "";
+                this.state.filters.horizon = String(demoForecast?.horizon_days || 30);
                 this.resetHistoryRange();
+                if (demoForecast) {
+                    this.state.filters.historyStart = demoForecast.history_start;
+                    this.state.filters.historyEnd = demoForecast.history_end;
+                }
                 this.state.riskData = null;
                 this.state.riskWarehouseId = "";
                 this.state.riskSupplierId = "";
@@ -296,6 +305,10 @@ export class AutoStockDashboard extends Component {
         return this.state.forecastOptions?.products.find(
             (product) => String(product.id) === String(this.state.filters.productId)
         );
+    }
+
+    isSelectedProduct(product) {
+        return this.selectedProduct?.id === product.id;
     }
 
     get selectedWarehouse() {

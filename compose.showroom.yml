@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${SHOWROOM_POSTGRES_USER:?Showroom PostgreSQL user is required}
+      POSTGRES_PASSWORD: ${SHOWROOM_POSTGRES_PASSWORD:?Showroom PostgreSQL password is required}
+      POSTGRES_DB: postgres
+    volumes:
+      - showroom_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  odoo:
+    image: autostock-ai-showroom:19.0
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${AUTOSTOCK_SHOWROOM_PORT:-8177}:8069"
+    environment:
+      HOST: db
+      USER: ${SHOWROOM_POSTGRES_USER:?Showroom PostgreSQL user is required}
+      PASSWORD: ${SHOWROOM_POSTGRES_PASSWORD:?Showroom PostgreSQL password is required}
+      AUTOSTOCK_SHOWROOM_ADMIN_PASSWORD: ${SHOWROOM_ADMIN_PASSWORD:?Showroom login password is required}
+    volumes:
+      - showroom_odoo_data:/var/lib/odoo
+      - ./addons:/mnt/extra-addons:ro
+      - ./scripts:/mnt/autostock-ai-scripts:ro
+      - ./.showroom/odoo.conf:/etc/odoo/odoo.conf:ro
+    command: ["--config=/etc/odoo/odoo.conf"]
+
+volumes:
+  showroom_postgres_data:
+    name: autostock_ai_showroom_postgres
+  showroom_odoo_data:
+    name: autostock_ai_showroom_filestore
