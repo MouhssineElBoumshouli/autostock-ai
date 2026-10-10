@@ -167,8 +167,11 @@ function ForecastPlot({ name, horizon, unit, chart }: { name: string; horizon: F
     chart.actual.length <= 1 ? 400 : index * (400 / (chart.actual.length - 1)), value, chart.yMaximum,
   ))
   const expectedCoordinates = chart.expected.map((value, index) => coordinate(
-    chart.expected.length <= 1 ? 400 : 400 + index * (300 / (chart.expected.length - 1)), value, chart.yMaximum,
+    400 + ((index + 1) * 300 / Math.max(1, chart.expected.length)), value, chart.yMaximum,
   ))
+  const forecastPathCoordinates = actualCoordinates.length
+    ? [actualCoordinates[actualCoordinates.length - 1], ...expectedCoordinates]
+    : expectedCoordinates
   const points = [
     ...actualCoordinates.map((point, index) => ({ ...point, label: chart.xLabels[index] ?? '', value: chart.actual[index], expected: false as const })),
     ...expectedCoordinates.map((point, index) => ({ ...point, label: chart.xLabels[chart.actual.length + index] ?? '', value: chart.expected[index], expected: true as const, range: { low: chart.lowerRange[index], high: chart.upperRange[index] } })),
@@ -220,8 +223,9 @@ function ForecastPlot({ name, horizon, unit, chart }: { name: string; horizon: F
             {Array.from({ length: 8 }, (_, index) => index * 100).map((x) => <line key={`v-${x}`} x1={x} x2={x} y1="4" y2="156" className="chart-grid-line chart-grid-vertical" />)}
             {chart.upperRange.length > 0 && <path d={confidencePath(chart)} fill="url(#forecast-confidence)" />}
             <line x1="400" x2="400" y1="4" y2="156" className="forecast-cutoff" />
+            <text x="408" y="14" className="forecast-cutoff-label">Forecast starts</text>
             <path d={smoothPath(actualCoordinates)} className="history-line" />
-            <path d={smoothPath(expectedCoordinates)} className="forecast-line" />
+            <path data-testid="forecast-line" d={smoothPath(forecastPathCoordinates)} className="forecast-line" />
             {actualCoordinates.map((point, index) => <circle key={`actual-${index}`} cx={point.x} cy={point.y} r={index === actualCoordinates.length - 1 ? 4.5 : 3.2} className="history-dot" />)}
             {expectedCoordinates.map((point, index) => <circle key={`forecast-${index}`} cx={point.x} cy={point.y} r="3.4" className="forecast-dot" />)}
             {current && <line x1={current.x} x2={current.x} y1="4" y2="156" className="chart-active-guide" />}
