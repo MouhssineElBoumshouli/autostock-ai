@@ -14,6 +14,10 @@ You are working on an Odoo 19 Community custom addon for an automotive company. 
 8. Report generation must be exceptional: plain-language summary PLUS detailed tables, charts, evidence, assumptions and technical appendix. No invented numbers.
 9. Do not assert Odoo integration works until it is actually installed and exercised in a real Odoo 19 runtime. Distinguish static tests, Odoo integration tests, and browser QA.
 
+## Current frontend direction
+
+New screens use the React 19 + TypeScript client in `frontend/` and authenticated, purpose-built controllers under `/autostock/api/v1/`. Reuse the existing Odoo services for business calculations, preserve session cookies, ACLs, company and warehouse scopes, and follow `docs/FRONTEND_ARCHITECTURE.md`. The old Owl dashboard is retained unchanged during review; do not extend or redesign it for new screens.
+
 ## First coding assignment
 
 **Review and harden the current foundation before adding more features.**
@@ -21,8 +25,8 @@ You are working on an Odoo 19 Community custom addon for an automotive company. 
 - Run `python -m pytest -q` and `python -m compileall -q addons ml scripts tests`.
 - Start `docker compose up -d`, create a demo Odoo 19 database, install the custom AutoStock addon and fix actual install/import/view/asset errors. No fake test statuses.
 - Verify correct product access permissions, company isolation, correct stock metrics and safe behavior with zero tracked products, one product, large catalog and user with no inventory rights.
-- Check Odoo 19 field naming/API for the product model, inherited view and embedded Owl client action; fix mismatches.
-- Compare the initial implemented dashboard with the concept image, improve consistent typography, spacing, real charts and responsive behavior without pretending AI is integrated.
+- Check Odoo 19 field naming/API for the product model and addon controllers; fix mismatches.
+- Compare the React dashboard with the concept image, keep data Odoo-backed, and verify typography, spacing, charts, responsive behavior and accessibility without pretending AI is integrated.
 - Capture desktop/mobile screenshots, write a concise QA report, and open a DRAFT PR. Do not merge.
 
 ## Next assignment after review

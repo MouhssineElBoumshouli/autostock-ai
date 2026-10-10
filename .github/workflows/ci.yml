@@ -36,6 +36,47 @@ jobs:
           python scripts/generate_synthetic_sales.py
           python -m ml.evaluate ml/output/synthetic_daily_sales.csv --days 30 --output "$RUNNER_TEMP/forecast.json"
 
+  frontend:
+    name: React frontend checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Typecheck frontend
+        run: npm run typecheck
+
+      - name: Run frontend unit tests
+        run: npm run test:unit
+
+      - name: Run Odoo API contract tests
+        run: npm run test:contract
+
+      - name: Install Chromium for browser tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Run responsive browser tests
+        run: npm run test:browser
+
+      - name: Build production frontend
+        run: npm run build
+
   odoo-integration:
     name: Odoo 19 integration tests
     runs-on: ubuntu-latest

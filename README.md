@@ -13,13 +13,15 @@ Built as a new project concept for Bounaim Auto, separate from SmartImport. This
 - Local-only Docker Compose Odoo 19 + PostgreSQL environment.
 - Custom installable Odoo module `autostock_ai`, separate from Odoo core.
 - Automotive product metadata: OEM reference, priority, safety stock, planning lead time, enable/disable tracking.
-- Read-only **Owl dashboard** based on Odoo stock, with four KPI cards, inventory health summary, and product table.
+- React 19 + TypeScript frontend foundation under `frontend/`, with a new Odoo-backed Dashboard, company-aware product search, forecast preview, inventory health, and read-only restock preview. The old Owl dashboard remains unchanged while the replacement is reviewed; new screens will use the React client.
 - Odoo demand forecasts for 7, 30, or 60 days from a bounded history of completed customer deliveries and linked returns, with provenance, baseline metrics, explicit assumptions, and review status.
 - Read-only stock-risk and reorder guidance scoped to the active company and warehouse, using Odoo on-hand/reservations/open moves, native reordering rules and multiples, supplier lead times and explicitly maintained MOQ terms, and only fresh, fully evaluated, manager-reviewed exact-scope forecasts.
 - A scheduled worker evaluates queued forecasts; browser requests do not train models. Standard Odoo access rules and active-company scope apply.
 - A labeled synthetic demo that is isolated from Odoo sale, stock, and supplier records.
 - Offline **scikit-learn demand forecasting**, chronological holdout evaluation, trailing-mean / seasonal-naive / Croston SBA baselines, and clearly labeled heuristic ranges.
 - Python and Odoo integration tests, an isolated PostgreSQL 16 + Odoo 19 GitHub Actions job, and project/QA documentation.
+
+The React interface's first milestone intentionally contains the Dashboard only. It is backed by authenticated routes under `/autostock/api/v1/` and reuses Odoo's inventory, forecast, and risk services. See [frontend architecture](docs/FRONTEND_ARCHITECTURE.md) and the [React dashboard QA report](docs/qa/react-dashboard-foundation.md).
 
 The Phase 3A recommendation screen is read-only. It does not create RFQs, purchase orders, or stock moves. When a reliable real forecast is absent, the screen either shows an explicitly labeled Odoo-policy baseline that excludes demand not yet recorded in Odoo, or withholds a numeric quantity when policy, permission, or source data is missing. Synthetic chart forecasts never feed real inventory guidance. Vendor price-break quantity and the separate AutoStock supplier MOQ are not treated as interchangeable. The [Phase 3A QA report](docs/qa/phase3a-risk-replenishment.md) records the integration, calculation, browser and visual checks.
 
