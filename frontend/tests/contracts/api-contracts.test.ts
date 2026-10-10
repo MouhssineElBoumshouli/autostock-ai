@@ -64,10 +64,24 @@ describe('Odoo v1 API contracts', () => {
       summary: { priority_locations: 1, reorder_suggestions: 1, complete: true },
       items: [{
         key: 'part-1', product_id: 1, template_id: 1, name: 'Ignition Coil', sku: 'AT-01-003',
+        reference: '', category: 'Ignition',
         warehouse_id: 1, warehouse: 'Central warehouse', status: 'out', status_label: 'Out of stock',
-        current_qty: 0, uom: 'Units', recommended_qty: 10, supplier_name: 'Fixture supplier',
+        current_qty: 0, free_qty: 0, reserved_qty: 0, incoming_qty: 0, outgoing_qty: 0,
+        projected_qty: 0, projected_after_demand: 0, forecast_demand: false, forecast_used: false,
+        forecast_reason: 'No reviewed forecast is available.', forecast_horizon_days: false,
+        forecast_review_status: false, uom: 'Units', recommended_qty: 10, reorder_needed: true,
+        supplier_name: 'Supplier', supplier: false, supplier_access_note: false,
         reason: 'No stock is on hand at this warehouse.', basis_note: 'Odoo restock policy.',
+        lead_time_days: 0, lead_time_source: 'unavailable', lead_time_label: 'Not provided',
+        minimum_threshold: false, target_stock: false, policy_source: 'none',
+        policy_source_label: 'No reorder policy', policy_issue: 'Policy missing',
+        calculation_basis: 'No reliable quantity calculated.',
       }],
+      insights: [
+        { id: 'reorder-suggestions', title: 'Reorder suggestions', description: '1 part location has a suggested order ready for review.', icon: 'reorder', action: 'view-reorder', action_label: 'View top 5' },
+        { id: 'stock-review', title: 'Part locations to review', description: '1 part location needs review.', icon: 'trend', action: 'review-parts', action_label: 'Review parts' },
+        { id: 'out-of-stock', title: 'Warehouse stockouts', description: '1 part location currently has zero stock.', icon: 'vehicle', action: 'view-reorder', action_label: 'View top 5' },
+      ],
       coverage: { complete: true, scanned_locations: 1, candidate_locations: 1, scan_limit: 500, flags: {} },
     })
     expect(parsed.items[0]).toMatchObject({ name: 'Ignition Coil', sku: 'AT-01-003' })
@@ -81,6 +95,8 @@ describe('Odoo v1 API contracts', () => {
       status: 'unavailable',
       reason_code: 'no_evaluated_forecast',
       message: 'No completed forecast is available.',
+      options: [],
+      options_limited: false,
       forecast: false,
     })
     expect(parsed.success).toBe(true)

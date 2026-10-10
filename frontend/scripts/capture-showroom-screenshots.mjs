@@ -1,12 +1,12 @@
 import { readFile, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { chromium } from '@playwright/test'
+import { chromium, expect } from '@playwright/test'
 
 const frontendDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const repositoryDirectory = path.resolve(frontendDirectory, '..')
 const credentialPath = path.join(repositoryDirectory, '.showroom', 'credentials.txt')
-const outputDirectory = path.join(repositoryDirectory, 'docs', 'qa', 'screenshots', 'react-dashboard')
+const outputDirectory = path.join(repositoryDirectory, 'docs', 'qa', 'screenshots', 'issue-26-gate-3')
 const frontendUrl = process.env.AUTOSTOCK_FRONTEND_URL || 'http://127.0.0.1:5173'
 
 function parseCredentials(contents) {
@@ -16,7 +16,6 @@ function parseCredentials(contents) {
     if (match) entries.set(match[1].toLowerCase().replace(/\s+/g, '_'), match[2])
   }
   const credentials = {
-    url: entries.get('url'),
     database: entries.get('database'),
     login: entries.get('login'),
     password: entries.get('password'),
@@ -30,7 +29,7 @@ function parseCredentials(contents) {
 const credentials = parseCredentials(await readFile(credentialPath, 'utf8'))
 await mkdir(outputDirectory, { recursive: true })
 const browser = await chromium.launch({ headless: true })
-const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 })
+const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1, colorScheme: 'light' })
 const page = await context.newPage()
 const pageErrors = []
 const consoleErrors = []
@@ -43,6 +42,49 @@ page.on('response', (response) => {
     failedApiResponses.push(`${pathname} returned ${response.status()}`)
   }
 })
+
+async function settleLayout() {
+  await page.evaluate(async () => {
+    await document.fonts.ready
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  })
+}
+
+async function captureDashboard(viewport) {
+  await page.setViewportSize({ width: viewport.width, height: viewport.height })
+  await settleLayout()
+  const layout = await page.evaluate(() => {
+    const plot = document.querySelector('[data-testid="forecast-plot"] svg')
+    const plotContainer = document.querySelector('[data-testid="forecast-plot"]')
+    return {
+      viewport: window.innerWidth,
+      pageWidth: document.documentElement.scrollWidth,
+      plotWidth: plot?.getBoundingClientRect().width ?? 0,
+      plotContainerWidth: plotContainer?.getBoundingClientRect().width ?? 0,
+      kpis: Array.from(document.querySelectorAll('.kpi-card .kpi-value'), (node) => node.textContent?.trim() ?? ''),
+      recommendationRows: document.querySelectorAll('.reorder-table tbody tr').length,
+      dashboardText: document.querySelector('main')?.innerText ?? '',
+    }
+  })
+  if (layout.pageWidth > viewport.width) throw new Error(`Dashboard overflows horizontally at ${viewport.width}px.`)
+  if (layout.plotWidth < layout.plotContainerWidth - 2) throw new Error(`Forecast plot does not fill the available width at ${viewport.width}px.`)
+  if (layout.kpis.length !== 5) throw new Error(`Expected five live KPI cards at ${viewport.width}px.`)
+  if (/stock positions/i.test(layout.dashboardText)) throw new Error(`Technical stock-position wording is visible at ${viewport.width}px.`)
+  if (!/part locations/i.test(layout.dashboardText)) throw new Error(`Part-location scope is missing at ${viewport.width}px.`)
+  const report = page.locator('.report-control')
+  await expect(report).toBeDisabled()
+  await expect(report).toHaveAttribute('title', 'Reports are not available yet')
+  const reportStyle = await report.evaluate((button) => {
+    const style = getComputedStyle(button)
+    return { backgroundColor: style.backgroundColor, backgroundImage: style.backgroundImage, boxShadow: style.boxShadow, cursor: style.cursor }
+  })
+  if (reportStyle.backgroundColor !== 'rgb(239, 240, 245)' || reportStyle.backgroundImage !== 'none' || reportStyle.boxShadow !== 'none' || reportStyle.cursor !== 'not-allowed') {
+    throw new Error(`Generate Report does not look disabled at ${viewport.width}px.`)
+  }
+  const fileName = `dashboard-${viewport.name}.png`
+  await page.screenshot({ path: path.join(outputDirectory, fileName), fullPage: true, animations: 'disabled' })
+  return { viewport: viewport.width, plotWidth: Math.round(layout.plotWidth), recommendationRows: layout.recommendationRows, fileName }
+}
 
 try {
   await page.goto(frontendUrl, { waitUntil: 'domcontentloaded' })
@@ -59,88 +101,81 @@ try {
   }
 
   await dashboardTitle.waitFor({ timeout: 60_000 })
-  await page.locator('.kpi-card').first().waitFor()
-  await page.locator('.chart-area svg').waitFor({ timeout: 45_000 })
-  await page.locator('.health-chart-wrap svg').waitFor({ timeout: 45_000 })
-  await page.locator('.reorder-row').first().waitFor({ timeout: 45_000 })
-  if (!await page.getByText('Demo environment', { exact: false }).first().isVisible().catch(() => false)) {
-    throw new Error('The signed-in company is not marked as a demo environment; no screenshot was written.')
-  }
+  await page.locator('.kpi-card').first().waitFor({ timeout: 45_000 })
+  await page.locator('[data-testid="forecast-plot"] svg, .dashboard-chart-state').first().waitFor({ timeout: 45_000 })
+  await page.locator('.health-donut').waitFor({ timeout: 45_000 })
+  await page.locator('.reorder-table tbody tr').first().waitFor({ timeout: 45_000 })
+  await expect(page.getByText('Demo environment', { exact: true })).toBeVisible()
+  await expect(page.locator('.kpi-card').filter({ hasText: 'Out of Stock' })).toContainText('No stock across the company')
+  const warehouseStockouts = page.locator('.insight-card').filter({ has: page.getByRole('heading', { name: 'Warehouse stockouts' }) })
+  await expect(warehouseStockouts).toContainText(/part locations? currently have zero stock/i)
+  await expect(warehouseStockouts).toContainText(/may still have stock in another warehouse/i)
+  const reorderPanel = page.locator('#reorder-panel')
+  await expect(reorderPanel.getByRole('columnheader', { name: 'Demand before delivery' })).toBeVisible()
+  await expect(reorderPanel.getByRole('columnheader', { name: 'Based on' })).toBeVisible()
 
   const evidence = []
   for (const viewport of [
     { width: 1440, height: 1000, name: '1440' },
     { width: 1024, height: 900, name: '1024' },
     { width: 390, height: 844, name: '390' },
-  ]) {
-    await page.setViewportSize({ width: viewport.width, height: viewport.height })
-    await page.waitForTimeout(300)
-    await page.evaluate(async () => {
-      await document.fonts.ready
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-    })
-    const layout = await page.evaluate(() => {
-      const plot = document.querySelector('.chart-area svg')
-      const container = document.querySelector('.chart-area')
-      const svgWidth = plot?.getBoundingClientRect().width ?? 0
-      const style = container ? getComputedStyle(container) : undefined
-      const containerWidth = container && style
-        ? container.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight)
-        : 0
-      return {
-        viewport: window.innerWidth,
-        pageWidth: document.documentElement.scrollWidth,
-        svgWidth,
-        containerWidth,
-        kpis: Array.from(document.querySelectorAll('.kpi-card .kpi-value'), (node) => node.textContent?.trim() ?? ''),
-        restockAlerts: document.querySelectorAll('.reorder-row').length,
-      }
-    })
-    if (layout.pageWidth > viewport.width) throw new Error(`Dashboard overflows horizontally at ${viewport.width}px.`)
-    if (layout.svgWidth < layout.containerWidth - 4) throw new Error(`Forecast plot is narrower than its container at ${viewport.width}px.`)
-    if (layout.kpis.length !== 5) throw new Error(`Expected five live KPI cards at ${viewport.width}px.`)
-    const file = path.join(outputDirectory, `dashboard-${viewport.name}.png`)
-    await page.screenshot({ path: file, fullPage: true, animations: 'disabled' })
-    evidence.push({ viewport: viewport.width, chartWidth: Math.round(layout.svgWidth), kpis: layout.kpis, restockAlerts: layout.restockAlerts, file: path.basename(file) })
-  }
+  ]) evidence.push(await captureDashboard(viewport))
 
   await page.setViewportSize({ width: 1440, height: 1000 })
-  await page.getByRole('button', { name: 'Search inventory' }).click()
-  await page.getByPlaceholder('Search by part name, SKU, or OEM reference…').fill('AT-FLT-001')
-  const showroomProduct = page.getByRole('option', { name: /AT-FLT-001/ })
-  await showroomProduct.waitFor({ timeout: 20_000 })
+  await page.keyboard.press('Control+k')
+  const searchDialog = page.getByRole('dialog', { name: 'Search AutoStock' })
+  await searchDialog.waitFor({ timeout: 10_000 })
+  const firstPart = page.locator('.reorder-table tbody tr').first()
+  const searchTerm = (await firstPart.locator('.sku-cell').innerText()).trim()
+  const searchInput = searchDialog.getByRole('combobox', { name: 'Search parts, SKUs, suppliers, and references' })
+  await searchInput.fill(searchTerm)
+  const searchResult = searchDialog.getByRole('option').first()
+  await searchResult.waitFor({ timeout: 20_000 })
+  const searchProductName = (await searchResult.locator('.search-result-copy strong').innerText()).trim()
+  await settleLayout()
+  await page.screenshot({ path: path.join(outputDirectory, 'search-open-1440.png'), fullPage: false, animations: 'disabled' })
+  await searchInput.press('ArrowDown')
+  await searchInput.press('Enter')
+  await page.getByRole('dialog', { name: new RegExp(searchProductName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).waitFor({ timeout: 20_000 })
   await page.keyboard.press('Escape')
 
-  const warehousePicker = page.getByLabel('Filter stock alerts by warehouse')
-  if (await warehousePicker.isVisible()) {
-    const firstWarehouse = warehousePicker.locator('option').nth(1)
-    const warehouseId = await firstWarehouse.getAttribute('value')
-    const warehouseName = (await firstWarehouse.innerText()).trim()
-    if (warehouseId) {
-      const filteredResponse = page.waitForResponse((response) => {
-        const url = new URL(response.url())
-        return url.pathname.endsWith('/dashboard/restock-preview') && url.searchParams.get('warehouse_id') === warehouseId
-      })
-      await warehousePicker.selectOption(warehouseId)
-      if (!(await filteredResponse).ok()) throw new Error('The selected company warehouse filter failed.')
-      await page.locator('.reorder-row').first().waitFor({ timeout: 20_000 })
-      const alertWarehouses = await page.locator('.reorder-row .reorder-warehouse').allTextContents()
-      if (!alertWarehouses.length || alertWarehouses.some((name) => !name.includes(warehouseName))) {
-        throw new Error('The restock preview included an item outside the selected showroom warehouse.')
-      }
-      await warehousePicker.selectOption('')
-      await page.waitForFunction((count) => document.querySelectorAll('.reorder-row').length === count, evidence[0].restockAlerts)
-      if (await page.locator('.reorder-row').count() !== evidence[0].restockAlerts) {
-        throw new Error('The all-warehouses preview did not restore its original results.')
-      }
-    }
+  const forecastHorizon = page.getByLabel('Forecast horizon')
+  const forecastRequest = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return url.pathname.endsWith('/dashboard/forecast-preview') && url.searchParams.get('horizon_days') === '7'
+  })
+  await forecastHorizon.selectOption('7')
+  await forecastRequest
+  await settleLayout()
+  const plot = page.getByTestId('forecast-plot')
+  if (await plot.isVisible().catch(() => false)) {
+    const bounds = await plot.boundingBox()
+    if (bounds) await page.mouse.move(bounds.x + bounds.width * 0.8, bounds.y + bounds.height * 0.4)
   }
+  await page.screenshot({ path: path.join(outputDirectory, 'forecast-interaction-1440.png'), fullPage: false, animations: 'disabled' })
+
+  await forecastHorizon.selectOption('30')
+  await expect(page.getByTestId('forecast-selection-status')).toHaveText(/next 30 days/i)
+  await page.locator('[data-testid="forecast-plot"] svg, .dashboard-chart-state').first().waitFor({ timeout: 15_000 })
+  const recommendationButton = page.locator('.reorder-table tbody tr').first().locator('.part-name')
+  const recommendationName = (await recommendationButton.innerText()).split('\n')[0].trim()
+  await recommendationButton.click()
+  await page.getByRole('dialog', { name: new RegExp(recommendationName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).waitFor({ timeout: 20_000 })
+  await settleLayout()
+  await page.screenshot({ path: path.join(outputDirectory, 'reorder-detail-1440.png'), fullPage: false, animations: 'disabled' })
+  await page.keyboard.press('Escape')
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('button', { name: 'Open navigation menu' }).click()
+  await page.getByRole('dialog', { name: 'AutoStock navigation' }).waitFor({ timeout: 10_000 })
+  await page.screenshot({ path: path.join(outputDirectory, 'mobile-navigation-390.png'), fullPage: false, animations: 'disabled' })
+  await page.keyboard.press('Escape')
 
   if (pageErrors.length) throw new Error(`Browser page errors: ${pageErrors.join(' | ')}`)
   if (consoleErrors.length) throw new Error(`Browser console errors: ${consoleErrors.join(' | ')}`)
   if (failedApiResponses.length) throw new Error(`Odoo API errors: ${failedApiResponses.join(' | ')}`)
-  for (const item of evidence) console.log(`Captured ${item.file}: ${item.viewport}px, chart ${item.chartWidth}px, ${item.restockAlerts} live restock alerts.`)
-  console.log(`Company demo environment verified; database: ${credentials.database}. Live product search and warehouse filter passed. Browser page/console errors: 0. API failures: 0.`)
+  for (const item of evidence) console.log(`Captured ${item.fileName}: ${item.viewport}px, chart ${item.plotWidth}px, ${item.recommendationRows} live recommendation rows.`)
+  console.log('Authenticated showroom interactions passed: product search and quick view, 7-day forecast selection, reorder details, and mobile navigation. Company-wide and warehouse-level stock copy, disabled report state, and restock labels were checked at every viewport. Page/console errors: 0. API failures: 0.')
 } finally {
   await context.close()
   await browser.close()

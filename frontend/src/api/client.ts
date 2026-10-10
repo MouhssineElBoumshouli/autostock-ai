@@ -4,9 +4,11 @@ import {
   searchSchema,
   sessionSchema,
   restockSchema,
+  productQuickViewSchema,
   type DashboardData,
   type ForecastData,
   type ProductSearchData,
+  type ProductQuickViewData,
   type RestockData,
   type SessionData,
 } from './contracts'
@@ -63,18 +65,41 @@ async function get<T>(path: string, schema: ZodType<T>, companyId?: number): Pro
   return parsed.data
 }
 
+function requireCompany<T extends { company: { id: number } }>(companyId: number, data: T): T {
+  if (data.company.id !== companyId) {
+    throw new ApiError('Odoo returned data for a different company. Refresh the Dashboard before continuing.', 'contract')
+  }
+  return data
+}
+
 export const api = {
-  session: (companyId?: number) => get('/autostock/api/v1/session', sessionSchema, companyId),
-  dashboard: (companyId: number) => get('/autostock/api/v1/dashboard', dashboardSchema, companyId),
+  session: async (companyId?: number) => {
+    const data = await get('/autostock/api/v1/session', sessionSchema, companyId)
+    if (companyId && data.current_company.id !== companyId) {
+      throw new ApiError('Odoo returned a session for a different company. Refresh the Dashboard before continuing.', 'contract')
+    }
+    return data
+  },
+  dashboard: async (companyId: number) => requireCompany(companyId, await get('/autostock/api/v1/dashboard', dashboardSchema, companyId)),
   restock: (companyId: number, warehouseId?: number) => {
     const suffix = warehouseId ? `?warehouse_id=${warehouseId}` : ''
-    return get(`/autostock/api/v1/dashboard/restock-preview${suffix}`, restockSchema, companyId)
+    return get(`/autostock/api/v1/dashboard/restock-preview${suffix}`, restockSchema, companyId).then((data) => requireCompany(companyId, data))
   },
-  forecast: (companyId: number, horizonDays = 30) => get(`/autostock/api/v1/dashboard/forecast-preview?horizon_days=${horizonDays}`, forecastSchema, companyId),
+  forecast: (companyId: number, horizonDays = 30, productId?: number, warehouseId?: number) => {
+    const params = new URLSearchParams({ horizon_days: String(horizonDays) })
+    if (productId) params.set('product_id', String(productId))
+    if (warehouseId) params.set('warehouse_id', String(warehouseId))
+    return get(`/autostock/api/v1/dashboard/forecast-preview?${params}`, forecastSchema, companyId).then((data) => requireCompany(companyId, data))
+  },
   search: (companyId: number, query: string) => {
     const suffix = new URLSearchParams({ q: query }).toString()
     return get(`/autostock/api/v1/search/products?${suffix}`, searchSchema, companyId)
   },
+  quickView: (companyId: number, productId: number) => get(
+    `/autostock/api/v1/products/${productId}/quick-view`,
+    productQuickViewSchema,
+    companyId,
+  ).then((data) => requireCompany(companyId, data)),
 }
 
 export async function signIn(login: string, password: string): Promise<void> {
@@ -121,4 +146,4 @@ export function friendlyError(error: unknown): string {
   return error instanceof Error ? error.message : 'Something went wrong while loading your workspace.'
 }
 
-export type { DashboardData, ForecastData, ProductSearchData, RestockData, SessionData }
+export type { DashboardData, ForecastData, ProductSearchData, ProductQuickViewData, RestockData, SessionData }

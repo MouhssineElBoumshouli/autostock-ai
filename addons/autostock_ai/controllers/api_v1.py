@@ -7,7 +7,8 @@ existing ORM services, which continue to enforce Odoo ACLs and record rules.
 from datetime import timedelta
 
 from odoo import _, http
-from odoo.addons.autostock_ai.models.forecast import REAL_SOURCE, SYNTHETIC_SOURCE
+from odoo.fields import Domain
+from odoo.addons.autostock_ai.models.forecast import REAL_SOURCE
 from odoo.addons.autostock_ai.models.inventory_risk import RISK_ORDER
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.http import request
@@ -69,6 +70,14 @@ class AutoStockApiV1(http.Controller):
         return user.has_group("sales_team.group_sale_salesman") or user.has_group(
             "sales_team.group_sale_manager"
         )
+
+    @staticmethod
+    def _can_read(model):
+        try:
+            model.check_access("read")
+        except AccessError:
+            return False
+        return True
 
     @staticmethod
     def _company_contract(company):
@@ -140,6 +149,22 @@ class AutoStockApiV1(http.Controller):
         dashboard = self._scoped_model("autostock.dashboard", company).get_dashboard_data()
         sample = dashboard["kpis"]
         complete = not dashboard["summary_incomplete"]
+        reviewed_forecasts = False
+        reviewed_forecasts_available = False
+        if self._has_sales_access(request.env.user):
+            ForecastRun = self._scoped_model("autostock.forecast.run", company)
+            if self._can_read(ForecastRun):
+                reviewed_forecasts = ForecastRun.search_count(
+                    [
+                        ("company_id", "=", company.id),
+                        ("source_type", "=", REAL_SOURCE),
+                        ("state", "=", "completed"),
+                        ("review_status", "=", "reviewed"),
+                        ("evaluation_status", "in", list(SUPPORTED_EVALUATIONS)),
+                    ]
+                )
+                reviewed_forecasts_available = True
+        sampled_products = sample["total"]
         return {
             "schema_version": 1,
             "company": self._company_contract(company),
@@ -149,15 +174,32 @@ class AutoStockApiV1(http.Controller):
                 "in_stock": sample["healthy"],
                 "low_stock": sample["low"],
                 "out_of_stock": sample["out"],
+                "reviewed_forecasts": reviewed_forecasts,
+                "reviewed_forecasts_available": reviewed_forecasts_available,
             },
             "inventory_health": {
                 "total_tracked": dashboard["total_tracked"],
-                "sampled_products": sample["total"],
+                "sampled_products": sampled_products,
                 "complete": complete,
                 "categories": [
-                    {"key": "healthy", "label": _("In stock"), "count": sample["healthy"]},
-                    {"key": "low", "label": _("Low stock"), "count": sample["low"]},
-                    {"key": "out", "label": _("Out of stock"), "count": sample["out"]},
+                    {
+                        "key": "healthy",
+                        "label": _("In stock"),
+                        "count": sample["healthy"],
+                        "percent": round(sample["healthy"] * 100 / sampled_products) if sampled_products else 0,
+                    },
+                    {
+                        "key": "low",
+                        "label": _("Low stock"),
+                        "count": sample["low"],
+                        "percent": round(sample["low"] * 100 / sampled_products) if sampled_products else 0,
+                    },
+                    {
+                        "key": "out",
+                        "label": _("Out of stock"),
+                        "count": sample["out"],
+                        "percent": round(sample["out"] * 100 / sampled_products) if sampled_products else 0,
+                    },
                 ],
             },
             "empty": dashboard["total_tracked"] == 0,
@@ -186,7 +228,7 @@ class AutoStockApiV1(http.Controller):
             return row.get("policy_source_label") or _(
                 "A reorder trigger or target needs to be reviewed."
             )
-        return _("This stock location needs a review.")
+        return _("This part location needs a review.")
 
     @staticmethod
     def _dashboard_priority(row):
@@ -195,6 +237,57 @@ class AutoStockApiV1(http.Controller):
             "shortage",
             "low",
             "policy_missing",
+        }
+
+    @classmethod
+    def _risk_item_payload(cls, row):
+        forecast_used = bool(row["forecast"].get("used"))
+        supplier = row.get("supplier") or {}
+        return {
+            "key": row["key"],
+            "product_id": row["product_id"],
+            "template_id": row["template_id"],
+            "name": row["product_name"],
+            "sku": row["sku"],
+            "reference": row["reference"],
+            "category": row["category"],
+            "warehouse_id": row["warehouse_id"],
+            "warehouse": row["warehouse"],
+            "status": row["risk"],
+            "status_label": row["risk_label"],
+            "current_qty": row["on_hand"],
+            "free_qty": row["free_qty"],
+            "reserved_qty": row["reserved_qty"],
+            "incoming_qty": row["incoming_at_receipt"],
+            "outgoing_qty": row["outgoing_at_receipt"],
+            "projected_qty": row["odoo_projected_at_receipt"],
+            "projected_after_demand": row["projected_after_demand"],
+            "forecast_demand": row["forecast_demand"] if forecast_used else False,
+            "forecast_used": forecast_used,
+            "forecast_reason": row["forecast"].get("reason") or False,
+            "forecast_horizon_days": row["forecast"].get("horizon_days") or False,
+            "forecast_review_status": row["forecast"].get("review_status") or False,
+            "uom": row["uom"],
+            "recommended_qty": (
+                row["recommended_qty"]
+                if row["reorder_needed"] and row["recommended_qty"] > 0
+                else False
+            ),
+            "reorder_needed": bool(row["reorder_needed"]),
+            "supplier_name": supplier.get("name") or False,
+            "supplier": supplier or False,
+            "supplier_access_note": row.get("supplier_access_note") or False,
+            "reason": cls._restock_reason(row),
+            "basis_note": row["calculation_note"],
+            "lead_time_days": row["lead_time_days"],
+            "lead_time_source": row["lead_time_source"],
+            "lead_time_label": row["lead_time_label"],
+            "minimum_threshold": row["minimum_threshold"],
+            "target_stock": row["target_stock"],
+            "policy_source": row["policy_source"],
+            "policy_source_label": row["policy_source_label"],
+            "policy_issue": row["policy_issue"],
+            "calculation_basis": row["calculation_basis"],
         }
 
     def _restock_preview_payload(self):
@@ -242,37 +335,82 @@ class AutoStockApiV1(http.Controller):
             )
         )
         complete = scanned_count >= candidate_count and not any(incomplete_flags.values())
-        preview_items = []
-        for row in priority_rows[:RESTOCK_PREVIEW_LIMIT]:
-            preview_items.append(
-                {
-                    "key": row["key"],
-                    "product_id": row["product_id"],
-                    "template_id": row["template_id"],
-                    "name": row["product_name"],
-                    "sku": row["sku"],
-                    "warehouse_id": row["warehouse_id"],
-                    "warehouse": row["warehouse"],
-                    "status": row["risk"],
-                    "status_label": row["risk_label"],
-                    "current_qty": row["on_hand"],
-                    "uom": row["uom"],
-                    "recommended_qty": (
-                        row["recommended_qty"]
-                        if row["reorder_needed"] and row["recommended_qty"] > 0
-                        else False
-                    ),
-                    "supplier_name": (row["supplier"] or {}).get("name") or False,
-                    "reason": self._restock_reason(row),
-                    "basis_note": row["calculation_note"],
-                }
-            )
+        preview_items = [
+            self._risk_item_payload(row)
+            for row in priority_rows[:RESTOCK_PREVIEW_LIMIT]
+        ]
 
         reorder_suggestions = sum(
             1
             for row in priority_rows
             if row["reorder_needed"] and row["recommended_qty"] > 0
         )
+        out_of_stock = sum(1 for row in priority_rows if row["risk"] == "out")
+        if reorder_suggestions == 0:
+            reorder_description = _("No part locations have a suggested order ready for review.")
+        elif reorder_suggestions == 1:
+            reorder_description = _("1 part location has a suggested order ready for review.")
+        else:
+            reorder_description = _(
+                "%(count)s part locations have a suggested order ready for review.",
+                count=reorder_suggestions,
+            )
+
+        review_count = len(priority_rows)
+        if review_count == 0:
+            review_description = _("No part locations need review.")
+        elif review_count == 1:
+            review_description = _(
+                "1 part location needs review because stock is low or empty, or its reorder rule needs attention."
+            )
+        else:
+            review_description = _(
+                "%(count)s part locations need review because stock is low or empty, or their reorder rules need attention.",
+                count=review_count,
+            )
+
+        if out_of_stock == 0:
+            out_of_stock_description = _("No part locations currently have zero stock.")
+        elif out_of_stock == 1:
+            out_of_stock_description = _(
+                "1 part location currently has zero stock. This part may still have stock in another warehouse."
+            )
+        else:
+            out_of_stock_description = _(
+                "%(count)s part locations currently have zero stock. Some of those parts may still have stock in another warehouse.",
+                count=out_of_stock,
+            )
+        limited_note = (
+            _(" More part locations may need review beyond this scan.")
+            if not complete
+            else ""
+        )
+        insights = [
+            {
+                "id": "reorder-suggestions",
+                "title": _("Reorder suggestions"),
+                "description": reorder_description + limited_note,
+                "icon": "reorder",
+                "action": "view-reorder",
+                "action_label": _("View top 5"),
+            },
+            {
+                "id": "stock-review",
+                "title": _("Part locations to review"),
+                "description": review_description + limited_note,
+                "icon": "trend",
+                "action": "review-parts",
+                "action_label": _("Review parts"),
+            },
+            {
+                "id": "out-of-stock",
+                "title": _("Warehouse stockouts"),
+                "description": out_of_stock_description + limited_note,
+                "icon": "vehicle",
+                "action": "view-reorder",
+                "action_label": _("View top 5"),
+            },
+        ]
         return {
             "schema_version": 1,
             "company": self._company_contract(company),
@@ -286,6 +424,7 @@ class AutoStockApiV1(http.Controller):
                 "complete": complete,
             },
             "items": preview_items,
+            "insights": insights,
             "coverage": {
                 "complete": complete,
                 "scanned_locations": min(scanned_count, RESTOCK_SCAN_LIMIT),
@@ -325,15 +464,54 @@ class AutoStockApiV1(http.Controller):
             )
 
         sales_access = self._has_sales_access(user)
+        forecast_access = sales_access and self._can_read(forecast_service)
         run = False
-        if sales_access:
-            real_domain = [
+        forecast_options = []
+        forecast_options_limited = False
+        if forecast_access:
+            options_domain = [
                 ("company_id", "=", company.id),
                 ("source_type", "=", REAL_SOURCE),
                 ("state", "=", "completed"),
                 ("evaluation_status", "in", list(SUPPORTED_EVALUATIONS)),
                 ("horizon_days", "=", str(horizon)),
             ]
+            option_runs = forecast_service.search(
+                options_domain,
+                order="source_cutoff desc, id desc",
+                limit=101,
+            )
+            forecast_options_limited = len(option_runs) > 100
+            seen_options = set()
+            for option_run in option_runs[:100]:
+                option_product = option_run.product_id
+                if (
+                    not option_product
+                    or not option_product.active
+                    or not option_product.is_storable
+                    or not option_product.autostock_enabled
+                    or (
+                        option_product.company_id
+                        and option_product.company_id.id != company.id
+                    )
+                ):
+                    continue
+                key = (option_product.id, option_run.warehouse_id.id or False)
+                if key in seen_options:
+                    continue
+                seen_options.add(key)
+                forecast_options.append(
+                    {
+                        "key": f"{key[0]}-{key[1] or 0}",
+                        "product_id": key[0],
+                        "name": option_product.product_tmpl_id.name,
+                        "sku": option_product.default_code or "—",
+                        "warehouse_id": key[1],
+                        "warehouse": option_run.warehouse_id.display_name or False,
+                    }
+                )
+
+            real_domain = list(options_domain)
             if product:
                 real_domain.append(("product_id", "=", product.id))
             if warehouse:
@@ -350,20 +528,8 @@ class AutoStockApiV1(http.Controller):
                     real_domain, order="source_cutoff desc, id desc", limit=1
                 )
 
-        if not run and company.autostock_demo_environment and not product and not warehouse:
-            run = forecast_service.search(
-                [
-                    ("company_id", "=", company.id),
-                    ("source_type", "=", SYNTHETIC_SOURCE),
-                    ("state", "=", "completed"),
-                    ("horizon_days", "=", str(horizon)),
-                ],
-                order="source_cutoff desc, id desc",
-                limit=1,
-            )
-
         if not run:
-            if not sales_access and not company.autostock_demo_environment:
+            if not forecast_access:
                 reason_code = "sales_access_required"
                 message = _(
                     "Your Odoo role does not include access to completed delivery history."
@@ -381,6 +547,8 @@ class AutoStockApiV1(http.Controller):
                 "status": status,
                 "reason_code": reason_code,
                 "message": message,
+                "options": forecast_options,
+                "options_limited": forecast_options_limited,
                 "forecast": False,
             }
 
@@ -390,7 +558,7 @@ class AutoStockApiV1(http.Controller):
         snapshot = forecast_service.get_forecast_snapshot(
             source_type=source_type,
             product_id=run.product_id.id if source_type == REAL_SOURCE else False,
-            sku=run.sku if source_type == SYNTHETIC_SOURCE else False,
+            sku=False,
             horizon_days=horizon,
             warehouse_id=(
                 run.warehouse_id.id if source_type == REAL_SOURCE and run.warehouse_id else False
@@ -406,6 +574,8 @@ class AutoStockApiV1(http.Controller):
                 "status": "unavailable",
                 "reason_code": "forecast_changed",
                 "message": _("The selected forecast is no longer available. Refresh to try again."),
+                "options": forecast_options,
+                "options_limited": forecast_options_limited,
                 "forecast": False,
             }
 
@@ -415,6 +585,8 @@ class AutoStockApiV1(http.Controller):
             "status": "available",
             "reason_code": False,
             "message": False,
+            "options": forecast_options,
+            "options_limited": forecast_options_limited,
             "forecast": {
                 "id": data["id"],
                 "product_name": data["product_name"],
@@ -463,18 +635,58 @@ class AutoStockApiV1(http.Controller):
             return {"schema_version": 1, "query": query, "results": [], "limited": False}
 
         Product = self._scoped_model("product.product", company)
-        domain = [
+        catalog_domain = [
             ("active", "=", True),
             ("is_storable", "=", True),
             ("company_id", "in", [False, company.id]),
-            "|",
-            "|",
-            ("name", "ilike", query),
-            ("default_code", "ilike", query),
-            ("autostock_oem_reference", "ilike", query),
         ]
+        matching_domains = [
+            Domain.OR([
+                Domain([("name", "ilike", query)]),
+                Domain([("default_code", "ilike", query)]),
+                Domain([("autostock_oem_reference", "ilike", query)]),
+            ])
+        ]
+        SupplierInfo = self._scoped_model("product.supplierinfo", company)
+        supplier_lines = SupplierInfo.browse()
+        supplier_lookup_limited = False
+        if self._can_read(SupplierInfo):
+            supplier_lines = SupplierInfo.search(
+                [
+                    ("company_id", "in", [False, company.id]),
+                    ("partner_id.name", "ilike", query),
+                ],
+                order="id",
+                limit=2001,
+            )
+            supplier_lookup_limited = len(supplier_lines) > 2000
+            supplier_lines = supplier_lines[:2000]
+            template_ids = supplier_lines.mapped("product_tmpl_id").ids
+            variant_ids = supplier_lines.mapped("product_id").ids
+            if template_ids or variant_ids:
+                matching_domains.append(
+                    Domain.OR(
+                        [
+                            Domain([("product_tmpl_id", "in", template_ids)]) if template_ids else Domain([("id", "=", 0)]),
+                            Domain([("id", "in", variant_ids)]) if variant_ids else Domain([("id", "=", 0)]),
+                        ]
+                    )
+                )
+        domain = Domain(catalog_domain) & Domain.OR(matching_domains)
         products = Product.search(domain, order="default_code, id", limit=9)
-        limited = len(products) > 8
+        limited = len(products) > 8 or supplier_lookup_limited
+
+        def matching_supplier_names(product):
+            return sorted(
+                {
+                    line.partner_id.display_name
+                    for line in supplier_lines
+                    if line.product_tmpl_id == product.product_tmpl_id
+                    and (not line.product_id or line.product_id == product)
+                },
+                key=str.casefold,
+            )
+
         return {
             "schema_version": 1,
             "query": query,
@@ -483,10 +695,83 @@ class AutoStockApiV1(http.Controller):
                 {
                     "id": product.id,
                     "template_id": product.product_tmpl_id.id,
-                    "name": product.display_name,
+                    "name": product.product_tmpl_id.name,
                     "sku": product.default_code or "—",
                     "reference": product.autostock_oem_reference or False,
+                    "category": product.categ_id.display_name or _("Uncategorized"),
+                    "supplier_names": matching_supplier_names(product),
                 }
                 for product in products[:8]
             ],
+        }
+
+    @http.route(
+        "/autostock/api/v1/products/<int:product_id>/quick-view",
+        type="http",
+        auth="user",
+        methods=["GET"],
+    )
+    def product_quick_view(self, product_id, **_kwargs):
+        return self._dispatch(lambda: self._product_quick_view_payload(product_id))
+
+    def _product_quick_view_payload(self, product_id):
+        company = self._selected_company()
+        if not request.env.user.has_group("stock.group_stock_user"):
+            raise AccessError(_("Inventory access is required to view product details."))
+        Product = self._scoped_model("product.product", company)
+        product = Product.search(
+            [
+                ("id", "=", product_id),
+                ("active", "=", True),
+                ("is_storable", "=", True),
+                ("company_id", "in", [False, company.id]),
+            ],
+            limit=1,
+        )
+        if not product:
+            raise AccessError(_("That part is not available in the selected company."))
+
+        positions = []
+        coverage = {
+            "complete": True,
+            "candidate_locations": 0,
+            "scanned_locations": 0,
+        }
+        tracked = bool(product.autostock_enabled)
+        if tracked:
+            risk_data = self._scoped_model("autostock.inventory.risk", company).get_risk_data(
+                product_id=product.id,
+                offset=0,
+            )
+            rows = list(risk_data["rows"])
+            rows.sort(
+                key=lambda row: (
+                    RISK_ORDER.get(row["risk"], 9),
+                    not row["reorder_needed"],
+                    row["warehouse"].casefold(),
+                )
+            )
+            positions = [self._risk_item_payload(row) for row in rows]
+            pagination = risk_data["pagination"]
+            coverage = {
+                "complete": not risk_data["warehouse_scope_limited"]
+                and not pagination["has_next"],
+                "candidate_locations": pagination["candidate_pair_count"],
+                "scanned_locations": pagination["evaluated_pair_count"],
+            }
+        return {
+            "schema_version": 1,
+            "company": self._company_contract(company),
+            "read_only": True,
+            "product": {
+                "id": product.id,
+                "template_id": product.product_tmpl_id.id,
+                "name": product.product_tmpl_id.name,
+                "sku": product.default_code or "—",
+                "reference": product.autostock_oem_reference or False,
+                "category": product.categ_id.display_name or _("Uncategorized"),
+                "tracked": tracked,
+            },
+            "positions": positions,
+            "coverage": coverage,
         }
