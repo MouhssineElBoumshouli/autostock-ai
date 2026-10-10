@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="autostock_ai.Dashboard">
-        <main class="as-app" t-on-keydown="onShellKeydown">
+        <main class="as-app" t-att-data-as-view="state.activeSection" t-on-keydown="onShellKeydown">
             <button t-if="state.mobileView &amp;&amp; state.navOpen" class="as-nav-scrim" type="button" aria-label="Close AutoStock navigation" t-on-click="closeMobileNav"/>
             <aside id="as-mobile-nav" t-ref="mobileNavDrawer" t-att-class="state.navOpen ? 'as-sidebar as-sidebar-open' : 'as-sidebar'" t-att-role="state.mobileView &amp;&amp; state.navOpen ? 'dialog' : 'complementary'" t-att-aria-modal="state.mobileView &amp;&amp; state.navOpen ? 'true' : 'false'" aria-label="AutoStock AI navigation" tabindex="-1">
                 <div class="as-sidebar-brand-row">
@@ -27,7 +27,7 @@
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18 9 12l4 4 8-9M16 7h5v5"/></svg><span>Forecasts</span>
                     </button>
                     <button type="button" t-att-class="state.activeSection === 'risks' ? 'as-nav-item is-active' : 'as-nav-item'" t-att-aria-current="state.activeSection === 'risks' ? 'location' : false" t-on-click="scrollToRisks">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.8 19h18.4L12 3Zm0 6v4m0 3h.01"/></svg><span>Stock risks</span>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.8 19h18.4L12 3Zm0 6v4m0 3h.01"/></svg><span>Restock</span>
                     </button>
                 </nav>
                 <div class="as-sidebar-footer">
@@ -54,20 +54,22 @@
                           t-att-aria-label="state.forecastOptions.demo_environment_note"
                           t-att-title="state.forecastOptions.demo_environment_note">Demo environment</span>
                 </header>
-                <div class="as-page-scroll" t-ref="dashboardScroll" t-on-scroll="updateActiveSection">
+                <div class="as-page-scroll" t-ref="dashboardScroll" >
                     <div class="as-page-content">
             <header class="as-topline">
                 <div class="as-heading-group">
                     <div class="as-eyebrow">AUTOSTOCK AI <span aria-hidden="true">/</span> INVENTORY INTELLIGENCE</div>
-                    <h1 class="as-title">Dashboard</h1>
-                    <p class="as-subtitle">A clear, current view of your automotive inventory.</p>
+                    <h1 class="as-title" tabindex="-1" t-esc="activeSectionLabel"/>
+                    <p class="as-subtitle" t-if="state.activeSection === 'dashboard'">Your inventory at a glance. See what needs attention.</p>
+                    <p class="as-subtitle" t-elif="state.activeSection === 'forecast'">Understand what your customers may need next.</p>
+                    <p class="as-subtitle" t-else="">Decide what to restock, with a clear reason for every suggestion.</p>
                 </div>
                 <div class="as-toolbar" aria-label="Dashboard actions">
                     <button class="as-btn as-btn-secondary" type="button" t-on-click="load" t-att-disabled="state.loading" aria-label="Refresh inventory data">
                         <svg class="as-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4.7 9a7.5 7.5 0 0 1 12.6-2L20 12M4 17v-5h5m10.3 3a7.5 7.5 0 0 1-12.6 2L4 12"/></svg>
                         <span>Refresh</span>
                     </button>
-                    <button class="as-btn as-btn-primary" type="button" t-on-click="openProducts">
+                    <button t-if="state.activeSection === 'dashboard'" class="as-btn as-btn-primary" type="button" t-on-click="openProducts">
                         <span>View inventory</span>
                         <svg class="as-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg>
                     </button>
@@ -114,15 +116,15 @@
                             <span>Tracked SKUs</span>
                         </div>
                         <strong><t t-esc="state.data.kpis.total"/></strong>
-                        <small>Products included in AutoStock AI</small>
+                        <small>Across the selected company</small>
                     </article>
                     <article class="as-card as-kpi">
                         <div class="as-kpi-heading">
                             <span class="as-kpi-icon as-green" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></svg></span>
-                            <span>Above safety stock</span>
+                            <span>Healthy stock</span>
                         </div>
                         <strong><t t-esc="state.data.kpis.healthy"/></strong>
-                        <small>On hand above the manual threshold</small>
+                        <small>Above the safety threshold</small>
                     </article>
                     <article class="as-card as-kpi">
                         <div class="as-kpi-heading">
@@ -130,7 +132,7 @@
                             <span>Low stock</span>
                         </div>
                         <strong><t t-esc="state.data.kpis.low"/></strong>
-                        <small>At or below a manual safety threshold</small>
+                        <small>Across all company warehouses</small>
                     </article>
                     <article class="as-card as-kpi">
                         <div class="as-kpi-heading">
@@ -138,7 +140,7 @@
                             <span>Out of stock</span>
                         </div>
                         <strong><t t-esc="state.data.kpis.out"/></strong>
-                        <small>On hand is zero or below</small>
+                        <small>Across all company warehouses</small>
                     </article>
                 </section>
 
@@ -376,6 +378,40 @@
                     </article>
                 </section>
 
+                <section class="as-overview-actions" aria-labelledby="as-overview-title">
+                    <div class="as-overview-head">
+                        <div>
+                            <span class="as-section-kicker">SMART RESTOCK GUIDANCE</span>
+                            <h2 id="as-overview-title">Parts that need attention</h2>
+                            <p>Review a few suggested restocks. All quantities come from Odoo and your configured rules.</p>
+                        </div>
+                        <button type="button" class="as-btn as-btn-secondary" t-on-click="scrollToRisks">Review restock list <span aria-hidden="true">→</span></button>
+                    </div>
+                    <div t-if="state.riskLoading &amp;&amp; !state.riskData" class="as-overview-feedback" role="status">Checking stock risks…</div>
+                    <div t-elif="state.riskError" class="as-overview-feedback" role="status">Restock information is temporarily unavailable. Open Restock to retry.</div>
+                    <div t-elif="state.riskData" class="as-overview-grid">
+                        <article t-foreach="dashboardAlerts" t-as="alert" t-key="alert.key" class="as-overview-card">
+                            <div class="as-overview-card-heading">
+                                <span t-att-class="'as-risk-badge as-risk-' + alert.risk" t-esc="alert.risk_label"/>
+                                <strong t-esc="alert.name"/>
+                            </div>
+                            <p><t t-esc="alert.warehouse"/> · <t t-esc="alert.free_qty"/> <t t-esc="alert.uom"/> available</p>
+                            <div class="as-overview-qty"><span>Suggested restock</span><strong><t t-esc="alert.recommended_qty"/> <t t-esc="alert.uom"/></strong></div>
+                            <button class="as-link" type="button" t-on-click="scrollToRisks">See why <span aria-hidden="true">→</span></button>
+                        </article>
+                        <article t-if="!dashboardAlerts.length" class="as-overview-card as-overview-calm">
+                            <strong>No restock suggestions in the current results</strong>
+                            <p>Open Restock to review other warehouses, products, and ordering policies.</p>
+                            <button class="as-link" type="button" t-on-click="scrollToRisks">Check restock list →</button>
+                        </article>
+                    </div>
+                    <p t-if="state.riskData &amp;&amp; state.riskData.pagination.page_count > 1" class="as-overview-scope">Preview of one loaded page only. Open Restock to see additional pages; these are not company-wide totals.</p>
+                    <div class="as-overview-bottom">
+                        <div><strong>Need a closer look at demand?</strong><span>View a part's forecast, historical sales, and data sources.</span></div>
+                        <button type="button" class="as-btn as-btn-secondary" t-on-click="scrollToForecast">Explore forecasts →</button>
+                    </div>
+                </section>
+
                 <section class="as-card as-table-panel" data-as-section="inventory" aria-labelledby="as-inventory-title">
                     <div class="as-panel-head">
                         <div><span class="as-section-kicker">LIVE ODOO DATA</span><h2 id="as-inventory-title">Automotive inventory</h2><p>On-hand and projected quantities come from Odoo; projected stock is not an AI forecast.</p></div>
@@ -413,8 +449,8 @@
                     <div class="as-risk-heading-row">
                         <div>
                             <span class="as-section-kicker">LIVE ODOO STOCK · EXPLAINABLE GUIDANCE</span>
-                            <h2 id="as-risk-title" class="as-risk-title" tabindex="-1">Stock risks &amp; reorder guidance</h2>
-                            <p>Current stock, scheduled Odoo moves, configured reorder rules, supplier terms, and reviewed delivery forecasts when their scope and coverage qualify.</p>
+                            <h2 id="as-risk-title" class="as-risk-title" tabindex="-1">Restock recommendations</h2>
+                            <p>See which parts need attention, how many to consider ordering, and why. Suggestions do not place orders.</p>
                         </div>
                         <button type="button" class="as-btn as-btn-secondary" t-on-click="loadRiskData" t-att-disabled="state.riskLoading" aria-label="Refresh stock-risk data">
                             <svg class="as-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4.7 9a7.5 7.5 0 0 1 12.6-2L20 12M4 17v-5h5m10.3 3a7.5 7.5 0 0 1-12.6 2L12 12"/></svg><span>Refresh</span>
