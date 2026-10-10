@@ -3,22 +3,26 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError, api, friendlyError, signOut } from '@/api/client'
 import { AppShell } from '@/components/app-shell'
 import { LoginScreen } from '@/components/login-screen'
-import { ForecastPanel, InventoryHealthPanel, KpiGrid, PanelError, RestockPanel } from '@/components/dashboard-panels'
+import {
+  ForecastPanel, InsightCards, InventoryHealthPanel, KpiGrid, PanelError, RestockPanel,
+} from '@/components/dashboard-panels'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Boxes, CircleAlert, WifiOff } from 'lucide-react'
+import { Boxes, CircleAlert, RefreshCw, WifiOff } from 'lucide-react'
 
 function DashboardSkeleton() {
   return (
     <main className="page-content" aria-label="Loading dashboard" aria-busy="true">
-      <div className="skeleton" style={{ width: 210, height: 12, marginBottom: 11 }} />
-      <div className="skeleton" style={{ width: 300, height: 30, marginBottom: 23 }} />
+      <div className="skeleton" style={{ width: 140, height: 32, marginBottom: 9 }} />
+      <div className="skeleton" style={{ width: 300, height: 13, marginBottom: 24 }} />
       <div className="kpi-grid">
-        {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="kpi-card" />)}
+        {Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="kpi-card" />)}
       </div>
       <div className="analytics-grid">
-        <Skeleton className="panel" style={{ height: 370 }} />
-        <Skeleton className="panel" style={{ height: 370 }} />
+        <Skeleton className="panel" style={{ height: 420 }} />
+        <Skeleton className="panel" style={{ height: 420 }} />
       </div>
+      <Skeleton className="panel insights-panel" style={{ height: 150, marginTop: 17 }} />
+      <Skeleton className="panel restock-panel" style={{ height: 300 }} />
       <span className="sr-only" role="status">Loading live Odoo inventory and forecasting data.</span>
     </main>
   )
@@ -60,6 +64,7 @@ export function DashboardPage() {
   const queryClient = useQueryClient()
   const [selectedCompanyId, setSelectedCompanyId] = useState<number>()
   const [warehouseSelection, setWarehouseSelection] = useState<{ companyId: number; id?: number }>()
+  const [forecastHorizon, setForecastHorizon] = useState(30)
   const sessionQuery = useQuery({
     queryKey: ['session', selectedCompanyId ?? 'active'],
     queryFn: () => api.session(selectedCompanyId),
@@ -81,8 +86,8 @@ export function DashboardPage() {
     enabled: Boolean(companyId && hasInventoryAccess),
   })
   const forecastQuery = useQuery({
-    queryKey: ['dashboard-forecast', companyId],
-    queryFn: () => api.forecast(companyId!),
+    queryKey: ['dashboard-forecast', companyId, forecastHorizon],
+    queryFn: () => api.forecast(companyId!, forecastHorizon),
     enabled: Boolean(companyId && hasInventoryAccess),
   })
 
@@ -112,6 +117,14 @@ export function DashboardPage() {
     window.location.reload()
   }
 
+  async function refreshDashboard() {
+    await Promise.all([
+      dashboardQuery.refetch(),
+      restockQuery.refetch(),
+      forecastQuery.refetch(),
+    ])
+  }
+
   if (sessionQuery.isPending) return <DashboardSkeleton />
   if (!session && sessionQuery.error) {
     if (sessionQuery.error instanceof ApiError && sessionQuery.error.code === 'unauthenticated') {
@@ -132,7 +145,11 @@ export function DashboardPage() {
     <AppShell
       session={session}
       selectedCompanyId={companyId!}
-      onCompanyChange={(id) => { setWarehouseSelection({ companyId: id }); setSelectedCompanyId(id) }}
+      onCompanyChange={(id) => {
+        setWarehouseSelection({ companyId: id })
+        setSelectedCompanyId(id)
+        setForecastHorizon(30)
+      }}
       onSignOut={onSignOut}
     >
       {dashboardQuery.isPending ? <DashboardSkeleton /> : dashboardQuery.error ? (
@@ -141,27 +158,39 @@ export function DashboardPage() {
         </main>
       ) : dashboardQuery.data ? (
         <main className="page-content">
-          <div className="page-heading">
+          <div className="page-heading reference-heading">
             <div>
-              <p className="eyebrow">Workspace overview</p>
-              <h1 className="page-title">Your inventory at a glance</h1>
-              <p className="page-subtitle">Stock health, demand outlook, and the parts that need attention.</p>
+              <h1 className="page-title">Dashboard</h1>
+              <p className="page-subtitle">AI-powered inventory intelligence for automotive parts</p>
             </div>
-            <div className="snapshot-label">Updated {dashboardQuery.data.snapshot_at}</div>
+            <div className="dashboard-actions">
+              <span className="snapshot-label">Updated {dashboardQuery.data.snapshot_at}</span>
+              <button type="button" className="refresh-button" onClick={() => void refreshDashboard()}>
+                <RefreshCw size={15} /> Refresh
+              </button>
+            </div>
           </div>
-          <KpiGrid data={dashboardQuery.data} />
+
+          <KpiGrid data={dashboardQuery.data} restock={restockQuery.data} />
+
           <div className="analytics-grid">
-            {forecastQuery.data ? <ForecastPanel forecast={forecastQuery.data} /> : forecastQuery.error ? (
-              <PanelError title="Demand outlook could not be loaded" message={friendlyError(forecastQuery.error)} onRetry={() => void forecastQuery.refetch()} />
-            ) : <Skeleton className="panel" style={{ height: 350 }} />}
+            {forecastQuery.data ? (
+              <ForecastPanel forecast={forecastQuery.data} horizonDays={forecastHorizon} onHorizonChange={setForecastHorizon} />
+            ) : forecastQuery.error ? (
+              <PanelError title="Demand forecast could not be loaded" message={friendlyError(forecastQuery.error)} onRetry={() => void forecastQuery.refetch()} />
+            ) : <Skeleton className="panel" style={{ height: 400 }} />}
             <InventoryHealthPanel data={dashboardQuery.data} />
           </div>
+
+          <InsightCards data={dashboardQuery.data} forecast={forecastQuery.data} restock={restockQuery.data} />
+
           {restockQuery.data ? (
             <RestockPanel data={restockQuery.data} warehouseId={warehouseId} onWarehouseChange={(id) => setWarehouseSelection({ companyId: companyId!, id })} />
           ) : restockQuery.error ? (
-            <div className="restock-panel"><PanelError title="Priority stock could not be loaded" message={friendlyError(restockQuery.error)} onRetry={() => void restockQuery.refetch()} /></div>
-          ) : <Skeleton className="panel restock-panel" style={{ height: 220 }} />}
-          <p className="page-footnote">Live data from {dashboardQuery.data.company.name} in Odoo. Restock guidance is read-only.</p>
+            <div className="restock-panel"><PanelError title="Reorder recommendations could not be loaded" message={friendlyError(restockQuery.error)} onRetry={() => void restockQuery.refetch()} /></div>
+          ) : <Skeleton className="panel restock-panel" style={{ height: 300 }} />}
+
+          <p className="page-footnote">Live data from {dashboardQuery.data.company.name} in Odoo. Recommendations remain read-only.</p>
         </main>
       ) : <DashboardSkeleton />}
     </AppShell>
