@@ -75,6 +75,11 @@ export const restockSchema = z.object({
   warehouses: z.array(z.object({ id: z.number().int().positive(), name: z.string() })),
   as_of: z.string(),
   read_only: z.literal(true),
+  summary: z.object({
+    priority_locations: z.number().int().nonnegative(),
+    reorder_suggestions: z.number().int().nonnegative(),
+    complete: z.boolean(),
+  }),
   items: z.array(riskItemSchema).max(5),
   coverage: z.object({
     complete: z.boolean(),
