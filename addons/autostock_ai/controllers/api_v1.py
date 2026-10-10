@@ -249,7 +249,7 @@ class AutoStockApiV1(http.Controller):
                     "key": row["key"],
                     "product_id": row["product_id"],
                     "template_id": row["template_id"],
-                    "name": row["name"],
+                    "name": row["product_name"],
                     "sku": row["sku"],
                     "warehouse_id": row["warehouse_id"],
                     "warehouse": row["warehouse"],

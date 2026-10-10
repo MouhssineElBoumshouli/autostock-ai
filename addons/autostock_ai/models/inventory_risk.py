@@ -620,6 +620,7 @@ class AutoStockInventoryRisk(models.AbstractModel):
                 "template_id": product.product_tmpl_id.id,
                 "warehouse_id": warehouse.id,
                 "name": product.display_name,
+                "product_name": product.product_tmpl_id.name,
                 "sku": product.default_code or "—",
                 "reference": product.autostock_oem_reference or "—",
                 "warehouse": warehouse.display_name,

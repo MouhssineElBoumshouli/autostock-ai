@@ -73,6 +73,16 @@ class TestAutoStockApiV1(HttpCase):
         self.assertEqual(len(data["inventory_health"]["categories"]), 3)
 
     def test_restock_preview_contract_is_read_only_and_bounded(self):
+        template = self.env["product.template"].create(
+            {
+                "name": "AutoStock API Clean Label Test Part",
+                "default_code": "AS-API-CLEAN-001",
+                "company_id": self.env.company.id,
+                "is_storable": True,
+                "autostock_enabled": True,
+            }
+        )
+        product = template.product_variant_id
         data = self._get_json("/autostock/api/v1/dashboard/restock-preview")
 
         self.assertEqual(data["schema_version"], 1)
@@ -80,6 +90,10 @@ class TestAutoStockApiV1(HttpCase):
         self.assertLessEqual(len(data["items"]), 5)
         self.assertIn("complete", data["coverage"])
         self.assertIn("warehouses", data)
+        item = next(row for row in data["items"] if row["product_id"] == product.id)
+        self.assertEqual(item["name"], template.name)
+        self.assertEqual(item["sku"], product.default_code)
+        self.assertNotIn(product.default_code, item["name"])
 
     def test_forecast_preview_has_a_truthful_empty_state(self):
         data = self._get_json(

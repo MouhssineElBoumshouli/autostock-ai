@@ -8,7 +8,7 @@
 
 The React Dashboard ran against the separate local Odoo showroom database `autostock_showroom_demo` for the fictional Atlas Auto Distribution business. The page fetched the displayed data through the authenticated `/autostock/api/v1/` routes. The browser capture script verified live product search and a warehouse-filtered restock preview, and found zero page errors, console errors, or API failures.
 
-The screenshots below are actual browser captures of the Odoo-backed showroom, not frontend fixtures. They show the 64 tracked parts, current inventory-health counts, a saved delivery-based forecast preview, and five warehouse-level priority restock positions. The company is marked discreetly as a Demo environment. Forecast and reorder values are supplied by Odoo services; the React client does not reimplement those calculations.
+The screenshots below are actual browser captures of the Odoo-backed showroom, not frontend fixtures. They show the 64 tracked parts, current inventory-health counts, a saved delivery-based forecast preview, and five warehouse-level priority restock positions. Restock rows display the human product name separately from the SKU. The company is marked discreetly as a Demo environment. Forecast and reorder values are supplied by Odoo services; the React client does not reimplement those calculations.
 
 ## Screenshots
 
@@ -36,14 +36,14 @@ The old Owl/Odoo dashboard was left unchanged. This PR adds the React client alo
 | `npm run lint` | Passed |
 | `npm run typecheck` | Passed |
 | `npm run test:unit` | Passed, 3 tests |
-| `npm run test:contract` | Passed, 4 tests |
+| `npm run test:contract` | Passed, 5 tests |
 | `npm run test:browser` | Passed, 3 tests covering responsive layout, chart interaction, mobile navigation, company refresh, and product search |
 | `npm run build` | Passed |
 | Actual showroom screenshot and interaction capture | Passed at 1440, 1024, and 390 px; 5 live restock alerts; warehouse filter and product search passed; no browser or API errors |
 | `python -m pytest -q` | Passed, 38 tests |
 | `python -m compileall -q addons ml scripts tests` | Passed |
 | Synthetic forecasting evaluation | Passed for 6 labeled fixture products using the existing evaluator; no accuracy claim is made from this run |
-| Odoo 19 + PostgreSQL 16 addon install and integration suite | Passed in an isolated database; 46 tests including 7 post-install HTTP cases, 0 failures and 0 errors |
+| Odoo 19 + PostgreSQL 16 addon install and integration suite | Passed in an isolated database; 38 actual test cases passed, including 7 post-install HTTP cases; the broader Odoo stats count is 46; 0 failures and 0 errors |
 | `git diff --check` | Passed |
 
 Frontend browser tests use explicit test fixtures. The three screenshots and the search/warehouse interaction check use the authenticated, locally running Odoo showroom instead. The browser capture reads local showroom credentials without logging them; no credentials are stored in the screenshots or committed.

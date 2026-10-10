@@ -52,6 +52,26 @@ describe('Odoo v1 API contracts', () => {
     expect(parsed.success).toBe(false)
   })
 
+  it('keeps a clean product name separate from its SKU in restock items', () => {
+    const parsed = restockSchema.parse({
+      schema_version: 1,
+      company,
+      warehouse_id: 1,
+      warehouses: [{ id: 1, name: 'Central warehouse' }],
+      as_of: '2026-10-10 12:00 UTC',
+      read_only: true,
+      items: [{
+        key: 'part-1', product_id: 1, template_id: 1, name: 'Ignition Coil', sku: 'AT-01-003',
+        warehouse_id: 1, warehouse: 'Central warehouse', status: 'out', status_label: 'Out of stock',
+        current_qty: 0, uom: 'Units', recommended_qty: 10, supplier_name: 'Fixture supplier',
+        reason: 'No stock is on hand at this warehouse.', basis_note: 'Odoo restock policy.',
+      }],
+      coverage: { complete: true, scanned_locations: 1, candidate_locations: 1, scan_limit: 500, flags: {} },
+    })
+    expect(parsed.items[0]).toMatchObject({ name: 'Ignition Coil', sku: 'AT-01-003' })
+    expect(parsed.items[0].name).not.toContain(parsed.items[0].sku)
+  })
+
   it('distinguishes an unavailable forecast from a saved forecast', () => {
     const parsed = forecastSchema.safeParse({
       schema_version: 1,

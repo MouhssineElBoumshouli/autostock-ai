@@ -124,6 +124,12 @@ test('dashboard renders responsively without browser errors or clipped chart wid
     await page.goto('/')
     await waitForDashboard(page)
     if (viewport.width === 1440) {
+      const firstAlert = page.locator('.alert-item').first()
+      await expect(firstAlert.locator('.alert-product-name')).toHaveText('Front Brake Rotor')
+      await expect(firstAlert.locator('.alert-product-sku')).toContainText('BRK-440')
+      await expect(firstAlert.locator('.alert-product-name')).not.toContainText('BRK-440')
+    }
+    if (viewport.width === 1440) {
       await page.locator('.chart-area').hover({ position: { x: 150, y: 100 } })
       await expect(page.locator('.forecast-panel .recharts-tooltip-wrapper')).toBeVisible()
       await page.mouse.move(5, 5)
