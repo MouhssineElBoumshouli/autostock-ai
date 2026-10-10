@@ -161,7 +161,7 @@ function MobileInventoryCard({ item, warehouseFilter, onOpen }: {
       </span>
       <span className="inventory-mobile-stocks">
         <span>On hand <strong>{number(item.on_hand)} {item.uom}</strong></span>
-        <span>Available <strong>{number(item.available)} {item.uom}</strong></span>
+        <span>Available to use <strong>{number(item.available)} {item.uom}</strong></span>
         <span>Incoming <strong>{number(item.incoming)} {item.uom}</strong></span>
       </span>
       <span className="inventory-mobile-meta">
@@ -446,8 +446,8 @@ function InventoryPageContent({
                           <tr>
                             <th scope="col" className="inventory-col-part">Part</th>
                             <th scope="col" className="inventory-col-sku">SKU</th>
-                            <th scope="col" className="inventory-col-number">On hand <span>company</span></th>
-                            <th scope="col" className="inventory-col-number">Available <span>company</span></th>
+                            <th scope="col" className="inventory-col-number" title="Physical units currently in stock">On hand <span>physical stock</span></th>
+                            <th scope="col" className="inventory-col-number" title="On-hand units that are not reserved">Available <span>not reserved</span></th>
                             <th scope="col" className="inventory-col-incoming">Incoming <span>company</span></th>
                             <th scope="col" className="inventory-col-warehouse">Warehouse stock</th>
                             <th scope="col" className="inventory-col-supplier">Supplier</th>
