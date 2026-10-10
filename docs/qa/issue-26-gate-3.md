@@ -40,6 +40,7 @@ The reference comparison retains the approved sidebar and header proportions, fi
 | `npm run build` | Passed |
 | `python -m pytest -q` | Passed, 38 tests |
 | `python -m compileall -q addons ml scripts tests` | Passed |
+| Labeled synthetic forecast evaluator | Passed for 6 explicitly labeled demo products; this is a development check, not evidence of business forecast accuracy |
 | Odoo 19 addon install and tests with PostgreSQL 16 | Passed in a fresh isolated database; Odoo result line reported 0 failures and 0 errors across 42 test cases. The separate broader Odoo statistics line reported 50 tests. The addon ran 11 post-install HTTP tests, including company isolation, search, session, forecast, dashboard and product detail coverage. |
 | Authenticated Atlas showroom capture | Passed at 1440/1024/390 px; search, quick view, 7-day forecast, recommendation drawer and mobile navigation all passed; no browser errors or API failures |
 | `git diff --check` | Passed; Git reports only its normal LF-to-CRLF conversion notice for edited frontend files on Windows |
