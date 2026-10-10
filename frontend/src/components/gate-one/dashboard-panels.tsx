@@ -529,11 +529,11 @@ export function ReorderTable({
             <colgroup>
               <col className="column-select" /><col className="column-part" /><col className="column-sku" />
               <col className="column-forecast" /><col className="column-stock" /><col className="column-suggested" />
-              <col className="column-confidence" /><col className="column-risk" /><col className="column-action" /><col className="column-more" />
+              <col className="column-confidence" /><col className="column-risk" /><col className="column-action" />
             </colgroup>
             <thead><tr>
               <th className="select-col"><span className="checkbox-visual" aria-hidden="true" /></th>
-              <th>Part</th><th>SKU</th><th>Demand before delivery</th><th>Current stock</th><th>Suggested order</th><th>Based on</th><th>Risk</th><th>Review</th><th aria-label="More details" />
+              <th>Part</th><th>SKU</th><th>Demand before delivery</th><th>Current stock</th><th>Suggested order</th><th>Based on</th><th>Risk</th><th>Review</th>
             </tr></thead>
             <tbody>
               {items.map((part) => {
@@ -555,7 +555,6 @@ export function ReorderTable({
                     <td className="confidence-cell"><span className="confidence-value">{part.forecast_used ? 'Stock + demand' : 'Stock + reorder rule'}</span></td>
                     <td><span className={`risk-pill risk-${level.toLowerCase()}`} title={part.status_label}>{riskTableLabel(part)}</span></td>
                     <td className="action-cell"><button className="purchase-action" type="button" onClick={() => onOpenProduct(part)}>Review</button></td>
-                    <td className="more-cell"><button className="row-more-button" type="button" aria-label={`Open restock details for ${part.name}`} onClick={() => onOpenProduct(part)}>···</button></td>
                     <td className="mobile-detail">
                       <span><small>Demand before delivery</small><strong>{part.forecast_used ? `${formatUnits(Number(part.forecast_demand))} ${part.uom}` : 'No forecast'}</strong></span>
                       <span><small>Current</small><strong>{formatQuantity(part.current_qty, part.uom)}</strong></span>
