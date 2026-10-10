@@ -124,12 +124,12 @@ function coordinate(x: number, value: number, yMaximum: number): ChartPoint {
 
 function confidencePath(chart: ChartSeries) {
   const positions = chart.upperRange.map((value, index) => coordinate(
-    chart.upperRange.length <= 1 ? 400 : 400 + index * (300 / (chart.upperRange.length - 1)),
+    400 + ((index + 1) * 300 / Math.max(1, chart.upperRange.length)),
     value,
     chart.yMaximum,
   ))
   const lower = chart.lowerRange.map((value, index) => coordinate(
-    chart.lowerRange.length <= 1 ? 400 : 400 + index * (300 / (chart.lowerRange.length - 1)),
+    400 + ((index + 1) * 300 / Math.max(1, chart.lowerRange.length)),
     value,
     chart.yMaximum,
   )).reverse()
