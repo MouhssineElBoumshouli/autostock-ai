@@ -97,6 +97,8 @@ test('search dialog stays fully inside the viewport even after page scrolling', 
   const signals = observePage(page)
   await page.setViewportSize({ width: 1440, height: 800 })
   await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Search parts, SKUs, vehicles, or suppliers' })).toBeVisible()
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
   await page.keyboard.press('Control+k')
   const dialog = page.getByRole('dialog', { name: 'Search AutoStock' })
