@@ -90,6 +90,13 @@ class TestAutoStockApiV1(HttpCase):
         self.assertLessEqual(len(data["items"]), 5)
         self.assertIn("complete", data["coverage"])
         self.assertIn("warehouses", data)
+        self.assertIn("summary", data)
+        self.assertGreaterEqual(data["summary"]["priority_locations"], len(data["items"]))
+        self.assertLessEqual(
+            data["summary"]["reorder_suggestions"],
+            data["summary"]["priority_locations"],
+        )
+        self.assertEqual(data["summary"]["complete"], data["coverage"]["complete"])
         item = next(row for row in data["items"] if row["product_id"] == product.id)
         self.assertEqual(item["name"], template.name)
         self.assertEqual(item["sku"], product.default_code)
