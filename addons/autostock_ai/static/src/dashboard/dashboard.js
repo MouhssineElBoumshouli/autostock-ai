@@ -308,6 +308,24 @@ export class AutoStockDashboard extends Component {
         return `background: conic-gradient(var(--as-green) 0% ${healthy}%, var(--as-amber) ${healthy}% ${second}%, var(--as-red) ${second}% 100%)`;
     }
 
+    // A business-readable forecast total, always derived from the persisted run.
+    get forecastDemandSummary() {
+        const run = this.state.forecast;
+        if (run?.state !== "completed" || !Array.isArray(run.predictions) || !run.predictions.length) {
+            return null;
+        }
+        const numbers = run.predictions.map((point) => Number(point.units));
+        if (numbers.some((value) => !Number.isFinite(value) || value < 0)) {
+            return null;
+        }
+        const total = numbers.reduce((sum, value) => sum + value, 0);
+        return {
+            units: Math.round(total * 10) / 10,
+            horizon: Number(run.horizon_days),
+            uom: run.uom || "units",
+        };
+    }
+
     get selectedProduct() {
         return this.state.forecastOptions?.products.find(
             (product) => String(product.id) === String(this.state.filters.productId)
