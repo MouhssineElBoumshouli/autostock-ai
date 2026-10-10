@@ -268,6 +268,11 @@ class AutoStockApiV1(http.Controller):
                 }
             )
 
+        reorder_suggestions = sum(
+            1
+            for row in priority_rows
+            if row["reorder_needed"] and row["recommended_qty"] > 0
+        )
         return {
             "schema_version": 1,
             "company": self._company_contract(company),
@@ -275,6 +280,11 @@ class AutoStockApiV1(http.Controller):
             "warehouses": snapshot["warehouses"],
             "as_of": snapshot["as_of"],
             "read_only": True,
+            "summary": {
+                "priority_locations": len(priority_rows),
+                "reorder_suggestions": reorder_suggestions,
+                "complete": complete,
+            },
             "items": preview_items,
             "coverage": {
                 "complete": complete,
