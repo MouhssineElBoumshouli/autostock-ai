@@ -781,6 +781,7 @@ html { scroll-behavior: smooth; }
 .profile-avatar { color: #6544d2; background: #f0edff; font-size: 10px; font-weight: 740; }
 .kpi-trend-current { color: #6f7890; background: #f2f3f7; }
 @media (min-width:761px) {
+  .kpi-card:nth-child(4) .kpi-trend-current,
   .kpi-card:last-child .kpi-trend-current { display: none; }
 }
 .notification-empty,.search-state { padding: 14px 10px; color: #7a849a; text-align: center; font-size: 11px; line-height: 1.45; }
