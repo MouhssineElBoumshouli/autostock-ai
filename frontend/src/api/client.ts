@@ -70,7 +70,7 @@ export const api = {
     const suffix = warehouseId ? `?warehouse_id=${warehouseId}` : ''
     return get(`/autostock/api/v1/dashboard/restock-preview${suffix}`, restockSchema, companyId)
   },
-  forecast: (companyId: number) => get('/autostock/api/v1/dashboard/forecast-preview?horizon_days=30', forecastSchema, companyId),
+  forecast: (companyId: number, horizonDays = 30) => get(`/autostock/api/v1/dashboard/forecast-preview?horizon_days=${horizonDays}`, forecastSchema, companyId),
   search: (companyId: number, query: string) => {
     const suffix = new URLSearchParams({ q: query }).toString()
     return get(`/autostock/api/v1/search/products?${suffix}`, searchSchema, companyId)
