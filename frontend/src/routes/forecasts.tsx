@@ -19,7 +19,7 @@ import { ProductSearchDialog, type ProductSearchItem } from '@/components/gate-t
 import { WorkspaceSession, type WorkspaceSessionValue } from '@/components/workspace-session'
 import { useDebounce } from '@/hooks/use-debounce'
 import { formatQuantity } from '@/lib/dashboard'
-import { buildForecastChartPoints, formatForecastDate, formatForecastDateTime, formatForecastTime, type ForecastChartPoint } from '@/lib/forecasts'
+import { buildForecastChartPoints, formatEmployeeForecastTotal, formatForecastDate, formatForecastDateTime, formatForecastTime, type ForecastChartPoint } from '@/lib/forecasts'
 import '@/styles/inventory.css'
 import '@/styles/forecasts.css'
 
@@ -119,19 +119,6 @@ function PartPagination({ page, hasPrevious, hasNext, onPage }: {
   return <div className="forecast-pagination" aria-label="Part results pages"><span>Part results · page {page}</span><div><button type="button" aria-label="Previous part results page" disabled={!hasPrevious} onClick={() => onPage(page - 1)}><ChevronLeft size={16} /></button><span>Page {page}</span><button type="button" aria-label="Next part results page" disabled={!hasNext} onClick={() => onPage(page + 1)}><ChevronRight size={16} /></button></div></div>
 }
 
-function formatEstimatedUnits(value: number, rounding: number) {
-  let scaled = rounding
-  let decimalPlaces = 0
-  while (decimalPlaces < 6 && Math.abs(scaled - Math.round(scaled)) > 1e-8) {
-    scaled *= 10
-    decimalPlaces += 1
-  }
-  return new Intl.NumberFormat(undefined, {
-    minimumFractionDigits: decimalPlaces,
-    maximumFractionDigits: decimalPlaces,
-  }).format(value)
-}
-
 function partEstimateMessage(entry: ForecastPartHorizon) {
   if (!entry.latest_run) return `No ${entry.horizon_days}-day estimate is saved for this part and warehouse.`
   if (entry.estimate.status === 'available') return ''
@@ -176,7 +163,7 @@ function ForecastPartRow({ part, view, timezone, onShowHistory }: {
       {run && <div className="forecast-part-statuses"><ForecastPill run={run as ForecastListRun} /><span className={`forecast-review ${run.review_status === 'reviewed' ? 'is-reviewed' : 'is-unreviewed'}`}>{reviewLabel(run.review_status)}</span></div>}
       {estimate.status === 'available' && run && estimate.estimated_units !== false && estimate.uom_rounding !== false && estimate.uom ? <>
         <span className="forecast-part-field-label">Estimated deliveries</span>
-        <strong className="forecast-estimate-total" data-testid="forecast-estimated-total">{formatEstimatedUnits(estimate.estimated_units, estimate.uom_rounding)} {estimate.uom}</strong>
+        <strong className="forecast-estimate-total" data-testid="forecast-estimated-total">{formatEmployeeForecastTotal(estimate.estimated_units, estimate.uom_rounding, estimate.uom)}</strong>
         <span className="forecast-estimate-range" data-testid="forecast-estimate-range">{dateRange}</span>
         {estimate.window_status === 'ended' && <small className="forecast-window-note">This saved estimate period has ended.</small>}
         {estimate.window_status === 'in_progress' && <small className="forecast-window-note">This saved estimate period is in progress.</small>}
@@ -246,7 +233,7 @@ function ForecastOverview({ companyId, session, onSwitchCompany, onSignOut }: Wo
         <div className="forecast-catalog-heading"><div className="inventory-catalog-title"><span className="inventory-catalog-icon"><ChartNoAxesCombined size={18} aria-hidden="true" /></span><div><h2 id="forecast-list-title">{view === 'parts' ? 'Forecasts by part' : 'Saved run history'}</h2><p>{view === 'parts' ? 'Choose a part and period to see its latest saved estimate.' : 'Every saved run remains available here, including older and incomplete estimates.'}</p></div></div><span className="inventory-live-mark"><i aria-hidden="true" /> Live Odoo data</span></div>
         <div className="forecast-filter-area">
           <label className="inventory-search-field"><Search size={16} aria-hidden="true" /><span className="sr-only">{view === 'parts' ? 'Search forecast parts by name or SKU' : 'Search saved forecasts by part name or SKU'}</span><input value={query} onChange={(event) => { setQuery(event.target.value); setPartsPage(1); setHistoryPage(1) }} placeholder="Search part name or SKU…" type="search" autoComplete="off" />{query && <button type="button" aria-label="Clear forecast search" onClick={() => { setQuery(''); setPartsPage(1); setHistoryPage(1) }}>Clear</button>}</label>
-          <label className="inventory-select-wrap forecast-warehouse-control"><span>Warehouse</span><select aria-label="Choose forecast warehouse" value={warehouseId ?? ''} onChange={(event) => { setWarehouseId(event.target.value ? Number(event.target.value) : undefined); setPartsPage(1); setHistoryPage(1) }}><option value="">All warehouses and company-wide</option>{warehouseOptions?.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}</select></label>
+          <label className="inventory-select-wrap forecast-warehouse-control"><span>Warehouse</span><select aria-label="Choose forecast warehouse" aria-describedby="forecast-warehouse-help" value={warehouseId ?? ''} onChange={(event) => { setWarehouseId(event.target.value ? Number(event.target.value) : undefined); setPartsPage(1); setHistoryPage(1) }}><option value="">All locations</option>{warehouseOptions?.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}</select><span id="forecast-warehouse-help" className="sr-only">Includes warehouse-specific and company-wide forecasts.</span></label>
           {view === 'history' && <details className="forecast-advanced-filters"><summary><SlidersHorizontal size={15} aria-hidden="true" />More filters</summary><div className="forecast-advanced-grid">
             <label className="inventory-select-wrap"><span>Forecast period</span><select aria-label="Filter forecasts by horizon" value={horizonDays} onChange={(event) => { setHorizonDays(event.target.value === 'all' ? 'all' : Number(event.target.value) as 7 | 30 | 60); setHistoryPage(1) }}><option value="all">All periods</option><option value="7">7 days</option><option value="30">30 days</option><option value="60">60 days</option></select></label>
             <label className="inventory-select-wrap"><span>Estimate status</span><select aria-label="Filter forecasts by run status" value={state} onChange={(event) => { setState(event.target.value as RunState); setHistoryPage(1) }}><option value="all">All statuses</option><option value="queued">Waiting to run</option><option value="running">Calculating</option><option value="completed">Calculated</option><option value="insufficient_history">Not enough history</option><option value="no_observed_demand">No deliveries recorded</option><option value="failed">Could not calculate</option></select></label>
@@ -312,7 +299,7 @@ function ForecastChart({ run, timezone }: { run: ForecastDetailData['run']; time
   if (!run.observations.length && !run.predictions.length) return <ForecastState title="No chart data is available">This saved run has no recorded daily deliveries or forecast points to display.</ForecastState>
 
   return <section className="forecast-chart-panel panel" aria-labelledby="forecast-chart-title">
-    <div className="forecast-detail-section-heading"><div><span className="inventory-catalog-icon"><ChartNoAxesCombined size={18} aria-hidden="true" /></span><div><h2 id="forecast-chart-title">Past deliveries and saved estimate</h2><p>Past bars show completed deliveries. The line shows the saved estimate after that history.</p></div></div><span className="forecast-chart-uom">{run.uom || 'Synthetic units'} per day</span></div>
+    <div className="forecast-detail-section-heading"><div><span className="inventory-catalog-icon"><ChartNoAxesCombined size={18} aria-hidden="true" /></span><div><h2 id="forecast-chart-title">Past deliveries and saved estimate</h2><p>The gray line shows past deliveries; the purple dashed line shows the saved estimate.</p></div></div><span className="forecast-chart-uom">{run.uom || 'Synthetic units'} per day</span></div>
     {run.source_type === 'completed_deliveries' && <p className="forecast-demand-note"><CircleHelp size={14} aria-hidden="true" />Completed deliveries are a fulfilled-sales record, not a measure of all customer demand. Stockouts can limit what the history shows.</p>}
     <div className="forecast-chart-legend"><span><i className="is-history" />Completed deliveries</span><span><i className="is-future" />Saved estimate</span>{run.predictions.length > 0 && <span><i className="is-range" />Planning range</span>}</div>
     <div className="forecast-chart-wrap" role="img" aria-label={`Daily completed deliveries and forecast for ${run.product_name}`} data-first-forecast-day={firstPrediction?.day} data-first-forecast-units={firstPrediction ? String(firstPrediction.units) : undefined} data-first-forecast-lower={firstPrediction ? String(firstPrediction.lower_heuristic) : undefined} data-first-forecast-upper={firstPrediction ? String(firstPrediction.upper_heuristic) : undefined}>
@@ -376,7 +363,7 @@ function ForecastEstimateSummary({ detail, timezone }: { detail: ForecastDetailD
   return <section className="forecast-estimate-summary panel" aria-label="Selected forecast summary">
     <div className="forecast-summary-main">
       <div className="forecast-summary-period"><span>Selected period</span><strong>{count(run.horizon_days)} days</strong><small>{isAvailable ? `${formatForecastDate(estimate.date_start as string, timezone, { year: 'numeric' })} – ${formatForecastDate(estimate.date_end as string, timezone, { year: 'numeric' })}` : 'Saved date range is unavailable'}</small>{isAvailable && <small className="forecast-summary-window">{estimate.window_status === 'ended' ? 'This saved period has ended.' : estimate.window_status === 'in_progress' ? 'This saved period is in progress.' : `This saved period starts ${formatForecastDate(estimate.date_start as string, timezone, { year: 'numeric' })}.`}</small>}</div>
-      <div className="forecast-summary-total" aria-live="polite"><span>{isAvailable ? 'Estimated deliveries' : 'Estimate total'}</span>{isAvailable ? <strong data-testid="forecast-estimated-total">{formatEstimatedUnits(estimate.estimated_units as number, estimate.uom_rounding as number)} {estimate.uom}</strong> : <p data-testid="forecast-estimate-unavailable">{detailEstimateMessage(estimate, run)}</p>}</div>
+      <div className="forecast-summary-total" aria-live="polite"><span>{isAvailable ? 'Estimated deliveries' : 'Estimate total'}</span>{isAvailable ? <strong data-testid="forecast-estimated-total">{formatEmployeeForecastTotal(estimate.estimated_units as number, estimate.uom_rounding as number, estimate.uom as string)}</strong> : <p data-testid="forecast-estimate-unavailable">{detailEstimateMessage(estimate, run)}</p>}</div>
     </div>
     <p className="forecast-restock-summary"><CircleHelp size={15} aria-hidden="true" />{restockSummary(guidance.status)}</p>
   </section>

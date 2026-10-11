@@ -16,7 +16,7 @@ function session() {
 
 function estimate(status: 'missing' | 'incomplete' | 'not_completed' | 'available', horizon: 7 | 30 | 60) {
   if (status === 'available') return {
-    status, estimated_units: horizon * 2.4, uom: 'Units', uom_rounding: 1,
+    status, estimated_units: horizon === 30 ? 26.4 : horizon * 2.4, uom: 'Units', uom_rounding: 0.01,
     date_start: '2026-09-27', date_end: horizon === 7 ? '2026-10-03' : horizon === 30 ? '2026-10-26' : '2026-11-25',
     window_status: 'in_progress',
   }
@@ -180,12 +180,32 @@ test('part-first Forecasts fits desktop, tablet and mobile and sends search and 
   expect(browserErrors).toEqual([])
 })
 
+test('employee labels keep SKU separate, show approximate totals, explain the chart, and name all locations clearly', async ({ page }) => {
+  await installForecastRoutes(page)
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto('/forecasts')
+
+  const row = page.locator('.forecast-part-row[data-product-id="1001"][data-warehouse-id="10"]')
+  await expect(row.locator('.forecast-part-identity strong')).toHaveText('Front Brake Pad Set')
+  await expect(row.locator('.forecast-part-identity small')).toHaveText('SKU BP-FR-420')
+  await expect(row.getByTestId('forecast-estimated-total')).toHaveText('About 26.4 Units expected')
+  const warehouse = page.getByRole('combobox', { name: 'Choose forecast warehouse' })
+  await expect(warehouse.locator('option').first()).toHaveText('All locations')
+  await expect(warehouse).toHaveAttribute('aria-describedby', 'forecast-warehouse-help')
+  await expect(page.locator('#forecast-warehouse-help')).toHaveText('Includes warehouse-specific and company-wide forecasts.')
+
+  await row.getByRole('link', { name: /Open 30-day estimate/ }).click()
+  await expect(page.getByRole('heading', { name: 'Front Brake Pad Set', exact: true })).toBeVisible()
+  await expect(page.getByTestId('forecast-estimated-total')).toHaveText('About 26.4 Units expected')
+  await expect(page.getByText('The gray line shows past deliveries; the purple dashed line shows the saved estimate.')).toBeVisible()
+})
+
 test('forecast period controls show saved totals only for full daily series', async ({ page }) => {
   await installForecastRoutes(page)
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto('/forecasts')
   const row = page.locator('.forecast-part-row').filter({ hasText: 'Atlas Central Warehouse' }).first()
-  await expect(row.getByTestId('forecast-estimated-total')).toContainText('72 Units')
+  await expect(row.getByTestId('forecast-estimated-total')).toHaveText('About 26.4 Units expected')
   await expect(row.getByTestId('forecast-estimate-range')).toContainText('Sep 27, 2026')
   await row.getByRole('button', { name: '60 days' }).click()
   await expect(row).toContainText('A complete daily estimate is not available, so a total cannot be shown.')
@@ -211,7 +231,7 @@ test('saved history separates synthetic examples and exposes every review and ru
   await expect(page.locator('.forecast-table tbody tr').first()).toContainText('Needs review')
 })
 
-test('forecast detail leads with the exact saved estimate and keeps evidence collapsed', async ({ page }) => {
+test('forecast detail leads with an approximate saved estimate and keeps evidence collapsed', async ({ page }) => {
   await installForecastRoutes(page)
   const writes: string[] = []
   const browserErrors: string[] = []
@@ -223,7 +243,7 @@ test('forecast detail leads with the exact saved estimate and keeps evidence col
   await expect(page.getByRole('heading', { name: 'Front Brake Pad Set', exact: true })).toBeVisible()
   await expect(page.getByText('Atlas Central Warehouse · Atlas Auto Distribution')).toBeVisible()
   await expect(page.getByText('Estimated deliveries', { exact: true })).toBeVisible()
-  await expect(page.getByTestId('forecast-estimated-total')).toHaveText('72 Units')
+  await expect(page.getByTestId('forecast-estimated-total')).toHaveText('About 26.4 Units expected')
   await expect(page.getByText('Reviewed', { exact: true })).toBeVisible()
   await expect(page.getByText('This saved estimate is not currently used for restock guidance.')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Past deliveries and saved estimate' })).toBeVisible()

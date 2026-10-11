@@ -203,10 +203,23 @@ class TestAutoStockForecastApi(HttpCase):
             f"/autostock/api/v1/forecasts/parts?company_id={company_b.id}&q=G7-SHARED-ROTOR"
         )
         self.assertEqual(parts_a["company"]["id"], company_a.id)
-        self.assertEqual([row["product_name"] for row in parts_a["parts"]], [shared_product.display_name])
+        readable_name = shared_product.with_context(
+            display_default_code=False
+        ).display_name
+        self.assertEqual([row["product_name"] for row in parts_a["parts"]], [readable_name])
+        self.assertNotIn(shared_product.default_code, parts_a["parts"][0]["product_name"])
+        self.assertEqual(parts_a["parts"][0]["sku"], shared_product.default_code)
         self.assertEqual(parts_a["parts"][0]["horizons"][0]["latest_run"]["id"], run_a.id)
         self.assertEqual(parts_b["company"]["id"], company_b.id)
         self.assertEqual(parts_b["parts"][0]["horizons"][0]["latest_run"]["id"], run_b.id)
+        history_a = self._get_json(
+            f"/autostock/api/v1/forecasts?company_id={company_a.id}&q=G7-SHARED-ROTOR"
+        )
+        self.assertEqual(history_a["runs"][0]["product_name"], readable_name)
+        detail_a = self._get_json(
+            f"/autostock/api/v1/forecasts/{run_a.id}?company_id={company_a.id}"
+        )
+        self.assertEqual(detail_a["run"]["product_name"], readable_name)
         self._get_json(
             f"/autostock/api/v1/forecasts/parts?company_id={company_a.id}&warehouse_id={warehouse_b.id}",
             expected_status=403,

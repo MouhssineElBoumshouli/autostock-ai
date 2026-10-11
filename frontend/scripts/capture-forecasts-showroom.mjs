@@ -148,6 +148,18 @@ try {
   }
   await expect(page.locator('.forecast-part-row')).toHaveCount(livePage.parts.length)
   if (!livePage.parts.length) throw new Error('Atlas has no visible real parts to capture in the Forecasts list.')
+  for (const part of livePage.parts) {
+    const row = page.locator(`.forecast-part-row[data-product-id="${part.product_id}"][data-warehouse-id="${part.warehouse_id || 'company'}"]`)
+    await expect(row.locator('.forecast-part-identity strong')).toHaveText(part.product_name)
+    await expect(row.locator('.forecast-part-identity small')).toHaveText(`SKU ${part.sku}`)
+    if (part.product_name.toLocaleLowerCase().includes(part.sku.toLocaleLowerCase())) {
+      throw new Error(`The Atlas part title repeats its SKU for ${part.sku}.`)
+    }
+  }
+  const warehouseSelect = page.getByRole('combobox', { name: 'Choose forecast warehouse' })
+  await expect(warehouseSelect.locator('option').first()).toHaveText('All locations')
+  await expect(warehouseSelect).toHaveAttribute('aria-describedby', 'forecast-warehouse-help')
+  await expect(page.locator('#forecast-warehouse-help')).toHaveText('Includes warehouse-specific and company-wide forecasts.')
   console.log(`Authenticated Atlas Forecasts session; user timezone: ${timezone}.`)
   console.log(`Capturing the unfiltered live By part page with ${livePage.parts.length} company-visible product/warehouse groups.`)
 
@@ -187,7 +199,8 @@ try {
   const selectedRow = page.locator(`.forecast-part-row[data-product-id="${part.product_id}"][data-warehouse-id="${part.warehouse_id || 'company'}"]`)
   await expect(selectedRow).toHaveCount(1)
   await expect(selectedRow.getByRole('button', { name: '30 days' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(selectedRow.getByTestId('forecast-estimated-total')).not.toBeEmpty()
+  await expect(selectedRow.locator('.forecast-part-identity strong')).toHaveText(part.product_name)
+  await expect(selectedRow.getByTestId('forecast-estimated-total')).toHaveText(/^About .+ expected$/)
   await expect(selectedRow.getByTestId('forecast-estimate-range')).toContainText(await page.evaluate(({ start, end }) => {
     const format = (value) => new Intl.DateTimeFormat(undefined, { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(`${value}T00:00:00Z`))
     return `${format(start)} – ${format(end)}`
@@ -204,8 +217,13 @@ try {
     || detail.estimate?.status !== 'available' || detail.read_only !== true) {
     throw new Error('The opened detail is not the selected complete real Atlas run.')
   }
-  await expect(page.getByTestId('forecast-estimated-total')).not.toBeEmpty()
+  if (detail.run.product_name !== part.product_name || detail.run.sku !== part.sku
+    || detail.estimate.estimated_units !== horizon.estimate.estimated_units) {
+    throw new Error('The Atlas detail label or exact saved total does not match the selected part forecast.')
+  }
+  await expect(page.getByTestId('forecast-estimated-total')).toHaveText(/^About .+ expected$/)
   await expect(page.getByRole('heading', { name: 'Past deliveries and saved estimate' })).toBeVisible()
+  await expect(page.getByText('The gray line shows past deliveries; the purple dashed line shows the saved estimate.')).toBeVisible()
   await expect(page.getByText(/This saved estimate|This demonstration example|Restock eligibility/).first()).toBeVisible()
   await expect(page.locator('.forecast-evaluation-disclosure')).not.toHaveAttribute('open', '')
   for (const [width, height, suffix] of [[1440, 1000, '1440'], [1024, 900, '1024'], [390, 844, '390']]) {

@@ -12,6 +12,21 @@ export type ForecastChartPoint = {
   forecastAnchor?: boolean
 }
 
+/** Present the saved total as an estimate without implying precision the source does not support. */
+export function formatEmployeeForecastTotal(value: number, rounding: number, uom: string) {
+  let scaled = rounding
+  let decimalPlaces = 0
+  while (decimalPlaces < 6 && Math.abs(scaled - Math.round(scaled)) > 1e-8) {
+    scaled *= 10
+    decimalPlaces += 1
+  }
+  const amount = new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: decimalPlaces,
+  }).format(value)
+  return `About ${amount} ${uom} expected`
+}
+
 type ForecastChartInput = Pick<ForecastDetailData['run'], 'observations' | 'predictions'>
 
 /**

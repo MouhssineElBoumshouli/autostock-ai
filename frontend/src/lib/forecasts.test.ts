@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildForecastChartPoints, formatForecastDate, formatForecastDateTime, formatForecastTime } from './forecasts'
+import { buildForecastChartPoints, formatEmployeeForecastTotal, formatForecastDate, formatForecastDateTime, formatForecastTime } from './forecasts'
 
 describe('forecast chart data', () => {
   it('keeps the first saved prediction and its heuristic range distinct from the last actual', () => {
@@ -74,5 +74,16 @@ describe('forecast date formatting', () => {
     )
     expect(formatForecastDate('2026-02-31', timezone)).toBe('Date unavailable')
     expect(formatForecastDateTime('not a date', timezone)).toBe('Date unavailable')
+  })
+})
+
+describe('employee-facing forecast totals', () => {
+  it('marks saved totals as approximate and removes unnecessary trailing zeros', () => {
+    expect(formatEmployeeForecastTotal(26.4, 0.01, 'Units')).toBe('About 26.4 Units expected')
+    expect(formatEmployeeForecastTotal(41, 0.01, 'Units')).toBe('About 41 Units expected')
+  })
+
+  it('preserves useful fractional precision for fractional units of measure', () => {
+    expect(formatEmployeeForecastTotal(1.25, 0.25, 'kg')).toBe('About 1.25 kg expected')
   })
 })

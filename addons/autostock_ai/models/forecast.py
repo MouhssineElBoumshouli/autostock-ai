@@ -296,8 +296,10 @@ class AutoStockForecastRun(models.Model):
                 {
                     "id": run.id,
                     "product_id": run.product_id.id if run.product_id else False,
-                    "product_name": run.product_name or (
-                        run.product_id.display_name if run.product_id else run.sku
+                    "product_name": (
+                        run.product_id.with_context(display_default_code=False).display_name
+                        if run.source_type == REAL_SOURCE and run.product_id
+                        else run.product_name or run.sku
                     ),
                     "sku": run.sku,
                     "warehouse_id": run.warehouse_id.id if run.warehouse_id else False,
@@ -571,7 +573,9 @@ class AutoStockForecastRun(models.Model):
             parts.append(
                 {
                     "product_id": product.id,
-                    "product_name": product.display_name,
+                    "product_name": product.with_context(
+                        display_default_code=False
+                    ).display_name,
                     "sku": product.default_code or str(product.id),
                     "warehouse_id": warehouse_record.id if warehouse_record else False,
                     "warehouse_name": warehouse_record.display_name if warehouse_record else False,
@@ -995,7 +999,11 @@ class AutoStockForecastRun(models.Model):
                 if run.source_type == SYNTHETIC_SOURCE
                 else _("Completed deliveries, with returns recorded separately"),
                 "sku": run.sku,
-                "product_name": run.product_name,
+                "product_name": (
+                    product.with_context(display_default_code=False).display_name
+                    if source_type == REAL_SOURCE and product
+                    else run.product_name or run.sku
+                ),
                 "horizon_days": int(run.horizon_days),
                 "history_start": run.history_start_date.isoformat(),
                 "history_end": run.history_end_date.isoformat(),

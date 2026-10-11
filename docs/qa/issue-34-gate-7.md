@@ -4,6 +4,13 @@
 
 This update keeps the work within Gate 7. Forecasts opens on **By part**, while **Saved run history** remains available for every saved record and all existing evidence. The screen is read-only and reuses saved Odoo forecasts and the current risk/replenishment service. The forecast engine, dashboard, Inventory, Warehouses, and Suppliers are unchanged.
 
+## Employee-usability review follow-up
+
+- Odoo returns the linked product's `display_name` with `display_default_code=False` for the Forecasts overview, history, and detail. SKU remains in its own field, and Odoo still supplies variant-specific names. Saved run IDs and prediction values are unchanged.
+- Employee-facing totals say **About … expected** and omit redundant trailing zeroes at the Odoo unit's displayed precision. The saved total in the API stays exact; fractional units keep their useful precision. No reorder quantity or forecast calculation changed.
+- The chart description now identifies the gray history line and purple dashed estimate line. The warehouse selector says **All locations** and its accessible help explains that warehouse-specific and company-wide forecasts are included.
+- Focused regressions cover Odoo list/group/detail product labels and separate SKUs, fractional and whole-unit display, the chart description, and the warehouse option/help.
+
 ## Employee-first behavior and data boundaries
 
 - `GET /autostock/api/v1/forecasts/parts` groups the complete company-visible real forecast set by stable product and warehouse IDs, then applies server-side search, warehouse selection, and pagination. The page shows its result page without implying a catalog-wide total.
@@ -23,18 +30,18 @@ This update keeps the work within Gate 7. Forecasts opens on **By part**, while 
 | Offline forecast evaluation | Passed: 6 labeled synthetic fixture series evaluated for a 30-day holdout. This is test evidence, not Atlas/customer accuracy evidence. |
 | `npm run lint` | Passed |
 | `npm run typecheck` | Passed |
-| `npm run test:unit` | Passed: 8 tests |
+| `npm run test:unit` | Passed: 10 tests |
 | `npm run test:contract` | Passed: 16 tests, including estimate completeness and the saved-parts contract |
-| `npm run test:browser` | Passed: 34 tests across Dashboard, Inventory, Warehouses, Suppliers, and Forecasts; includes server filters, company switching, detail evidence, partial-series handling, timezone formatting, navigation, and desktop/tablet/mobile layouts |
+| `npm run test:browser` | Passed: 35 tests across Dashboard, Inventory, Warehouses, Suppliers, and Forecasts; includes server filters, company switching, detail evidence, partial-series handling, timezone formatting, employee copy, navigation, and desktop/tablet/mobile layouts |
 | `npm run build` | Passed: production Vite build |
 | Odoo 19 + PostgreSQL 16 integration suite | Passed: **60 actual test cases, 0 failures, 0 errors**. Odoo's broader statistics counter reports 74 tests. The isolated database was in a disposable container with no showroom data attached. The two unattached anonymous PostgreSQL test volumes created during the runs were verified and removed; all named showroom volumes remain. |
-| GitHub Actions | Passed: [run 38185654129](https://github.com/MouhssineElBoumshouli/autostock-ai/actions/runs/38185654129); Python, React frontend, and Odoo 19 integration jobs all succeeded on commit `ae9d65003fb0a53a70997d34e0aeb62223e89959`. |
+| GitHub Actions | Previous PR-head run [38185920925](https://github.com/MouhssineElBoumshouli/autostock-ai/actions/runs/38185920925) passed Python, React frontend, and Odoo 19 integration. CI for this employee-usability follow-up will be recorded after the update is pushed. |
 
 The Odoo integration coverage includes a 1,002-run grouped catalog, server-side pagination/search, the newest failed/unreviewed run, no history, one-day and missing-day series, exact saved daily totals/date boundaries, ended estimate windows, demo/real separation, Sales-restricted access, and company/warehouse isolation. The >1,000 catalog integration case passed; its warmed API response grouped the 25 requested product/warehouse groups in under 0.1 seconds in the isolated run.
 
 ## Live Atlas browser QA and screenshots
 
-The authenticated Atlas Auto Distribution showroom was opened in the React app through the existing Odoo session. The live capture used Atlas part `AT-BRK-001` at **Atlas Central Warehouse**, a completed saved 30-day run for **2026-10-10 through 2026-11-08**. The unfiltered first page returned four company-visible product/warehouse groups; the capture also searched the selected SKU, waited for the matching Odoo response, and verified the exact part/warehouse result before opening its detail. Saved run history retained the selected real record.
+The authenticated Atlas Auto Distribution showroom was opened in the React app through the existing Odoo session. The live capture used Atlas part `AT-BRK-001` at **Atlas Central Warehouse**, a completed saved 30-day run for **2026-10-10 through 2026-11-08**. The visible title is `Front Brake Pad Set`, with the SKU shown once beneath it; the total is presented as an estimate with unnecessary zeroes removed. The unfiltered first page returned four company-visible product/warehouse groups; the capture also searched the selected SKU, waited for the matching Odoo response, and verified the exact part/warehouse result and unchanged saved total before opening its detail. Saved run history retained the selected real record.
 
 The capture checked page overflow at 1440px, 1024px, and 390px. It recorded **0 browser page errors, 0 console errors, and 0 failed AutoStock API responses**. Screenshots show the real By part list, exact-run detail, and Saved run history at all three sizes:
 
