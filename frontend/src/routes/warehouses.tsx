@@ -97,9 +97,9 @@ function OverviewMetrics({ data }: { data: WarehouseData }) {
   const values = data.summary
   const metrics = [
     { label: 'Warehouses', value: values.active_warehouses, note: 'In this company', tone: 'violet', icon: WarehouseIcon },
-    { label: 'Need attention', value: values.warehouses_needing_attention, note: 'Low or out-of-stock parts', tone: 'amber', icon: AlertCircle },
-    { label: 'With stockouts', value: values.warehouses_with_stockouts, note: 'Tracked parts at zero', tone: 'red', icon: PackageSearch },
-    { label: 'With incoming stock', value: values.warehouses_with_incoming, note: 'At least one part expected', tone: 'green', icon: ArrowDownToLine },
+    { label: 'Need attention', value: values.warehouses_needing_attention, note: 'Warehouses with low or out-of-stock parts', tone: 'amber', icon: AlertCircle },
+    { label: 'With stockouts', value: values.warehouses_with_stockouts, note: 'Warehouses with tracked parts at zero', tone: 'red', icon: PackageSearch },
+    { label: 'With incoming stock', value: values.warehouses_with_incoming, note: 'Warehouses expecting incoming stock', tone: 'green', icon: ArrowDownToLine },
   ]
   return (
     <>
@@ -127,7 +127,7 @@ function WarehouseCard({ row, locale, timezone }: { row: WarehouseRow; locale: s
         <WarehouseStatus status={row.status} />
       </div>
       <div className="warehouse-card-metrics">
-        <div><span>Parts stored</span><strong>{count(row.stocked_parts)}</strong></div>
+        <div><span>Parts with stock</span><strong>{count(row.stocked_parts)}</strong></div>
         <div className="is-alert"><span>Low stock</span><strong>{count(row.low_stock_parts)}</strong></div>
         <div className="is-critical"><span>Out of stock</span><strong>{count(row.out_of_stock_parts)}</strong></div>
       </div>
@@ -276,7 +276,7 @@ function AttentionParts({ parts }: { parts: WarehouseDetailData['attention_parts
   if (!parts.length) return null
   return (
     <section className="warehouse-attention panel" aria-labelledby="warehouse-attention-title">
-      <div className="warehouse-detail-section-heading"><div><h2 id="warehouse-attention-title">Parts to check</h2><p>Tracked parts with the lowest stock in this warehouse.</p></div><span>{parts.length} shown</span></div>
+      <div className="warehouse-detail-section-heading"><div><h2 id="warehouse-attention-title">Parts to check</h2><p>Tracked parts that are out of stock or low on stock in this warehouse.</p></div><span>{parts.length} shown</span></div>
       <div className="warehouse-attention-list">
         {parts.map((part) => <div className="warehouse-attention-row" key={part.product_id}>
           <span className={`warehouse-attention-icon is-${part.status}`}><PackageSearch size={16} aria-hidden="true" /></span>
@@ -322,7 +322,7 @@ function stockRows(data: InventoryData, openProduct: (item: InventoryRow) => voi
       <div className="warehouse-stock-table-wrap">
         <table className="warehouse-stock-table">
           <thead><tr>
-            <th scope="col">Part</th><th scope="col">SKU</th><th scope="col">On hand<span>physical stock</span></th><th scope="col">Available<span>not reserved</span></th><th scope="col">Reserved</th><th scope="col">Incoming</th><th scope="col">Outgoing</th><th scope="col">Status</th>
+            <th scope="col">Part</th><th scope="col">SKU</th><th scope="col">On hand<span>physical stock</span></th><th scope="col">Available to use<span>not reserved</span></th><th scope="col">Reserved</th><th scope="col">Incoming</th><th scope="col">Outgoing</th><th scope="col">Status</th>
           </tr></thead>
           <tbody>{data.items.map((item) => <tr key={item.product_id}>
             <td><button type="button" className="warehouse-stock-part" onClick={() => openProduct(item)} aria-label={`Open details for ${item.name}`}><span className="inventory-part-icon"><PackageSearch size={15} aria-hidden="true" /></span><span><strong>{item.name}</strong><small>{item.category}{item.reference ? ` · OEM ${item.reference}` : ''}</small></span></button></td>

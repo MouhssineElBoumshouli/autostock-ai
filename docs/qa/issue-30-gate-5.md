@@ -45,6 +45,10 @@ The captured detail snapshot showed 64 catalog part positions, of which 53 had s
 | `npm run capture:warehouses-showroom` | Passed; 12 scripted live captures plus a separate activity-feed image; no browser/API errors |
 | `git diff --check` | Passed |
 
+### Independent review wording pass — 2026-10-11
+
+The overview notes now state that the attention, stockout, and incoming-stock values count warehouses. Warehouse cards use **Parts with stock**. The **Parts to check** helper describes out-of-stock or low-stock parts, and the desktop warehouse stock table labels available quantity **Available to use** with **not reserved** beneath it. Browser assertions cover the overview wording at 1440, 1024, and 390 px, plus the detail helper and table labels. The showroom screenshots were refreshed; capture reported 0 page errors, 0 console errors, and 0 failed AutoStock API responses. No stock calculations or warehouse behavior changed.
+
 ## Screenshot evidence
 
 All screenshots below are browser captures of authenticated Odoo showroom data, not local frontend fixtures.
