@@ -148,7 +148,9 @@ function ReferenceDashboard({ session, companyId, onSwitchCompany, onSignOut }: 
       void navigate({ to: '/suppliers' })
       return
     }
-    window.requestAnimationFrame(() => scrollToTarget('forecast-panel'))
+    if (section === 'forecast') {
+      void navigate({ to: '/forecasts' })
+    }
   }
 
   function onUnavailable(label: string) {

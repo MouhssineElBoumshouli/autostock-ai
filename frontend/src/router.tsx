@@ -3,6 +3,7 @@ import { LazyDashboardRoute } from '@/routes/lazy-dashboard'
 import { LazyInventoryRoute } from '@/routes/lazy-inventory'
 import { LazyWarehouseDetailRoute, LazyWarehousesRoute } from '@/routes/lazy-warehouses'
 import { LazySupplierDetailRoute, LazySupplierGapsRoute, LazySuppliersRoute } from '@/routes/lazy-suppliers'
+import { LazyForecastDetailRoute, LazyForecastsRoute } from '@/routes/lazy-forecasts'
 
 const rootRoute = createRootRoute({ component: Outlet })
 const dashboardRoute = createRoute({
@@ -41,7 +42,18 @@ const supplierDetailRoute = createRoute({
   component: LazySupplierDetailRoute,
 })
 
-export const router = createRouter({ routeTree: rootRoute.addChildren([dashboardRoute, inventoryRoute, warehousesRoute, warehouseDetailRoute, suppliersRoute, supplierGapsRoute, supplierDetailRoute]) })
+const forecastsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/forecasts',
+  component: LazyForecastsRoute,
+})
+const forecastDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/forecasts/$runId',
+  component: LazyForecastDetailRoute,
+})
+
+export const router = createRouter({ routeTree: rootRoute.addChildren([dashboardRoute, inventoryRoute, warehousesRoute, warehouseDetailRoute, suppliersRoute, supplierGapsRoute, supplierDetailRoute, forecastsRoute, forecastDetailRoute]) })
 
 declare module '@tanstack/react-router' {
   interface Register {

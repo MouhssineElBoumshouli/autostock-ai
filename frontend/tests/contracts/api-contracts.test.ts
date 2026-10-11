@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   dashboardSchema, forecastSchema, inventoryDetailSchema, inventorySchema,
-  restockSchema, sessionSchema, supplierDetailSchema, supplierGapsSchema,
+  forecastDetailSchema, forecastsSchema, restockSchema, sessionSchema, supplierDetailSchema, supplierGapsSchema,
   supplierTermsSchema, suppliersSchema, warehouseDetailSchema, warehousesSchema,
 } from '../../src/api/contracts'
 
@@ -15,6 +15,57 @@ const company = {
 }
 
 describe('Odoo v1 API contracts', () => {
+  it('accepts exact server forecast counts and a bounded filtered page', () => {
+    const parsed = forecastsSchema.safeParse({
+      schema_version: 1, company,
+      filters: { query: 'ALT-1001', warehouse_id: 8, horizon_days: 30, state: 'completed', review_status: 'unreviewed', source_type: 'completed_deliveries' },
+      runs: [{
+        id: 201, product_id: 1001, product_name: 'Alternator Assembly', sku: 'ALT-1001',
+        warehouse_id: 8, warehouse_name: 'Central Parts Warehouse', horizon_days: 30,
+        history_start: '2026-01-01', history_end: '2026-06-29', source_cutoff: '2026-06-30 12:00:00',
+        created_at: '2026-06-30 12:00:00', source_type: 'completed_deliveries', state: 'completed',
+        evaluation_status: 'evaluated', review_status: 'unreviewed',
+      }],
+      pagination: { page: 41, page_size: 25, total_count: 1001, total_pages: 41, has_previous: true, has_next: false },
+      warehouse_options: [{ id: 8, name: 'Central Parts Warehouse' }],
+      warehouse_options_limited: false, warehouse_count: 1, real_history_access: true, access_note: false, read_only: true,
+    })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.pagination.total_count).toBe(1001)
+      expect(parsed.data.runs[0].review_status).toBe('unreviewed')
+    }
+  })
+
+  it('keeps exact-run history, returns, forecast points, and restock eligibility in one read-only detail contract', () => {
+    const parsed = forecastDetailSchema.safeParse({
+      schema_version: 1, company,
+      run: {
+        id: 201, name: 'ALT-1001 · 7 days', company_id: 1, company_name: company.name,
+        product_id: 1001, warehouse_id: 8, warehouse_name: 'Central Parts Warehouse', uom: 'Units',
+        created_at: '2026-06-30 12:00:00', state: 'completed', evaluation_status: 'evaluated', failure_reason: false,
+        source_type: 'completed_deliveries', source_label: 'Completed deliveries, with returns recorded separately',
+        sku: 'ALT-1001', product_name: 'Alternator Assembly', horizon_days: 7,
+        history_start: '2026-01-01', history_end: '2026-06-29', source_cutoff: '2026-06-30 12:00:00', source_timezone: 'UTC',
+        history_days: 180, nonzero_days: 12, source_event_count: 84, source_snapshot_sha256: 'abc', model_version: 'test',
+        selected_method: 'trailing_mean', baseline_method: 'seasonal_naive', demand_pattern: 'regular', evaluation_days: 7,
+        baseline_mae: 1.2, ml_mae: 0.9, ml_evaluated: true, review_status: 'unreviewed', reviewed_by: false, reviewed_at: false,
+        data_provenance: 'Completed deliveries in Odoo.', assumptions: 'Fulfilled sales proxy.', limitations: 'Stockouts can censor demand.', interval_note: 'Heuristic range.',
+        current_stock: { on_hand: 4, odoo_projected: 6, uom: 'Units' },
+        observations: [{ day: '2026-06-29', delivered_units: 2, returned_units: 1, units: 2, source_event_count: 3 }],
+        predictions: [{ day: '2026-06-30', units: 2.5, lower_heuristic: 1, upper_heuristic: 4 }],
+      },
+      history_coverage: { configured: true, complete_from: '2026-01-01', run_starts_within_coverage: true },
+      restock_guidance: { status: 'not_eligible', usable: false, reason: 'This forecast has not been reviewed.' },
+      read_only: true,
+    })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.run.observations[0].returned_units).toBe(1)
+      expect(parsed.data.restock_guidance.usable).toBe(false)
+    }
+  })
+
   it('accepts a session with explicit allowed companies and permissions', () => {
     const parsed = sessionSchema.safeParse({
       schema_version: 1,

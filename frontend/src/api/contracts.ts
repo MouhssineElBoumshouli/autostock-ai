@@ -194,6 +194,121 @@ export const forecastSchema = z.discriminatedUnion('status', [
   }),
 ])
 
+const forecastListRunSchema = z.object({
+  id: z.number().int().positive(),
+  product_id: z.union([z.number().int().positive(), z.literal(false)]),
+  product_name: z.string(),
+  sku: z.string(),
+  warehouse_id: z.union([z.number().int().positive(), z.literal(false)]),
+  warehouse_name: z.union([z.string(), z.literal(false)]),
+  horizon_days: z.union([z.literal(7), z.literal(30), z.literal(60)]),
+  history_start: z.string(),
+  history_end: z.string(),
+  source_cutoff: z.string(),
+  created_at: z.string(),
+  source_type: z.enum(['completed_deliveries', 'synthetic_demo']),
+  state: z.enum(['queued', 'running', 'completed', 'insufficient_history', 'no_observed_demand', 'failed']),
+  evaluation_status: z.union([z.string(), z.literal(false)]),
+  review_status: z.enum(['unreviewed', 'reviewed']),
+})
+
+export const forecastsSchema = z.object({
+  schema_version: z.literal(1),
+  company: companySchema,
+  filters: z.object({
+    query: z.string(),
+    warehouse_id: z.union([z.number().int().positive(), z.literal(false)]),
+    horizon_days: z.union([z.literal('all'), z.literal(7), z.literal(30), z.literal(60)]),
+    state: z.union([z.literal('all'), z.enum(['queued', 'running', 'completed', 'insufficient_history', 'no_observed_demand', 'failed'])]),
+    review_status: z.union([z.literal('all'), z.enum(['unreviewed', 'reviewed'])]),
+    source_type: z.union([z.literal('all'), z.enum(['completed_deliveries', 'synthetic_demo'])]),
+  }),
+  runs: z.array(forecastListRunSchema).max(50),
+  pagination: z.object({
+    page: z.number().int().positive(),
+    page_size: z.number().int().positive().max(50),
+    total_count: z.number().int().nonnegative(),
+    total_pages: z.number().int().nonnegative(),
+    has_previous: z.boolean(),
+    has_next: z.boolean(),
+  }),
+  warehouse_options: z.array(z.object({ id: z.number().int().positive(), name: z.string() })).max(100),
+  warehouse_options_limited: z.boolean(),
+  warehouse_count: z.number().int().nonnegative(),
+  real_history_access: z.boolean(),
+  access_note: z.union([z.string(), z.literal(false)]),
+  read_only: z.literal(true),
+})
+
+export const forecastDetailSchema = z.object({
+  schema_version: z.literal(1),
+  company: companySchema,
+  run: z.object({
+    id: z.number().int().positive(),
+    name: z.string(),
+    company_id: z.number().int().positive(),
+    company_name: z.string(),
+    product_id: z.union([z.number().int().positive(), z.literal(false)]),
+    warehouse_id: z.union([z.number().int().positive(), z.literal(false)]),
+    warehouse_name: z.union([z.string(), z.literal(false)]),
+    uom: z.union([z.string(), z.literal(false)]),
+    created_at: z.string(),
+    state: z.enum(['queued', 'running', 'completed', 'insufficient_history', 'no_observed_demand', 'failed']),
+    evaluation_status: z.union([z.string(), z.literal(false)]),
+    failure_reason: z.union([z.string(), z.literal(false)]),
+    source_type: z.enum(['completed_deliveries', 'synthetic_demo']),
+    source_label: z.string(),
+    sku: z.string(),
+    product_name: z.string(),
+    horizon_days: z.number().int().positive(),
+    history_start: z.string(),
+    history_end: z.string(),
+    source_cutoff: z.string(),
+    source_timezone: z.string(),
+    history_days: z.number().int().nonnegative(),
+    nonzero_days: z.number().int().nonnegative(),
+    source_event_count: z.number().int().nonnegative(),
+    source_snapshot_sha256: z.union([z.string(), z.literal(false)]),
+    model_version: z.union([z.string(), z.literal(false)]),
+    selected_method: z.union([z.string(), z.literal(false)]),
+    baseline_method: z.union([z.string(), z.literal(false)]),
+    demand_pattern: z.union([z.string(), z.literal(false)]),
+    evaluation_days: z.number().int().nonnegative(),
+    baseline_mae: z.union([z.number(), z.literal(false)]),
+    ml_mae: z.union([z.number(), z.literal(false)]),
+    ml_evaluated: z.boolean(),
+    review_status: z.enum(['unreviewed', 'reviewed']),
+    reviewed_by: z.union([z.string(), z.literal(false)]),
+    reviewed_at: z.union([z.string(), z.literal(false)]),
+    data_provenance: z.union([z.string(), z.literal(false)]),
+    assumptions: z.union([z.string(), z.literal(false)]),
+    limitations: z.union([z.string(), z.literal(false)]),
+    interval_note: z.union([z.string(), z.literal(false)]),
+    current_stock: z.union([
+      z.object({ on_hand: z.number(), odoo_projected: z.number(), uom: z.string() }),
+      z.literal(false),
+    ]),
+    observations: z.array(z.object({
+      day: z.string(), delivered_units: z.number(), returned_units: z.number(),
+      units: z.number(), source_event_count: z.number().int().nonnegative(),
+    })).max(730),
+    predictions: z.array(z.object({
+      day: z.string(), units: z.number(), lower_heuristic: z.number(), upper_heuristic: z.number(),
+    })).max(60),
+  }),
+  history_coverage: z.object({
+    configured: z.boolean(),
+    complete_from: z.union([z.string(), z.literal(false)]),
+    run_starts_within_coverage: z.boolean(),
+  }),
+  restock_guidance: z.object({
+    status: z.enum(['eligible', 'not_eligible', 'not_applicable', 'restricted', 'unavailable']),
+    usable: z.boolean(),
+    reason: z.string(),
+  }),
+  read_only: z.literal(true),
+})
+
 export const searchSchema = z.object({
   schema_version: z.literal(1),
   query: z.string(),
@@ -708,6 +823,9 @@ export type SessionData = z.infer<typeof sessionSchema>
 export type DashboardData = z.infer<typeof dashboardSchema>
 export type RestockData = z.infer<typeof restockSchema>
 export type ForecastData = z.infer<typeof forecastSchema>
+export type ForecastsData = z.infer<typeof forecastsSchema>
+export type ForecastDetailData = z.infer<typeof forecastDetailSchema>
+export type ForecastListRun = z.infer<typeof forecastListRunSchema>
 export type ProductSearchData = z.infer<typeof searchSchema>
 export type ProductQuickViewData = z.infer<typeof productQuickViewSchema>
 export type InventoryOptions = z.infer<typeof inventoryOptionsSchema>

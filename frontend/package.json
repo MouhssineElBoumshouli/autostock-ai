@@ -14,7 +14,8 @@
     "capture:showroom": "node scripts/capture-showroom-screenshots.mjs",
     "capture:inventory-showroom": "node scripts/capture-inventory-showroom.mjs",
     "capture:warehouses-showroom": "node scripts/capture-warehouses-showroom.mjs",
-    "capture:suppliers-showroom": "node scripts/capture-suppliers-showroom.mjs"
+    "capture:suppliers-showroom": "node scripts/capture-suppliers-showroom.mjs",
+    "capture:forecasts-showroom": "node scripts/capture-forecasts-showroom.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",

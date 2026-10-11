@@ -488,7 +488,7 @@ function WarehouseWorkspace({
     if (section === 'inventory') void navigate({ to: '/inventory' })
     if (section === 'warehouses') void navigate({ to: '/warehouses' })
     if (section === 'suppliers') void navigate({ to: '/suppliers' })
-    if (section === 'forecast') void navigate({ to: '/' })
+    if (section === 'forecast') void navigate({ to: '/forecasts' })
   }
 
   return (
