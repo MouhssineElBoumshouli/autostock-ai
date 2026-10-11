@@ -247,3 +247,103 @@
 @media (prefers-reduced-motion: reduce) {
   .forecast-loading i { animation: none; }
 }
+
+/* Gate 7 employee-first Forecasts views */
+.forecast-view-tabs { display: flex; align-items: center; gap: 4px; margin: 0 0 12px; padding: 4px; width: fit-content; max-width: 100%; border: 1px solid #e7e9f1; border-radius: 11px; background: #f8f9fc; }
+.forecast-view-tabs button { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 13px; border: 1px solid transparent; border-radius: 8px; color: #68738b; background: transparent; font-size: 13px; font-weight: 650; white-space: nowrap; }
+.forecast-view-tabs button:hover { color: #5134b3; background: #fff; }
+.forecast-view-tabs button.is-active { border-color: #e7e2fa; color: #5f43c5; background: #fff; box-shadow: 0 2px 6px rgba(35,38,85,.045); }
+.forecast-filter-area { grid-template-columns: minmax(220px,1fr) minmax(190px,.6fr); align-items: end; }
+.forecast-filter-area > .forecast-advanced-filters { grid-column: 1 / -1; }
+.forecast-advanced-filters { min-width: 0; }
+.forecast-advanced-filters > summary { width: fit-content; min-height: 34px; display: inline-flex; align-items: center; gap: 7px; color: #6b55be; font-size: 12px; font-weight: 650; cursor: pointer; }
+.forecast-advanced-filters > summary:focus-visible { border-radius: 4px; outline: 2px solid rgba(113,72,239,.45); outline-offset: 3px; }
+.forecast-advanced-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)) auto; align-items: end; gap: 9px; padding: 8px 0 2px; }
+.forecast-advanced-grid .inventory-select-wrap { min-width: 0; }
+.forecast-clear-filters { white-space: nowrap; }
+.forecast-history-count { margin: 1px 16px 9px; color: #778198; font-size: 12px; }
+.forecast-access-note { align-items: center; flex-wrap: wrap; }
+.forecast-inline-link { padding: 2px 0; color: #6846dc; text-decoration: underline; text-underline-offset: 2px; font-size: inherit; font-weight: 650; }
+.forecast-part-list { display: grid; gap: 9px; padding: 12px; }
+.forecast-part-row { min-width: 0; display: grid; grid-template-columns: minmax(185px,1fr) minmax(205px,.92fr) minmax(290px,1.35fr); align-items: center; gap: 16px; padding: 15px 16px; border: 1px solid #e8eaf1; border-radius: 12px; background: #fff; box-shadow: 0 3px 13px rgba(35,38,85,.035); }
+.forecast-part-identity { min-width: 0; display: flex; align-items: flex-start; gap: 10px; }
+.forecast-part-identity > div { min-width: 0; display: grid; gap: 4px; }
+.forecast-part-identity strong { color: #303a55; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+.forecast-part-identity small,.forecast-part-warehouse { color: #788198; font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+.forecast-part-warehouse { display: inline-flex; align-items: flex-start; gap: 5px; margin-top: 3px; }
+.forecast-part-warehouse svg { flex: 0 0 13px; margin-top: 1px; }
+.forecast-part-period,.forecast-part-estimate { min-width: 0; display: grid; align-content: center; gap: 7px; }
+.forecast-part-field-label,.forecast-summary-period > span,.forecast-summary-total > span { color: #79839a; font-size: 12px; font-weight: 580; }
+.forecast-horizon-control { width: fit-content; max-width: 100%; display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid #e9eaf1; border-radius: 9px; background: #f8f9fc; }
+.forecast-horizon-control button { min-height: 31px; padding: 0 9px; border: 1px solid transparent; border-radius: 7px; color: #69748b; background: transparent; font-size: 12px; font-weight: 640; white-space: nowrap; }
+.forecast-horizon-control button[aria-pressed="true"] { border-color: #e2dcf8; color: #5d43c0; background: #fff; box-shadow: 0 1px 4px rgba(35,38,85,.05); }
+.forecast-run-count { color: #8a92a5; font-size: 11px; }
+.forecast-part-statuses { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.forecast-estimate-total { color: #303a55; font-size: 17px; line-height: 1.25; font-weight: 740; overflow-wrap: anywhere; }
+.forecast-estimate-range,.forecast-window-note { color: #788198; font-size: 12px; line-height: 1.4; }
+.forecast-window-note { color: #826b43; }
+.forecast-part-empty-copy { margin: 0; color: #737e94; font-size: 12px; line-height: 1.45; }
+.forecast-part-actions { display: flex; align-items: center; justify-content: flex-start; }
+.forecast-open-estimate { min-height: 31px; display: inline-flex; align-items: center; gap: 5px; color: #6846dc; font-size: 12px; font-weight: 680; }
+.forecast-open-estimate:hover { color: #4e31b9; }
+.forecast-part-actions button { padding: 0; border: 0; background: transparent; cursor: pointer; }
+.forecast-pagination[aria-label="Part results pages"] { border-top: 1px solid #eff0f5; }
+.forecast-estimate-summary { margin-bottom: 12px; padding: 15px 17px 12px; }
+.forecast-summary-main { min-width: 0; display: grid; grid-template-columns: minmax(175px,.6fr) minmax(0,1.4fr); gap: 20px; }
+.forecast-summary-period,.forecast-summary-total { min-width: 0; display: grid; align-content: start; gap: 5px; }
+.forecast-summary-period strong { color: #303a55; font-size: 17px; line-height: 1.3; }
+.forecast-summary-period small { color: #778198; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.forecast-summary-total strong { color: #5c41c4; font-size: clamp(20px,2vw,27px); line-height: 1.2; font-weight: 750; overflow-wrap: anywhere; }
+.forecast-summary-total p { margin: 0; color: #69758d; font-size: 13px; line-height: 1.45; }
+.forecast-restock-summary { display: flex; align-items: flex-start; gap: 7px; margin: 12px 0 0; padding-top: 10px; border-top: 1px solid #eff0f5; color: #6f7890; font-size: 12px; line-height: 1.45; }
+.forecast-restock-summary svg { flex: 0 0 15px; margin-top: 1px; color: #7557d3; }
+.forecast-provenance-list { padding: 0; }
+.forecast-provenance-list > div { grid-template-columns: minmax(145px,.65fr) minmax(0,1.35fr); }
+.forecast-estimate-summary + .forecast-chart-panel { margin-top: 0; }
+.forecast-evaluation-panel { margin-top: 12px; }
+.forecast-evaluation-panel .forecast-detail-section-heading { min-height: 62px; }
+.forecast-evaluation-panel .forecast-detail-section-heading .inventory-catalog-icon { flex: 0 0 32px; width: 32px; height: 32px; }
+.forecast-evaluation-disclosure { margin-top: 0; }
+.forecast-evaluation-body .forecast-provenance-list { padding: 0; }
+.forecast-evaluation-body .forecast-provenance-list > div { grid-template-columns: minmax(175px,.55fr) minmax(0,1.45fr); }
+.forecast-evaluation-body .forecast-provenance-list dd { overflow-wrap: anywhere; }
+.forecast-detail-actions { flex-wrap: wrap; }
+
+@media (max-width: 1100px) {
+  .forecast-part-row { grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px 16px; }
+  .forecast-part-estimate { grid-column: 1 / -1; grid-template-columns: minmax(0,1fr) auto; align-items: center; }
+  .forecast-part-estimate > .forecast-part-field-label,.forecast-part-estimate > .forecast-estimate-total,.forecast-part-estimate > .forecast-estimate-range,.forecast-part-estimate > .forecast-window-note,.forecast-part-estimate > .forecast-part-empty-copy { grid-column: 1; }
+  .forecast-part-estimate > .forecast-part-statuses,.forecast-part-estimate > .forecast-part-actions { grid-column: 2; }
+  .forecast-part-estimate > .forecast-part-statuses { grid-row: 1; justify-self: end; }
+  .forecast-part-estimate > .forecast-part-actions { grid-row: 2 / span 3; justify-self: end; align-self: end; }
+  .forecast-advanced-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .forecast-clear-filters { grid-column: 1 / -1; justify-self: start; }
+}
+
+@media (max-width: 760px) {
+  .forecast-view-tabs { width: 100%; display: grid; grid-template-columns: minmax(0,.8fr) minmax(0,1.2fr); }
+  .forecast-view-tabs button { min-width: 0; padding-inline: 7px; font-size: 12px; }
+  .forecast-filter-area { grid-template-columns: minmax(0,1fr); }
+  .forecast-advanced-grid { grid-template-columns: minmax(0,1fr); }
+  .forecast-clear-filters { grid-column: auto; }
+  .forecast-history-count { margin-inline: 11px; line-height: 1.4; }
+  .forecast-part-list { gap: 8px; padding: 10px; }
+  .forecast-part-row { grid-template-columns: minmax(0,1fr); gap: 12px; padding: 13px; }
+  .forecast-part-identity strong { font-size: 14px; }
+  .forecast-part-period,.forecast-part-estimate { padding-top: 10px; border-top: 1px solid #f0f1f5; }
+  .forecast-part-estimate { grid-column: auto; grid-template-columns: minmax(0,1fr); align-items: start; }
+  .forecast-part-estimate > .forecast-part-field-label,.forecast-part-estimate > .forecast-estimate-total,.forecast-part-estimate > .forecast-estimate-range,.forecast-part-estimate > .forecast-window-note,.forecast-part-estimate > .forecast-part-empty-copy,.forecast-part-estimate > .forecast-part-statuses,.forecast-part-estimate > .forecast-part-actions { grid-column: auto; grid-row: auto; justify-self: start; }
+  .forecast-part-actions { margin-top: 1px; }
+  .forecast-horizon-control { width: 100%; }
+  .forecast-horizon-control button { flex: 1 1 0; }
+  .forecast-estimate-summary { padding: 13px; }
+  .forecast-summary-main { grid-template-columns: minmax(0,1fr); gap: 12px; }
+  .forecast-summary-total { padding-top: 10px; border-top: 1px solid #eff0f5; }
+  .forecast-summary-total strong { font-size: 24px; }
+  .forecast-evaluation-body .forecast-provenance-list > div,.forecast-provenance-list > div { grid-template-columns: minmax(105px,.7fr) minmax(0,1.3fr); gap: 8px; }
+  .forecast-evaluation-panel { margin-top: 9px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .forecast-view-tabs button,.forecast-horizon-control button,.forecast-open-estimate { scroll-behavior: auto; transition: none; }
+}

@@ -1,6 +1,7 @@
 import {
   dashboardSchema,
   forecastDetailSchema,
+  forecastPartsSchema,
   forecastsSchema,
   inventoryDetailSchema,
   inventoryOptionsSchema,
@@ -131,6 +132,20 @@ export const api = {
       if (value !== undefined && value !== '') params.set(key, String(value))
     }
     return get(`/autostock/api/v1/forecasts?${params}`, forecastsSchema, companyId)
+      .then((data) => requireCompany(companyId, data))
+  },
+  forecastParts: (companyId: number, filters: ForecastPartsRequest = {}) => {
+    const params = new URLSearchParams()
+    const values: Record<string, string | number | undefined> = {
+      q: filters.query,
+      warehouse_id: filters.warehouseId,
+      page: filters.page,
+      page_size: filters.pageSize,
+    }
+    for (const [key, value] of Object.entries(values)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
+    }
+    return get(`/autostock/api/v1/forecasts/parts?${params}`, forecastPartsSchema, companyId)
       .then((data) => requireCompany(companyId, data))
   },
   forecastDetail: (companyId: number, runId: number) => get(
@@ -342,6 +357,8 @@ export type ForecastsRequest = {
   page?: number
   pageSize?: number
 }
+
+export type ForecastPartsRequest = Pick<ForecastsRequest, 'query' | 'warehouseId' | 'page' | 'pageSize'>
 
 export type WarehouseRequest = {
   query?: string

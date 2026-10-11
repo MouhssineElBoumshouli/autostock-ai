@@ -17,8 +17,8 @@ class TestAutoStockForecastApi(HttpCase):
         admin.write({"password": self.test_password})
         self.authenticate(admin.login, self.test_password)
 
-    def _get_json(self, path, expected_status=200):
-        response = self.url_open(path, allow_redirects=False)
+    def _get_json(self, path, expected_status=200, timeout=12):
+        response = self.url_open(path, allow_redirects=False, timeout=timeout)
         self.assertEqual(response.status_code, expected_status, response.text[:500])
         self.assertIn("application/json", response.headers.get("Content-Type", ""))
         return response.json()
@@ -59,10 +59,15 @@ class TestAutoStockForecastApi(HttpCase):
         review_status="unreviewed",
         horizon=7,
         history_days=100,
+        history_end=False,
         evaluation_days=0,
         name=False,
     ):
-        today = fields.Date.today()
+        history_end = (
+            fields.Date.to_date(history_end)
+            if history_end
+            else fields.Date.today() - timedelta(days=1)
+        )
         values = {
             "name": name or f"Gate 7 {sku}",
             "company_id": company.id,
@@ -76,8 +81,8 @@ class TestAutoStockForecastApi(HttpCase):
             "evaluation_status": "evaluated" if state == "completed" else state,
             "review_status": review_status,
             "horizon_days": str(horizon),
-            "history_start_date": today - timedelta(days=history_days - 1),
-            "history_end_date": today - timedelta(days=1),
+            "history_start_date": history_end - timedelta(days=history_days - 1),
+            "history_end_date": history_end,
             "source_cutoff": fields.Datetime.now(),
             "history_days": history_days,
             "nonzero_days": 12 if state == "completed" else 0,
@@ -100,6 +105,22 @@ class TestAutoStockForecastApi(HttpCase):
                 allowed_company_ids=[company.id]
             ),
             values,
+        )
+
+    def _points(self, run, days=None, units=1.0):
+        count_days = int(run.horizon_days) if days is None else days
+        start = run.history_end_date + timedelta(days=1)
+        return self.env["autostock.forecast.point"].create(
+            [
+                {
+                    "run_id": run.id,
+                    "day": start + timedelta(days=offset),
+                    "units": units,
+                    "lower_heuristic": max(0.0, units - 0.5),
+                    "upper_heuristic": units + 0.5,
+                }
+                for offset in range(count_days)
+            ]
         )
 
     def _user(self, name, company, companies, *, sales=False):
@@ -174,6 +195,211 @@ class TestAutoStockForecastApi(HttpCase):
             f"/autostock/api/v1/forecasts/{run_b.id}?company_id={company_a.id}",
             expected_status=403,
         )
+
+        parts_a = self._get_json(
+            f"/autostock/api/v1/forecasts/parts?company_id={company_a.id}&q=G7-SHARED-ROTOR"
+        )
+        parts_b = self._get_json(
+            f"/autostock/api/v1/forecasts/parts?company_id={company_b.id}&q=G7-SHARED-ROTOR"
+        )
+        self.assertEqual(parts_a["company"]["id"], company_a.id)
+        self.assertEqual([row["product_name"] for row in parts_a["parts"]], [shared_product.display_name])
+        self.assertEqual(parts_a["parts"][0]["horizons"][0]["latest_run"]["id"], run_a.id)
+        self.assertEqual(parts_b["company"]["id"], company_b.id)
+        self.assertEqual(parts_b["parts"][0]["horizons"][0]["latest_run"]["id"], run_b.id)
+        self._get_json(
+            f"/autostock/api/v1/forecasts/parts?company_id={company_a.id}&warehouse_id={warehouse_b.id}",
+            expected_status=403,
+        )
+
+    def test_part_forecast_selects_latest_status_and_only_sums_complete_saved_days(self):
+        company = self.env.company
+        warehouse = self._warehouse(company)
+        product = self._product(company, "Gate 7 Complete Brake Rotor", "G7-COMPLETE-ROTOR")
+        older_complete = self._run(
+            company,
+            sku="G7-COMPLETE-ROTOR",
+            product=product,
+            warehouse=warehouse,
+            source_type=REAL_SOURCE,
+            state="completed",
+            review_status="reviewed",
+            horizon=7,
+            history_days=90,
+            evaluation_days=7,
+        )
+        self._points(older_complete, units=1.0)
+        newest_failed = self._run(
+            company,
+            sku="G7-COMPLETE-ROTOR",
+            product=product,
+            warehouse=warehouse,
+            source_type=REAL_SOURCE,
+            state="failed",
+            review_status="unreviewed",
+            horizon=7,
+            history_days=90,
+        )
+        one_day_only = self._run(
+            company,
+            sku="G7-COMPLETE-ROTOR",
+            product=product,
+            warehouse=warehouse,
+            source_type=REAL_SOURCE,
+            state="completed",
+            review_status="unreviewed",
+            horizon=30,
+            history_days=90,
+            evaluation_days=7,
+        )
+        self._points(one_day_only, days=1, units=4.0)
+        demo = self._run(
+            company,
+            sku="G7-COMPLETE-ROTOR",
+            product=False,
+            warehouse=False,
+            source_type=SYNTHETIC_SOURCE,
+            state="completed",
+            review_status="reviewed",
+            horizon=30,
+            history_days=90,
+            evaluation_days=7,
+        )
+        self._points(demo, units=3.0)
+
+        page = self._get_json(
+            f"/autostock/api/v1/forecasts/parts?q=G7-COMPLETE-ROTOR&warehouse_id={warehouse.id}"
+        )
+        self.assertEqual(len(page["parts"]), 1)
+        part = page["parts"][0]
+        self.assertEqual(part["product_id"], product.id)
+        self.assertEqual(part["warehouse_id"], warehouse.id)
+        self.assertEqual(part["source_type"], REAL_SOURCE)
+        horizon_7 = next(item for item in part["horizons"] if item["horizon_days"] == 7)
+        self.assertEqual(horizon_7["saved_run_count"], 2)
+        self.assertEqual(horizon_7["latest_run"]["id"], newest_failed.id)
+        self.assertEqual(horizon_7["latest_run"]["state"], "failed")
+        self.assertEqual(horizon_7["latest_run"]["review_status"], "unreviewed")
+        self.assertEqual(horizon_7["estimate"]["status"], "not_completed")
+        self.assertFalse(horizon_7["estimate"]["estimated_units"])
+        horizon_30 = next(item for item in part["horizons"] if item["horizon_days"] == 30)
+        self.assertEqual(horizon_30["latest_run"]["id"], one_day_only.id)
+        self.assertEqual(horizon_30["estimate"]["status"], "incomplete")
+        self.assertFalse(horizon_30["estimate"]["estimated_units"])
+        self.assertFalse(horizon_30["estimate"]["date_start"])
+        horizon_60 = next(item for item in part["horizons"] if item["horizon_days"] == 60)
+        self.assertFalse(horizon_60["latest_run"])
+        self.assertEqual(horizon_60["estimate"]["status"], "missing")
+
+        exact_detail = self._get_json(f"/autostock/api/v1/forecasts/{older_complete.id}")
+        self.assertEqual(exact_detail["run"]["review_status"], "reviewed")
+        self.assertEqual(exact_detail["estimate"]["status"], "available")
+        self.assertEqual(exact_detail["estimate"]["estimated_units"], 7.0)
+        self.assertEqual(
+            exact_detail["estimate"]["date_start"],
+            (older_complete.history_end_date + timedelta(days=1)).isoformat(),
+        )
+        self.assertEqual(exact_detail["estimate"]["date_end"], (older_complete.history_end_date + timedelta(days=7)).isoformat())
+        self.assertNotEqual(exact_detail["restock_guidance"]["status"], "reviewed")
+        self.assertFalse(exact_detail["restock_guidance"]["usable"])
+
+        empty = self._get_json("/autostock/api/v1/forecasts/parts?q=G7-NO-SAVED-PART")
+        self.assertEqual(empty["parts"], [])
+        history = self._get_json("/autostock/api/v1/forecasts?q=G7-COMPLETE-ROTOR")
+        self.assertIn(demo.id, [row["id"] for row in history["runs"]])
+
+    def test_exact_daily_series_keeps_its_truthful_ended_date_window(self):
+        company = self.env.company
+        run = self._run(
+            company,
+            sku="DEMO-BP-001",
+            product=self._product(company, "Gate 7 Ended Window Rotor", "DEMO-BP-001"),
+            source_type=REAL_SOURCE,
+            state="completed",
+            horizon=7,
+            history_days=90,
+            history_end=fields.Date.today() - timedelta(days=17),
+            evaluation_days=7,
+        )
+        self._points(run, units=2.0)
+
+        detail = self._get_json(f"/autostock/api/v1/forecasts/{run.id}")
+        estimate = detail["estimate"]
+        self.assertEqual(estimate["status"], "available")
+        self.assertEqual(estimate["window_status"], "ended")
+        self.assertEqual(
+            estimate["date_start"],
+            (run.history_end_date + timedelta(days=1)).isoformat(),
+        )
+        self.assertEqual(
+            estimate["date_end"],
+            (run.history_end_date + timedelta(days=7)).isoformat(),
+        )
+        self.assertEqual(estimate["estimated_units"], 14.0)
+
+    def test_part_forecast_pages_the_full_grouped_catalog_beyond_1001_runs(self):
+        company = self.env.company
+        today = fields.Date.today()
+        templates = self.env["product.template"].with_company(company).create(
+            [
+                {
+                    "name": f"Gate 7 grouped catalog part {index:04d}",
+                    "default_code": f"G7-GROUP-{index:04d}",
+                    "company_id": company.id,
+                    "is_storable": True,
+                    "autostock_enabled": True,
+                }
+                for index in range(334)
+            ]
+        )
+        products = templates.product_variant_id
+        run_values = []
+        for product in products:
+            for horizon in (7, 30, 60):
+                run_values.append(
+                    {
+                        "name": f"{product.default_code} · {horizon} days",
+                        "company_id": company.id,
+                        "product_id": product.id,
+                        "product_name": product.display_name,
+                        "sku": product.default_code,
+                        "uom_id": product.uom_id.id,
+                        "source_type": REAL_SOURCE,
+                        "state": "failed",
+                        "evaluation_status": "failed",
+                        "horizon_days": str(horizon),
+                        "history_start_date": today - timedelta(days=90),
+                        "history_end_date": today - timedelta(days=1),
+                        "source_cutoff": fields.Datetime.now(),
+                        "failure_reason": "Integration fixture; no forecast was generated.",
+                    }
+                )
+        models.Model.create(self.env["autostock.forecast.run"], run_values)
+
+        first_page = self._get_json(
+            "/autostock/api/v1/forecasts/parts?q=G7-GROUP&page=1&page_size=25",
+            timeout=60,
+        )
+        last_page = self._get_json(
+            "/autostock/api/v1/forecasts/parts?q=G7-GROUP&page=14&page_size=25",
+            timeout=60,
+        )
+        self.assertEqual(len(first_page["parts"]), 25)
+        self.assertTrue(first_page["pagination"]["has_next"])
+        self.assertEqual(len({row["product_id"] for row in first_page["parts"]}), 25)
+        self.assertEqual(len(last_page["parts"]), 9)
+        self.assertFalse(last_page["pagination"]["has_next"])
+        self.assertNotIn("total_count", last_page["pagination"])
+        for part in first_page["parts"]:
+            self.assertEqual(len(part["horizons"]), 3)
+            self.assertEqual([item["saved_run_count"] for item in part["horizons"]], [1, 1, 1])
+        searched = self._get_json(
+            "/autostock/api/v1/forecasts/parts?q=G7-GROUP-0333&page_size=12",
+            timeout=60,
+        )
+        self.assertEqual(len(searched["parts"]), 1)
+        self.assertEqual(searched["parts"][0]["sku"], "G7-GROUP-0333")
+        self.assertEqual(searched["parts"][0]["product_id"], products[-1].id)
 
     def test_forecast_search_and_pagination_reach_run_1001(self):
         company = self.env.company
@@ -291,6 +517,11 @@ class TestAutoStockForecastApi(HttpCase):
         self.assertTrue(page["access_note"])
         self.assertTrue(all(row["source_type"] == SYNTHETIC_SOURCE for row in page["runs"]))
         self.assertNotIn("G7-RESTRICTED", str(page))
+        parts = self._get_json("/autostock/api/v1/forecasts/parts")
+        self.assertFalse(parts["real_history_access"])
+        self.assertTrue(parts["access_note"])
+        self.assertEqual(parts["parts"], [])
+        self.assertNotIn("G7-RESTRICTED", str(parts))
         self._get_json(
             "/autostock/api/v1/forecasts?source_type=completed_deliveries",
             expected_status=403,

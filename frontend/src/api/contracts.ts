@@ -240,9 +240,74 @@ export const forecastsSchema = z.object({
   read_only: z.literal(true),
 })
 
+const forecastEstimateSchema = z.object({
+  status: z.enum(['missing', 'not_completed', 'incomplete', 'available']),
+  estimated_units: z.union([z.number(), z.literal(false)]),
+  uom: z.union([z.string(), z.literal(false)]),
+  uom_rounding: z.union([z.number().positive(), z.literal(false)]),
+  date_start: z.union([z.string(), z.literal(false)]),
+  date_end: z.union([z.string(), z.literal(false)]),
+  window_status: z.union([z.enum(['upcoming', 'in_progress', 'ended']), z.literal(false)]),
+}).superRefine((estimate, context) => {
+  if (estimate.status === 'available') {
+    if (estimate.estimated_units === false || !estimate.uom || estimate.uom_rounding === false
+      || !estimate.date_start || !estimate.date_end || !estimate.window_status) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: 'A complete estimate must include its total, unit, saved date range, and period status.' })
+    }
+  } else if (estimate.estimated_units !== false || estimate.date_start !== false || estimate.date_end !== false) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Incomplete, pending, or missing estimates cannot include a total or date range.' })
+  }
+})
+
+const forecastPartRunSchema = z.object({
+  id: z.number().int().positive(),
+  created_at: z.string(),
+  horizon_days: z.union([z.literal(7), z.literal(30), z.literal(60)]),
+  source_type: z.literal('completed_deliveries'),
+  state: z.enum(['queued', 'running', 'completed', 'insufficient_history', 'no_observed_demand', 'failed']),
+  evaluation_status: z.union([z.string(), z.literal(false)]),
+  review_status: z.enum(['unreviewed', 'reviewed']),
+})
+
+export const forecastPartsSchema = z.object({
+  schema_version: z.literal(1),
+  company: companySchema,
+  filters: z.object({
+    query: z.string(),
+    warehouse_id: z.union([z.number().int().positive(), z.literal(false)]),
+  }),
+  parts: z.array(z.object({
+    product_id: z.number().int().positive(),
+    product_name: z.string(),
+    sku: z.string(),
+    warehouse_id: z.union([z.number().int().positive(), z.literal(false)]),
+    warehouse_name: z.union([z.string(), z.literal(false)]),
+    horizons: z.array(z.object({
+      horizon_days: z.union([z.literal(7), z.literal(30), z.literal(60)]),
+      saved_run_count: z.number().int().nonnegative(),
+      latest_run: z.union([forecastPartRunSchema, z.literal(false)]),
+      estimate: forecastEstimateSchema,
+    })).length(3),
+    source_type: z.literal('completed_deliveries'),
+  })).max(50),
+  pagination: z.object({
+    page: z.number().int().positive(),
+    page_size: z.number().int().positive().max(50),
+    has_previous: z.boolean(),
+    has_next: z.boolean(),
+  }),
+  warehouse_options: z.array(z.object({ id: z.number().int().positive(), name: z.string() })).max(100),
+  warehouse_options_limited: z.boolean(),
+  warehouse_count: z.number().int().nonnegative(),
+  real_history_access: z.boolean(),
+  access_note: z.union([z.string(), z.literal(false)]),
+  read_only: z.literal(true),
+})
+
 export const forecastDetailSchema = z.object({
   schema_version: z.literal(1),
   company: companySchema,
+  estimate: forecastEstimateSchema,
   run: z.object({
     id: z.number().int().positive(),
     name: z.string(),
@@ -824,8 +889,12 @@ export type DashboardData = z.infer<typeof dashboardSchema>
 export type RestockData = z.infer<typeof restockSchema>
 export type ForecastData = z.infer<typeof forecastSchema>
 export type ForecastsData = z.infer<typeof forecastsSchema>
+export type ForecastPartsData = z.infer<typeof forecastPartsSchema>
 export type ForecastDetailData = z.infer<typeof forecastDetailSchema>
 export type ForecastListRun = z.infer<typeof forecastListRunSchema>
+export type ForecastPart = ForecastPartsData['parts'][number]
+export type ForecastPartHorizon = ForecastPart['horizons'][number]
+export type ForecastEstimate = z.infer<typeof forecastEstimateSchema>
 export type ProductSearchData = z.infer<typeof searchSchema>
 export type ProductQuickViewData = z.infer<typeof productQuickViewSchema>
 export type InventoryOptions = z.infer<typeof inventoryOptionsSchema>

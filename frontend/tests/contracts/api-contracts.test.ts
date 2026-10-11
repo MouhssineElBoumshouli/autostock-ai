@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   dashboardSchema, forecastSchema, inventoryDetailSchema, inventorySchema,
-  forecastDetailSchema, forecastsSchema, restockSchema, sessionSchema, supplierDetailSchema, supplierGapsSchema,
+  forecastDetailSchema, forecastPartsSchema, forecastsSchema, restockSchema, sessionSchema, supplierDetailSchema, supplierGapsSchema,
   supplierTermsSchema, suppliersSchema, warehouseDetailSchema, warehousesSchema,
 } from '../../src/api/contracts'
 
@@ -40,6 +40,7 @@ describe('Odoo v1 API contracts', () => {
   it('keeps exact-run history, returns, forecast points, and restock eligibility in one read-only detail contract', () => {
     const parsed = forecastDetailSchema.safeParse({
       schema_version: 1, company,
+      estimate: { status: 'available', estimated_units: 17, uom: 'Units', uom_rounding: 1, date_start: '2026-06-30', date_end: '2026-07-06', window_status: 'ended' },
       run: {
         id: 201, name: 'ALT-1001 · 7 days', company_id: 1, company_name: company.name,
         product_id: 1001, warehouse_id: 8, warehouse_name: 'Central Parts Warehouse', uom: 'Units',
@@ -64,6 +65,35 @@ describe('Odoo v1 API contracts', () => {
       expect(parsed.data.run.observations[0].returned_units).toBe(1)
       expect(parsed.data.restock_guidance.usable).toBe(false)
     }
+  })
+
+  it('accepts grouped real part forecasts and rejects totals on incomplete daily series', () => {
+    const common = {
+      schema_version: 1, company,
+      filters: { query: 'ALT-1001', warehouse_id: 8 },
+      parts: [{
+        product_id: 1001, product_name: 'Alternator Assembly', sku: 'ALT-1001',
+        warehouse_id: 8, warehouse_name: 'Central Parts Warehouse', source_type: 'completed_deliveries',
+        horizons: [
+          { horizon_days: 7, saved_run_count: 0, latest_run: false, estimate: { status: 'missing', estimated_units: false, uom: false, uom_rounding: false, date_start: false, date_end: false, window_status: false } },
+          { horizon_days: 30, saved_run_count: 2, latest_run: { id: 203, created_at: '2026-09-20 10:00:00', horizon_days: 30, source_type: 'completed_deliveries', state: 'completed', evaluation_status: 'evaluated', review_status: 'unreviewed' }, estimate: { status: 'available', estimated_units: 42, uom: 'Units', uom_rounding: 1, date_start: '2026-09-21', date_end: '2026-10-20', window_status: 'in_progress' } },
+          { horizon_days: 60, saved_run_count: 1, latest_run: { id: 204, created_at: '2026-09-20 10:01:00', horizon_days: 60, source_type: 'completed_deliveries', state: 'completed', evaluation_status: 'evaluated', review_status: 'reviewed' }, estimate: { status: 'incomplete', estimated_units: false, uom: 'Units', uom_rounding: 1, date_start: false, date_end: false, window_status: false } },
+        ],
+      }],
+      pagination: { page: 1, page_size: 12, has_previous: false, has_next: false },
+      warehouse_options: [{ id: 8, name: 'Central Parts Warehouse' }],
+      warehouse_options_limited: false, warehouse_count: 1, real_history_access: true, access_note: false, read_only: true,
+    }
+    const parsed = forecastPartsSchema.safeParse(common)
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.parts[0].horizons[1].estimate.estimated_units).toBe(42)
+      expect(parsed.data.parts[0].horizons[2].estimate.estimated_units).toBe(false)
+      expect(parsed.data.parts[0].source_type).toBe('completed_deliveries')
+    }
+    const dishonestTotal = structuredClone(common) as typeof common
+    dishonestTotal.parts[0].horizons[2].estimate.estimated_units = 999
+    expect(forecastPartsSchema.safeParse(dishonestTotal).success).toBe(false)
   })
 
   it('accepts a session with explicit allowed companies and permissions', () => {

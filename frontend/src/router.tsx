@@ -42,14 +42,20 @@ const supplierDetailRoute = createRoute({
   component: LazySupplierDetailRoute,
 })
 
+const validateForecastSearch = (search: Record<string, unknown>) => search.view === 'history'
+  ? { view: 'history' as const }
+  : search.view === 'parts' ? { view: 'parts' as const } : {}
+
 const forecastsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/forecasts',
+  validateSearch: validateForecastSearch,
   component: LazyForecastsRoute,
 })
 const forecastDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/forecasts/$runId',
+  validateSearch: validateForecastSearch,
   component: LazyForecastDetailRoute,
 })
 

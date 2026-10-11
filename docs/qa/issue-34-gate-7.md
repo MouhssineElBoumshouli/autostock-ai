@@ -2,16 +2,17 @@
 
 ## Scope
 
-This branch adds the real, authenticated Forecasts workspace and exact-run detail. It uses stored Odoo forecast runs and existing risk/replenishment calculations. The screen is read-only; it does not create, queue, review, approve, or purchase. The approved dashboard design system and completed Dashboard, Inventory, Warehouses and Suppliers screens remain intact apart from routing their Forecasts navigation item to the new route.
+This update keeps the work within Gate 7. Forecasts opens on **By part**, while **Saved run history** remains available for every saved record and all existing evidence. The screen is read-only and reuses saved Odoo forecasts and the current risk/replenishment service. The forecast engine, dashboard, Inventory, Warehouses, and Suppliers are unchanged.
 
-## Implementation and data boundaries
+## Employee-first behavior and data boundaries
 
-- `GET /autostock/api/v1/forecasts` returns exact company-scoped counts, filters and bounded server-side pages; users can search by saved part name or SKU and filter by warehouse, horizon, run status, review state and source.
-- `GET /autostock/api/v1/forecasts/{run_id}` returns the exact saved run with source dates, cutoff, company/warehouse scope, stored observations and returns, forecast points, UoM, method, baseline, holdout and evaluation details.
-- Real delivery history requires inventory and Sales access. Stock-only users see synthetic showroom examples only, with no real-run count or metadata. Standard Odoo ACLs and record rules remain active; the implementation does not call `sudo()`.
-- Current restock eligibility is explained by calling the existing `autostock.inventory.risk.get_risk_data` service for the exact part and warehouse. React does not calculate forecasts, evaluation values or reorder quantities.
-- The chart separates completed deliveries, returned units and future estimates, marks “Forecast starts”, and labels its range as heuristic. The copy explains that fulfilled sales are not unconstrained demand and MAE is not an accuracy percentage.
-- The detail keeps synthetic examples visibly separate from operational history. No buying or forecast-write actions are exposed.
+- `GET /autostock/api/v1/forecasts/parts` groups the complete company-visible real forecast set by stable product and warehouse IDs, then applies server-side search, warehouse selection, and pagination. The page shows its result page without implying a catalog-wide total.
+- Each 7/30/60-day control selects the latest saved run for that exact part and warehouse. A failed, pending, or unreviewed newest run stays selected; review status does not imply restock eligibility. Older records remain in Saved run history.
+- A total and exact future date range are shown only when the selected completed run has a unit of measure and the stored daily predictions cover every expected calendar day. Totals are the sum of those stored values, rounded at the product unit's precision. Missing or partial series show an explanation and no total.
+- Synthetic showroom examples remain separate from real product/warehouse groups and appear only in Saved run history. Matching SKUs do not merge synthetic examples with operational records.
+- Real delivery forecasts and details require the existing inventory and Sales access. Odoo ACLs, record rules, company scope, and selected warehouse scope remain active; the implementation does not use `sudo()`.
+- Forecast detail leads with the part, warehouse, period, unit, saved date range, past deliveries, and a plain-language restock eligibility sentence. Source cutoff, saved history coverage, method, evaluation, assumptions, limitations, and other technical evidence remain available under **How was this estimated?**
+- React does not calculate forecasts, accuracy, or reorder quantities. The chart uses saved observations and prediction points; the restock explanation calls the existing Odoo risk service.
 
 ## Automated results
 
@@ -19,43 +20,36 @@ This branch adds the real, authenticated Forecasts workspace and exact-run detai
 | --- | --- |
 | `python -m pytest -q` | Passed: 38 tests |
 | `python -m compileall -q addons ml scripts tests` | Passed |
-| Synthetic forecast evaluation | Passed: 6 labeled offline fixture series evaluated. These are test fixtures, not Atlas or customer accuracy evidence. |
+| Offline forecast evaluation | Passed: 6 labeled synthetic fixture series evaluated for a 30-day holdout. This is test evidence, not Atlas/customer accuracy evidence. |
 | `npm run lint` | Passed |
 | `npm run typecheck` | Passed |
-| `npm run test:unit` | Passed: 8 tests, including first forecast point/range preservation and Odoo/ISO/date-only date handling |
-| `npm run test:contract` | Passed: 15 tests |
-| `npm run test:browser` | Passed: 32 tests. Includes chart data bound to the first API prediction, desktop/mobile Saved date formatting, the localized source-cutoff label across a Casablanca midnight boundary, tablet table-header wrapping, read-only behavior, server filters, permission/no-result/error states and responsive navigation. |
+| `npm run test:unit` | Passed: 8 tests |
+| `npm run test:contract` | Passed: 16 tests, including estimate completeness and the saved-parts contract |
+| `npm run test:browser` | Passed: 34 tests across Dashboard, Inventory, Warehouses, Suppliers, and Forecasts; includes server filters, company switching, detail evidence, partial-series handling, timezone formatting, navigation, and desktop/tablet/mobile layouts |
 | `npm run build` | Passed: production Vite build |
-| Local Odoo 19 + PostgreSQL 16 integration run | Passed in isolated Compose project `autostock-pr35-review-52cfe5f3`, database `autostock_ci`: **57 actual Odoo test cases, 0 failures, 0 errors**. Odoo's broader stats line reports 71 tests. The test project's containers, network and two temporary named volumes were removed after the run; existing Atlas showroom containers and volumes were untouched. |
-| GitHub Actions | Passed: [run 38180482736](https://github.com/MouhssineElBoumshouli/autostock-ai/actions/runs/38180482736) on commit `736c8735c80412c08ee45f709143576ed1901bef`; Python, React frontend and Odoo 19 integration jobs all succeeded. |
+| Odoo 19 + PostgreSQL 16 integration suite | Passed: **60 actual test cases, 0 failures, 0 errors**. Odoo's broader statistics counter reports 74 tests. The isolated database was in a disposable container with no showroom data attached. The two unattached anonymous PostgreSQL test volumes created during the runs were verified and removed; all named showroom volumes remain. |
+| GitHub Actions | Pending for the update commit; link and result will be recorded after push. |
 
-Forecast chart regression coverage verifies that the final observed point anchors the line while the first future point retains its saved units and heuristic bounds. Browser tests verify those first future values against the Forecasts detail API. Date regression coverage handles Odoo's UTC-naive datetime string, ISO values with and without offsets, timezone conversion, stable date-only labels, and invalid values. A focused browser regression also uses the UTC cutoff `2026-10-09 23:58:00`, verifies it crosses into the next Casablanca calendar day, and checks the rendered Source cutoff is labeled `(your local time)` rather than `(UTC)`.
-
-## Local Docker and showroom recovery
-
-Docker Desktop was stopped because startup failed while clearing stale Docker Model Runner and secrets-engine Unix socket endpoints. I preserved the socket files by moving the affected runtime directories aside and disabled Docker AI inference in Docker Desktop settings after saving a settings backup. The preserved items remain under `%LOCALAPPDATA%\Docker\run-recovery-preserved-20261011-215224`, `%LOCALAPPDATA%\Docker\run-recovery-preserved-20261011-215327`, and `%LOCALAPPDATA%\docker-secrets-engine-recovery-preserved-20261011-215327`; the settings backup is `%APPDATA%\Docker\settings-store.json.pre-g7-recovery-20261011-215224`.
-
-Docker Desktop now reports `running`. The Atlas showroom Odoo container is running and its PostgreSQL container is healthy. The existing Atlas showroom filestore and PostgreSQL volumes remain present. All pre-existing AutoStock containers and volumes remained visible after recovery and after the isolated integration run. `docker_data.vhdx` remained the same size in the before/after observations: 44,280,315,904 bytes. No showroom database, database file, filestore, or pre-existing Docker volume was removed, reset, or used by the isolated integration tests.
+The Odoo integration coverage includes a 1,002-run grouped catalog, server-side pagination/search, the newest failed/unreviewed run, no history, one-day and missing-day series, exact saved daily totals/date boundaries, ended estimate windows, demo/real separation, Sales-restricted access, and company/warehouse isolation. The >1,000 catalog integration case passed; its warmed API response grouped the 25 requested product/warehouse groups in under 0.1 seconds in the isolated run.
 
 ## Live Atlas browser QA and screenshots
 
-The authenticated Atlas Auto Distribution showroom was verified through the live React browser and Odoo API. The capture selected completed, reviewed forecast run `12` for Engine Oil Filter, opened its exact run detail, and verified the rendered chart's first future day, prediction and heuristic bounds against the API response. Saved timestamps were checked in the authenticated user's `Africa/Casablanca` timezone. The Source cutoff now explicitly identifies its localized timestamp as `(your local time)` instead of appending the source's UTC timezone to converted output. The 1440px, 1024px and 390px reviewed-detail screenshots were refreshed after this correction. Captures checked page overflow and recorded **0 browser page errors, 0 console errors and 0 failed AutoStock API responses**.
+The authenticated Atlas Auto Distribution showroom was opened in the React app through the existing Odoo session. The live capture used Atlas part `AT-BRK-001` at **Atlas Central Warehouse**, a completed saved 30-day run for **2026-10-10 through 2026-11-08**. The unfiltered first page returned four company-visible product/warehouse groups; the capture also searched the selected SKU, waited for the matching Odoo response, and verified the exact part/warehouse result before opening its detail. Saved run history retained the selected real record.
 
-Actual live screenshots are committed under `docs/qa/screenshots/issue-34-gate-7/`:
+The capture checked page overflow at 1440px, 1024px, and 390px. It recorded **0 browser page errors, 0 console errors, and 0 failed AutoStock API responses**. Screenshots show the real By part list, exact-run detail, and Saved run history at all three sizes:
 
-| View | Screenshot |
-| --- | --- |
-| Forecast list, desktop (1440px) | [forecasts-overview-1440.png](screenshots/issue-34-gate-7/forecasts-overview-1440.png) |
-| Forecast list, tablet (1024px) | [forecasts-overview-1024.png](screenshots/issue-34-gate-7/forecasts-overview-1024.png) |
-| Forecast list, mobile (390px) | [forecasts-overview-390.png](screenshots/issue-34-gate-7/forecasts-overview-390.png) |
-| Completed and reviewed run with evaluation disclosure open, desktop | [forecast-reviewed-detail-evaluation-open-1440.png](screenshots/issue-34-gate-7/forecast-reviewed-detail-evaluation-open-1440.png) |
-| Same run detail, tablet | [forecast-reviewed-detail-evaluation-open-1024.png](screenshots/issue-34-gate-7/forecast-reviewed-detail-evaluation-open-1024.png) |
-| Same run detail, mobile | [forecast-reviewed-detail-evaluation-open-390.png](screenshots/issue-34-gate-7/forecast-reviewed-detail-evaluation-open-390.png) |
-| Live no-results state, desktop | [forecasts-no-results-1440.png](screenshots/issue-34-gate-7/forecasts-no-results-1440.png) |
-| Live unreviewed forecast state, desktop | [forecasts-real-unreviewed-1440.png](screenshots/issue-34-gate-7/forecasts-real-unreviewed-1440.png) |
+| View | Desktop (1440px) | Tablet (1024px) | Mobile (390px) |
+| --- | --- | --- | --- |
+| By part, live Atlas records | [PNG](screenshots/issue-34-gate-7-employee-first/forecasts-by-part-30-day-1440.png) | [PNG](screenshots/issue-34-gate-7-employee-first/forecasts-by-part-30-day-1024.png) | [PNG](screenshots/issue-34-gate-7-employee-first/forecasts-by-part-30-day-390.png) |
+| Saved estimate detail | [PNG](screenshots/issue-34-gate-7-employee-first/forecast-estimate-detail-1440.png) | [PNG](screenshots/issue-34-gate-7-employee-first/forecast-estimate-detail-1024.png) | [PNG](screenshots/issue-34-gate-7-employee-first/forecast-estimate-detail-390.png) |
+| Saved run history | [PNG](screenshots/issue-34-gate-7-employee-first/forecast-saved-history-1440.png) | [PNG](screenshots/issue-34-gate-7-employee-first/forecast-saved-history-1024.png) | [PNG](screenshots/issue-34-gate-7-employee-first/forecast-saved-history-390.png) |
 
-Two live states were unavailable: Atlas currently has no real completed-delivery forecast with insufficient history, and no separate restricted Atlas account is configured for browser capture. The browser suite still covers restricted access using isolated API fixtures; that fixture is not represented as a live screenshot.
+## Local Docker and showroom recovery
 
-## Remaining review note
+Docker Desktop had stopped while clearing stale Docker Model Runner and secrets-engine Unix socket endpoints. I preserved the socket files by moving the affected runtime directories aside and disabled Docker AI inference in Docker Desktop settings after saving a settings backup. The preserved items remain under `%LOCALAPPDATA%\Docker\run-recovery-preserved-20261011-215224`, `%LOCALAPPDATA%\Docker\run-recovery-preserved-20261011-215327`, and `%LOCALAPPDATA%\docker-secrets-engine-recovery-preserved-20261011-215327`; the settings backup is `%APPDATA%\Docker\settings-store.json.pre-g7-recovery-20261011-215224`.
 
-No real-business forecasting accuracy or commercial-readiness claim is made.
+Docker Desktop is running. The Atlas showroom Odoo container is running and its PostgreSQL container is healthy. The Atlas Odoo process was restarted to load the updated Python controller/model code; the database and filestore volumes were not changed. `autostock_ai_showroom_filestore` and `autostock_ai_showroom_postgres` remain present. No showroom database, database file, filestore, or named Docker volume was removed, reset, or attached to the isolated test environment. `docker_data.vhdx` remained the same size in the before/after observations: 44,280,315,904 bytes.
+
+## Remaining limitations
+
+The Atlas showroom is demonstration data. These checks do not establish forecast accuracy for a real business, production readiness, or readiness for purchasing automation. A separate restricted Atlas account is not configured for live screenshots; restricted access is covered by Odoo integration and browser contract tests.

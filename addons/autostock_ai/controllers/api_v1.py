@@ -642,6 +642,26 @@ class AutoStockApiV1(http.Controller):
         return {"schema_version": 1, "company": self._company_contract(company), **result}
 
     @http.route(
+        "/autostock/api/v1/forecasts/parts",
+        type="http",
+        auth="user",
+        methods=["GET"],
+    )
+    def forecast_parts(self, **_kwargs):
+        return self._dispatch(self._forecast_parts_payload)
+
+    def _forecast_parts_payload(self):
+        company = self._selected_company()
+        args = request.httprequest.args
+        result = self._scoped_model("autostock.forecast.run", company).get_forecast_part_page(
+            query=args.get("q", ""),
+            warehouse_id=args.get("warehouse_id"),
+            page=args.get("page", 1),
+            page_size=args.get("page_size", 12),
+        )
+        return {"schema_version": 1, "company": self._company_contract(company), **result}
+
+    @http.route(
         "/autostock/api/v1/forecasts/<int:run_id>",
         type="http",
         auth="user",

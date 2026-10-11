@@ -11,6 +11,7 @@ from ml.forecast import MODEL_VERSION, Observation, forecast_daily
 from ml.synthetic import DEMO_SKUS, SYNTHETIC_DATASET_VERSION, generate_synthetic_history
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.fields import Domain
 from odoo.tools.float_utils import float_round
 
 _logger = logging.getLogger(__name__)
@@ -335,6 +336,289 @@ class AutoStockForecastRun(models.Model):
             ),
             "read_only": True,
         }
+
+    @api.model
+    def _forecast_estimate_summaries(self, runs):
+        """Summarize complete saved daily series without recalculating forecasts."""
+        if not runs:
+            return {}
+
+        company = self.env.company
+        Point = self.env["autostock.forecast.point"].with_company(company).with_context(
+            allowed_company_ids=[company.id]
+        )
+        grouped_points = Point._read_group(
+            [
+                ("company_id", "=", company.id),
+                ("run_id", "in", runs.ids),
+            ],
+            ["run_id"],
+            ["__count", "units:sum", "day:min", "day:max"],
+            order="run_id",
+        )
+        point_stats = {
+            run.id: (point_count, units_sum or 0.0, first_day, last_day)
+            for run, point_count, units_sum, first_day, last_day in grouped_points
+        }
+        today = fields.Date.context_today(self)
+        summaries = {}
+
+        for run in runs:
+            horizon = int(run.horizon_days)
+            unit = run.uom_id
+            summary = {
+                "status": "not_completed" if run.state != "completed" else "incomplete",
+                "estimated_units": False,
+                "uom": unit.display_name if unit else False,
+                "uom_rounding": unit.rounding if unit else False,
+                "date_start": False,
+                "date_end": False,
+                "window_status": False,
+            }
+            stats = point_stats.get(run.id)
+            if run.state == "completed" and stats and unit:
+                point_count, units_sum, first_day, last_day = stats
+                expected_start = run.history_end_date + timedelta(days=1)
+                expected_end = expected_start + timedelta(days=horizon - 1)
+                # A run/day uniqueness constraint plus an exact count and these
+                # boundaries proves that every expected calendar day exists.
+                if (
+                    point_count == horizon
+                    and first_day == expected_start
+                    and last_day == expected_end
+                ):
+                    summary.update(
+                        {
+                            "status": "available",
+                            "estimated_units": float_round(
+                                units_sum, precision_rounding=unit.rounding
+                            ),
+                            "date_start": first_day.isoformat(),
+                            "date_end": last_day.isoformat(),
+                            "window_status": (
+                                "ended" if last_day < today
+                                else "in_progress" if first_day < today
+                                else "upcoming"
+                            ),
+                        }
+                    )
+            summaries[run.id] = summary
+        return summaries
+
+    @api.model
+    def get_forecast_part_page(
+        self, query="", warehouse_id=False, page=1, page_size=12
+    ):
+        """Return a server-grouped page of real forecasted product locations.
+
+        Groups are keyed by stable product and warehouse IDs. The most recently
+        saved run for each horizon is chosen by create date, with record ID as a
+        stable tie-breaker, including pending, failed, or unreviewed runs.
+        Synthetic examples remain in exact Saved run history and never merge
+        with a real product that happens to share a name or SKU.
+        """
+        self._require_inventory_access()
+        company = self.env.company
+        query = (query or "").strip()[:80]
+
+        def positive_page_value(value, label, *, default, maximum=False):
+            try:
+                parsed = int(value or default)
+            except (TypeError, ValueError) as error:
+                raise ValidationError(_("Choose a valid %(label)s.", label=label)) from error
+            if parsed <= 0 or (maximum and parsed > maximum):
+                if maximum:
+                    raise ValidationError(
+                        _(
+                            "Choose a %(label)s between 1 and %(maximum)s.",
+                            label=label,
+                            maximum=maximum,
+                        )
+                    )
+                raise ValidationError(_("Choose a valid %(label)s.", label=label))
+            return parsed
+
+        page = positive_page_value(page, _("page"), default=1)
+        page_size = positive_page_value(
+            page_size, _("page size"), default=12, maximum=50
+        )
+        warehouse = (
+            self._scoped_warehouse(self._positive_id(warehouse_id, _("warehouse")), company)
+            if warehouse_id not in (None, "", False)
+            else self.env["stock.warehouse"]
+        )
+        sales_access = self.env.user.has_group(
+            "sales_team.group_sale_salesman"
+        ) or self.env.user.has_group("sales_team.group_sale_manager")
+        Run = self.with_company(company).with_context(
+            allowed_company_ids=[company.id]
+        )
+
+        domain = [
+            ("company_id", "=", company.id),
+            ("source_type", "=", REAL_SOURCE),
+            ("product_id", "!=", False),
+            ("product_id.company_id", "in", [False, company.id]),
+            "|",
+            ("warehouse_id", "=", False),
+            ("warehouse_id.company_id", "=", company.id),
+        ]
+        if warehouse:
+            domain.append(("warehouse_id", "=", warehouse.id))
+        if query:
+            domain.extend(
+                ["|", ("product_name", "ilike", query), ("sku", "ilike", query)]
+            )
+
+        group_rows = []
+        if sales_access:
+            # `_read_group` applies Odoo record rules and paginates after grouping,
+            # so repeated horizons never split a part/warehouse group across pages.
+            group_rows = Run._read_group(
+                domain,
+                ["product_id", "warehouse_id"],
+                [],
+                offset=(page - 1) * page_size,
+                limit=page_size + 1,
+                order="product_id, warehouse_id",
+            )
+        has_next = len(group_rows) > page_size
+        page_groups = group_rows[:page_size]
+        pair_domains = [
+            [
+                ("product_id", "=", product.id),
+                ("warehouse_id", "=", warehouse_record.id if warehouse_record else False),
+            ]
+            for product, warehouse_record in page_groups
+        ]
+        page_buckets = []
+        if pair_domains:
+            bucket_domain = Domain(domain) & Domain.OR(pair_domains)
+            page_buckets = Run._read_group(
+                bucket_domain,
+                ["product_id", "warehouse_id", "horizon_days"],
+                ["__count", "create_date:max"],
+                order="product_id, warehouse_id, horizon_days",
+            )
+        latest_bucket_domains = [
+            [
+                ("product_id", "=", product.id),
+                ("warehouse_id", "=", warehouse_record.id if warehouse_record else False),
+                ("horizon_days", "=", horizon),
+                ("create_date", "=", latest_created_at),
+            ]
+            for product, warehouse_record, horizon, _run_count, latest_created_at in page_buckets
+        ]
+        latest_candidates = Run.search(
+            Domain(domain) & Domain.OR(latest_bucket_domains),
+            order="create_date desc, id desc",
+        ) if latest_bucket_domains else Run.browse()
+        latest_by_key = {}
+        for latest in latest_candidates:
+            key = (
+                latest.product_id.id,
+                latest.warehouse_id.id if latest.warehouse_id else False,
+                int(latest.horizon_days),
+            )
+            latest_by_key.setdefault(key, latest)
+        latest_runs = Run.browse([run.id for run in latest_by_key.values()])
+        estimate_by_run_id = self._forecast_estimate_summaries(latest_runs)
+        bucket_by_key = {}
+        for product, warehouse_record, horizon, run_count, _latest_created_at in page_buckets:
+            key = (product.id, warehouse_record.id if warehouse_record else False)
+            latest = latest_by_key.get((key[0], key[1], int(horizon)))
+            bucket_by_key.setdefault(key, {})[int(horizon)] = {
+                "saved_run_count": run_count,
+                "latest_run_id": latest.id if latest else False,
+            }
+
+        parts = []
+        for product, warehouse_record in page_groups:
+            key = (product.id, warehouse_record.id if warehouse_record else False)
+            horizons = []
+            for horizon in sorted(SUPPORTED_HORIZONS):
+                bucket = bucket_by_key.get(key, {}).get(horizon)
+                latest = latest_by_key.get((key[0], key[1], horizon)) if bucket else False
+                latest_data = False
+                estimate = {
+                    "status": "missing",
+                    "estimated_units": False,
+                    "uom": False,
+                    "uom_rounding": False,
+                    "date_start": False,
+                    "date_end": False,
+                    "window_status": False,
+                }
+                if latest:
+                    estimate = estimate_by_run_id.get(latest.id, estimate)
+                    latest_data = {
+                        "id": latest.id,
+                        "created_at": fields.Datetime.to_string(latest.create_date),
+                        "horizon_days": horizon,
+                        "source_type": REAL_SOURCE,
+                        "state": latest.state,
+                        "evaluation_status": latest.evaluation_status or False,
+                        "review_status": latest.review_status,
+                    }
+                horizons.append(
+                    {
+                        "horizon_days": horizon,
+                        "saved_run_count": bucket["saved_run_count"] if bucket else 0,
+                        "latest_run": latest_data,
+                        "estimate": estimate,
+                    }
+                )
+            parts.append(
+                {
+                    "product_id": product.id,
+                    "product_name": product.display_name,
+                    "sku": product.default_code or str(product.id),
+                    "warehouse_id": warehouse_record.id if warehouse_record else False,
+                    "warehouse_name": warehouse_record.display_name if warehouse_record else False,
+                    "horizons": horizons,
+                    "source_type": REAL_SOURCE,
+                }
+            )
+        Warehouse = self.env["stock.warehouse"].with_company(company).with_context(
+            allowed_company_ids=[company.id]
+        )
+        warehouse_count = Warehouse.search_count([("company_id", "=", company.id)])
+        warehouse_options = Warehouse.search(
+            [("company_id", "=", company.id)], order="name, id", limit=101
+        )
+        warehouses_limited = len(warehouse_options) > 100
+        warehouse_options = warehouse_options[:100]
+        return {
+            "filters": {
+                "query": query,
+                "warehouse_id": warehouse.id if warehouse else False,
+            },
+            "parts": parts,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "has_previous": page > 1,
+                "has_next": has_next,
+            },
+            "warehouse_options": [
+                {"id": item.id, "name": item.display_name}
+                for item in warehouse_options
+            ],
+            "warehouse_options_limited": warehouses_limited,
+            "warehouse_count": warehouse_count,
+            "real_history_access": sales_access,
+            "access_note": (
+                False if sales_access else _(
+                    "Completed delivery forecasts require Sales access. Synthetic examples remain available in Saved run history."
+                )
+            ),
+            "read_only": True,
+        }
+
+    @api.model
+    def _forecast_estimate_summary(self, run):
+        """Return the exact stored-period estimate summary for one saved run."""
+        return self._forecast_estimate_summaries(run).get(run.id)
 
     @api.model
     def _positive_id(self, value, label):
@@ -889,6 +1173,7 @@ class AutoStockForecastRun(models.Model):
 
         return {
             "run": run_data,
+            "estimate": self._forecast_estimate_summary(run),
             "history_coverage": {
                 "configured": coverage_configured,
                 "complete_from": coverage_start.isoformat() if coverage_start else False,

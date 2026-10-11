@@ -150,6 +150,15 @@ async function installOdooContractStub(page: Page) {
         options: forecastOptions, options_limited: false, forecast: selectedForecast,
       })
     }
+    if (path.endsWith('/forecasts/parts')) {
+      return fulfillJson(route, {
+        schema_version: 1, company: company(companyId),
+        filters: { query: '', warehouse_id: false }, parts: [],
+        pagination: { page: 1, page_size: 12, has_previous: false, has_next: false },
+        warehouse_options: [], warehouse_options_limited: false, warehouse_count: 0,
+        real_history_access: true, access_note: false, read_only: true,
+      })
+    }
     if (path.endsWith('/search/products')) {
       const query = (url.searchParams.get('q') ?? '').toLowerCase()
       const results = query.includes('toyota')
