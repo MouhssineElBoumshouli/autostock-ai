@@ -11,7 +11,8 @@
     "test:unit": "vitest run src/lib",
     "test:contract": "vitest run tests/contracts",
     "test:browser": "playwright test",
-    "capture:showroom": "node scripts/capture-showroom-screenshots.mjs"
+    "capture:showroom": "node scripts/capture-showroom-screenshots.mjs",
+    "capture:inventory-showroom": "node scripts/capture-inventory-showroom.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",

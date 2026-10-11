@@ -329,6 +329,11 @@ test('forecast product and horizon controls update the company forecast and char
   await expect(chart).toBeVisible()
 
   const plot = page.getByTestId('forecast-plot')
+  await expect(plot.locator('.forecast-cutoff-label')).toHaveText('Forecast starts')
+  const forecastLine = page.getByTestId('forecast-line')
+  await expect(forecastLine).toHaveAttribute('d', /^M 400 /)
+  const firstForecastDotX = Number(await plot.locator('.forecast-dot').first().getAttribute('cx'))
+  expect(firstForecastDotX).toBeGreaterThan(400)
   const bounds = await plot.boundingBox()
   if (!bounds) throw new Error('Forecast plot is not laid out')
   await page.mouse.move(bounds.x + bounds.width * 0.79, bounds.y + bounds.height * 0.42)

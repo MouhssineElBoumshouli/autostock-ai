@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { dashboardSchema, forecastSchema, restockSchema, sessionSchema } from '../../src/api/contracts'
+import {
+  dashboardSchema, forecastSchema, inventoryDetailSchema, inventorySchema,
+  restockSchema, sessionSchema,
+} from '../../src/api/contracts'
 
 const company = {
   id: 1,
@@ -98,6 +101,54 @@ describe('Odoo v1 API contracts', () => {
       options: [],
       options_limited: false,
       forecast: false,
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('accepts a server-paged inventory response whose total catalog exceeds one thousand parts', () => {
+    const item = {
+      product_id: 1001, template_id: 1001, name: 'Water Pump', sku: 'WP-1001', reference: 'OEM-001',
+      category_id: 4, category: 'Cooling', tracked: true, active: true, uom: 'Units',
+      status: 'low_stock', on_hand: 2, available: 1, reserved: 1, incoming: 4, outgoing: 1, projected: 5,
+      warehouse_count: 1,
+      warehouses: [{ id: 8, name: 'Central', on_hand: 2, available: 1, reserved: 1, incoming: 4, outgoing: 1 }],
+      supplier: { id: 22, name: 'Northline Supply', lead_time_days: 12, lead_time_label: 'Supplier lead time', minimum_order_qty: 1, minimum_order_uom: 'Units', company_specific: true },
+      supplier_access_note: false, supplier_lookup_limited: false, lead_time_days: 12,
+      lead_time_label: 'Supplier lead time', lead_time_source: 'supplier',
+    }
+    const parsed = inventorySchema.safeParse({
+      schema_version: 1, company, as_of: '2026-10-10 12:00:00',
+      summary: { total_tracked: 320, in_stock: 250, low_stock: 48, out_of_stock: 22, complete: true, sampled_products: 320, total_catalog: 1001 },
+      filters: { query: '', supplier_query: '', status: 'all', warehouse_id: false, category_id: false, supplier_id: false, tracked: 'all', active: 'active', sort: 'name', direction: 'asc' },
+      items: [item],
+      pagination: { page: 41, page_size: 25, total_count: 1001, total_pages: 41, has_previous: true, has_next: false, summary_exact: true, status_scan_used: false },
+      coverage: { tracked_summary_complete: true, warehouse_scope_limited: false, supplier_lines_limited: false, supplier_terms_available: true, status_filter_complete: true },
+      empty_catalog: false,
+    })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.items).toHaveLength(1)
+      expect(parsed.data.items[0].product_id).toBe(1001)
+      expect(parsed.data.pagination.total_count).toBe(1001)
+      expect(parsed.data.pagination.page).toBe(41)
+    }
+  })
+
+  it('requires product details to distinguish company stock, warehouse stock, supplier access, and movements', () => {
+    const parsed = inventoryDetailSchema.safeParse({
+      schema_version: 1, company,
+      product: { id: 10, template_id: 10, name: 'Water Pump', sku: 'WP-10', reference: false, category_id: 4, category: 'Cooling', tracked: false, active: true, uom: 'Units', safety_stock: 0 },
+      company_stock: { on_hand: 7, available: 5, reserved: 2, incoming: 3, outgoing: 1, projected: 9 },
+      warehouses: [{ id: 8, name: 'Central', on_hand: 7, available: 5, reserved: 2, incoming: 3, outgoing: 1, selected: false, projected: 9 }],
+      supplier: false, supplier_access: false, supplier_note: 'Supplier details are restricted.',
+      lead_time_days: 0, lead_time_label: 'Planning assumption', lead_time_source: 'planning_assumption',
+      forecast: { status: 'not_tracked', message: 'Monitoring is not enabled.', horizon_days: false, history_start: false, history_end: false, used_for_restock: false, demand_before_delivery: false },
+      recommendations: [],
+      recommendation_coverage: { complete: true, candidate_locations: 0, scanned_locations: 0, forecast_access_available: false, forecast_access_reason: false },
+      movements_available: true, movements: [],
+      movement_note: 'No stock changes were recorded in the last 90 days.',
+      coverage: { warehouse_scope_limited: false, total_warehouses: 1, supplier_terms_available: false },
+      read_only: true,
     })
     expect(parsed.success).toBe(true)
   })

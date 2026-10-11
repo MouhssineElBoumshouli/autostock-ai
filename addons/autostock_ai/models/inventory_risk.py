@@ -887,6 +887,9 @@ class AutoStockInventoryRisk(models.AbstractModel):
             "warehouse_scope_limited": warehouse_scope_limited,
             "forecast_lookup_limited": forecast_candidates_truncated,
             "forecast_access_available": bool(forecast_access_available),
+            "forecast_access_reason": (
+                False if forecast_access_available else forecast_access_reason
+            ),
             "supplier_lookup_limited": suppliers_lookup_limited,
             "reordering_rule_lookup_limited": orderpoints_lookup_limited,
             "supplier_terms_available": can_read_suppliers,

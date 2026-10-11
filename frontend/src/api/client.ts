@@ -1,11 +1,17 @@
 import {
   dashboardSchema,
+  inventoryDetailSchema,
+  inventoryOptionsSchema,
+  inventorySchema,
   forecastSchema,
   searchSchema,
   sessionSchema,
   restockSchema,
   productQuickViewSchema,
   type DashboardData,
+  type InventoryData,
+  type InventoryDetailData,
+  type InventoryOptions,
   type ForecastData,
   type ProductSearchData,
   type ProductQuickViewData,
@@ -100,6 +106,58 @@ export const api = {
     productQuickViewSchema,
     companyId,
   ).then((data) => requireCompany(companyId, data)),
+  inventoryOptions: (companyId: number, supplierQuery = '') => {
+    const params = new URLSearchParams()
+    if (supplierQuery.trim().length >= 2) params.set('supplier_q', supplierQuery.trim())
+    return get(`/autostock/api/v1/inventory/options?${params}`, inventoryOptionsSchema, companyId)
+      .then((data) => requireCompany(companyId, data))
+  },
+  inventory: (companyId: number, filters: InventoryRequest = {}) => {
+    const params = new URLSearchParams()
+    const values: Record<string, string | number | undefined> = {
+      q: filters.query,
+      supplier_q: filters.supplierQuery,
+      status: filters.status,
+      warehouse_id: filters.warehouseId,
+      category_id: filters.categoryId,
+      supplier_id: filters.supplierId,
+      tracked: filters.tracked,
+      active: filters.active,
+      sort: filters.sort,
+      direction: filters.direction,
+      page: filters.page,
+      page_size: filters.pageSize,
+    }
+    for (const [key, value] of Object.entries(values)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
+    }
+    return get(`/autostock/api/v1/inventory?${params}`, inventorySchema, companyId)
+      .then((data) => requireCompany(companyId, data))
+  },
+  inventoryDetail: (companyId: number, productId: number, warehouseId?: number) => {
+    const params = new URLSearchParams()
+    if (warehouseId) params.set('warehouse_id', String(warehouseId))
+    return get(
+      `/autostock/api/v1/products/${productId}/inventory-detail?${params}`,
+      inventoryDetailSchema,
+      companyId,
+    ).then((data) => requireCompany(companyId, data))
+  },
+}
+
+export type InventoryRequest = {
+  query?: string
+  supplierQuery?: string
+  status?: 'all' | 'in_stock' | 'low_stock' | 'out_of_stock'
+  warehouseId?: number
+  categoryId?: number
+  supplierId?: number
+  tracked?: 'all' | 'tracked' | 'not_tracked'
+  active?: 'active' | 'archived' | 'all'
+  sort?: 'name' | 'sku'
+  direction?: 'asc' | 'desc'
+  page?: number
+  pageSize?: number
 }
 
 export async function signIn(login: string, password: string): Promise<void> {
@@ -146,4 +204,14 @@ export function friendlyError(error: unknown): string {
   return error instanceof Error ? error.message : 'Something went wrong while loading your workspace.'
 }
 
-export type { DashboardData, ForecastData, ProductSearchData, ProductQuickViewData, RestockData, SessionData }
+export type {
+  DashboardData,
+  ForecastData,
+  InventoryData,
+  InventoryDetailData,
+  InventoryOptions,
+  ProductSearchData,
+  ProductQuickViewData,
+  RestockData,
+  SessionData,
+}
