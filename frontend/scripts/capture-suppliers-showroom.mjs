@@ -70,6 +70,9 @@ try {
   await page.getByRole('heading', { name: 'Your suppliers' }).waitFor({ timeout: 45_000 })
   await expect(page.getByText('Demo environment', { exact: true })).toBeVisible()
   await expect(page.getByText('Atlas Auto Distribution', { exact: false }).first()).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: 'Low / out of stock' })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: 'Parts to restock' })).toBeVisible()
+  await expect(page.locator('.supplier-filters label').filter({ hasText: 'Supplier terms' })).toBeVisible()
   const supplierRows = page.locator('.supplier-table tbody tr')
   await expect(supplierRows.first()).toBeVisible()
   let supplierId
@@ -109,7 +112,7 @@ try {
   await expect(page.locator('.supplier-summary-grid .inventory-summary-card').filter({ hasText: 'Active suppliers' }).locator('strong')).toHaveText('4')
   await capture(1440, 1000, 'suppliers-search-1440.png')
 
-  const attentionFilter = page.getByRole('combobox', { name: 'Filter suppliers by reorder needs' })
+  const attentionFilter = page.getByRole('combobox', { name: 'Filter suppliers by parts to restock' })
   const attentionResponse = page.waitForResponse((response) => {
     const url = new URL(response.url())
     return url.pathname === '/autostock/api/v1/suppliers'
@@ -126,7 +129,10 @@ try {
   await page.goto(`${frontendUrl}/suppliers/${supplierId}`, { waitUntil: 'domcontentloaded' })
   await expect(page.getByRole('heading', { name: supplierName, exact: true })).toBeVisible({ timeout: 45_000 })
   await expect(page.getByRole('heading', { name: 'Parts supplied' })).toBeVisible({ timeout: 45_000 })
+  await expect(page.getByRole('columnheader', { name: 'Suggested order' })).toBeVisible({ timeout: 45_000 })
+  await expect(page.locator('.supplier-detail-metrics .inventory-summary-copy').filter({ hasText: 'Parts to restock' })).toBeVisible()
   await expect(page.locator('.supplier-part-table tbody tr:visible, .supplier-part-mobile-list .supplier-part-card:visible').first()).toBeVisible({ timeout: 45_000 })
+  await expect(page.locator('.supplier-reorder-chip').first()).toContainText(/suggested/)
   await capture(1440, 1000, 'supplier-detail-1440.png')
   await capture(1024, 900, 'supplier-detail-1024.png')
   await capture(390, 844, 'supplier-detail-390.png')
@@ -161,11 +167,14 @@ try {
 
   await page.goto(`${frontendUrl}/suppliers/missing`, { waitUntil: 'domcontentloaded' })
   await expect(page.getByRole('heading', { name: 'Parts without a supplier', level: 1 })).toBeVisible({ timeout: 45_000 })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await expect(page.getByRole('columnheader', { name: 'Suggested order' })).toBeVisible({ timeout: 45_000 })
   await expect(page.locator('.supplier-gap-banner strong')).toBeVisible({ timeout: 45_000 })
   await expect(page.locator('.supplier-part-table tbody tr:visible, .supplier-part-mobile-list .supplier-part-card:visible').first()).toBeVisible({ timeout: 45_000 })
   await capture(1440, 1000, 'supplier-gaps-1440.png')
   await capture(1024, 900, 'supplier-gaps-1024.png')
   await capture(390, 844, 'supplier-gaps-390.png')
+  await expect(page.locator('.supplier-part-mobile-list').filter({ hasText: /Units suggested/ })).toBeVisible()
 
   if (pageErrors.length || consoleErrors.length || apiFailures.length) {
     throw new Error(JSON.stringify({ pageErrors, consoleErrors, apiFailures }, null, 2))

@@ -23,7 +23,7 @@ The captures below came from the running Atlas Auto Distribution Odoo showroom u
 | Parts without a supplier | 1024 px tablet | [supplier-gaps-1024.png](screenshots/issue-32-gate-6/supplier-gaps-1024.png) |
 | Parts without a supplier | 390 px mobile | [supplier-gaps-390.png](screenshots/issue-32-gate-6/supplier-gaps-390.png) |
 
-Playwright checked for horizontal overflow at every captured viewport. The capture run made live supplier-name and reorder-attention requests plus a supplier-part SKU search, then reported zero page errors, zero browser console errors, and zero failed AutoStock API responses. The company-wide Active suppliers KPI remained four while both supplier-name search and reorder-attention filtering narrowed the visible list. The missing-supplier page was captured after its live response rendered four matching parts. There are 14 screenshots total.
+Playwright checked for horizontal overflow at every captured viewport. The capture run made live supplier-name and reorder-attention requests plus a supplier-part SKU search, then reported zero page errors, zero browser console errors, and zero failed AutoStock API responses. The company-wide Active suppliers KPI remained four while both supplier-name search and reorder-attention filtering narrowed the visible list. The missing-supplier page was captured after its live response rendered four matching parts. There are 14 screenshots total. All 14 were refreshed after the wording review to show “Low / out of stock,” “Parts to restock,” “Suggested order,” explicit suggested quantities and units, and “Supplier terms.”
 
 ## Checks
 
