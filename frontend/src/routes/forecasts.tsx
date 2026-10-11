@@ -307,7 +307,7 @@ function ForecastRunDetail({ runId, companyId, session, onSwitchCompany, onSignO
               <div><dt>History source</dt><dd>{run.source_label}</dd></div>
               <div><dt>{run.source_type === 'synthetic_demo' ? 'Generated daily values' : 'Completed delivery and return events'}</dt><dd>{run.source_type === 'synthetic_demo' ? `${count(run.history_days)} calendar days` : `${count(run.source_event_count)} source events · ${count(run.history_days)} calendar days`}</dd></div>
               <div><dt>Days with deliveries</dt><dd>{count(run.nonzero_days)}</dd></div>
-              <div><dt>Source cutoff</dt><dd>{formatForecastDateTime(run.source_cutoff, session.user.timezone)} ({run.source_timezone})</dd></div>
+              <div><dt>Source cutoff</dt><dd>{formatForecastDateTime(run.source_cutoff, session.user.timezone)} (your local time)</dd></div>
               {run.review_status === 'reviewed' && <div><dt>Reviewed by</dt><dd>{run.reviewed_by || 'Inventory manager'}</dd></div>}
               {run.reviewed_at && <div><dt>Review date</dt><dd>{formatForecastDateTime(run.reviewed_at, session.user.timezone)}</dd></div>}
             </dl>

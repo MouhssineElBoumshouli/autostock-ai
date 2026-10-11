@@ -59,7 +59,7 @@ function pageData(url: URL) {
   }
 }
 
-function detailData(id: number) {
+function detailData(id: number, sourceCutoff = '2026-09-27 14:20:00') {
   return {
     schema_version: 1, company,
     run: {
@@ -68,7 +68,7 @@ function detailData(id: number) {
       created_at: '2026-09-27 14:20:00', state: 'completed', evaluation_status: 'evaluated', failure_reason: false,
       source_type: 'completed_deliveries', source_label: 'Completed deliveries, with returns recorded separately',
       sku: 'BP-FR-420', product_name: 'Front Brake Pad Set', horizon_days: 30,
-      history_start: '2026-03-01', history_end: '2026-09-26', source_cutoff: '2026-09-27 14:20:00', source_timezone: 'UTC',
+      history_start: '2026-03-01', history_end: '2026-09-26', source_cutoff: sourceCutoff, source_timezone: 'UTC',
       history_days: 210, nonzero_days: 87, source_event_count: 129,
       source_snapshot_sha256: 'ab'.repeat(32), model_version: 'autostock-demand-v2.1.0',
       selected_method: 'trailing_mean', baseline_method: 'seasonal_naive', demand_pattern: 'regular', evaluation_days: 30,
@@ -164,6 +164,26 @@ test('forecast detail separates history, future estimates, provenance, and evalu
   await page.getByRole('link', { name: 'All forecasts' }).click()
   await expect(page).toHaveURL('/forecasts')
   expect(writes).toEqual([])
+})
+
+test('forecast provenance labels a UTC cutoff in the user timezone when it crosses midnight', async ({ page }) => {
+  await installSession(page)
+  const cutoff = '2026-10-09 23:58:00'
+  await page.route(/\/autostock\/api\/v1\/forecasts\/\d+(\?|$)/, (route) => {
+    const id = Number(new URL(route.request().url()).pathname.split('/').at(-1))
+    return route.fulfill({ json: detailData(id, cutoff) })
+  })
+
+  const cutoffInstant = new Date(`${cutoff.replace(' ', 'T')}Z`)
+  // Casablanca is UTC+1 at this reviewed cutoff, so 23:58 UTC falls on Oct 10 locally.
+  const casablancaInstant = new Date(cutoffInstant.getTime() + 60 * 60 * 1000)
+  expect(cutoffInstant.toISOString().slice(0, 10)).toBe('2026-10-09')
+  expect(casablancaInstant.toISOString().slice(0, 10)).toBe('2026-10-10')
+  await page.goto('/forecasts/14')
+  await expect(page.getByRole('heading', { name: 'Front Brake Pad Set', exact: true })).toBeVisible()
+  const cutoffRow = page.locator('.forecast-provenance-list > div').filter({ has: page.getByText('Source cutoff', { exact: true }) })
+  await expect(cutoffRow.locator('dd')).toContainText('(your local time)')
+  await expect(cutoffRow.locator('dd')).not.toContainText('(UTC)')
 })
 
 test('mobile navigation opens the Forecasts route and restricted/no-results states are readable', async ({ page }) => {

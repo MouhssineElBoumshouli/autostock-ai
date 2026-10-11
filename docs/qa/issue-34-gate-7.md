@@ -24,12 +24,12 @@ This branch adds the real, authenticated Forecasts workspace and exact-run detai
 | `npm run typecheck` | Passed |
 | `npm run test:unit` | Passed: 8 tests, including first forecast point/range preservation and Odoo/ISO/date-only date handling |
 | `npm run test:contract` | Passed: 15 tests |
-| `npm run test:browser` | Passed: 31 tests. Includes chart data bound to the first API prediction, desktop/mobile Saved date formatting, tablet table-header wrapping, read-only behavior, server filters, permission/no-result/error states and responsive navigation. |
+| `npm run test:browser` | Passed: 32 tests. Includes chart data bound to the first API prediction, desktop/mobile Saved date formatting, the localized source-cutoff label across a Casablanca midnight boundary, tablet table-header wrapping, read-only behavior, server filters, permission/no-result/error states and responsive navigation. |
 | `npm run build` | Passed: production Vite build |
-| Local Odoo 19 + PostgreSQL 16 integration run | Passed against a fresh `autostock_gate7_pr35_test` database: **57 actual Odoo test cases, 0 failures, 0 errors**. Odoo's broader stats line reports 71 tests. The isolated PostgreSQL data directory used `tmpfs`; the test-only container and network were removed afterward, and no named volumes were created. |
+| Local Odoo 19 + PostgreSQL 16 integration run | Passed in isolated Compose project `autostock-pr35-review-52cfe5f3`, database `autostock_ci`: **57 actual Odoo test cases, 0 failures, 0 errors**. Odoo's broader stats line reports 71 tests. The test project's containers, network and two temporary named volumes were removed after the run; existing Atlas showroom containers and volumes were untouched. |
 | GitHub Actions | The required Python, frontend and Odoo integration jobs run for every PR update; use PR #35's check status for the current commit-specific result. |
 
-Forecast chart regression coverage verifies that the final observed point anchors the line while the first future point retains its saved units and heuristic bounds. Browser tests verify those first future values against the Forecasts detail API. Date regression coverage handles Odoo's UTC-naive datetime string, ISO values with and without offsets, timezone conversion, stable date-only labels, and invalid values.
+Forecast chart regression coverage verifies that the final observed point anchors the line while the first future point retains its saved units and heuristic bounds. Browser tests verify those first future values against the Forecasts detail API. Date regression coverage handles Odoo's UTC-naive datetime string, ISO values with and without offsets, timezone conversion, stable date-only labels, and invalid values. A focused browser regression also uses the UTC cutoff `2026-10-09 23:58:00`, verifies it crosses into the next Casablanca calendar day, and checks the rendered Source cutoff is labeled `(your local time)` rather than `(UTC)`.
 
 ## Local Docker and showroom recovery
 
@@ -39,7 +39,7 @@ Docker Desktop now reports `running`. The Atlas showroom Odoo container is runni
 
 ## Live Atlas browser QA and screenshots
 
-The authenticated Atlas Auto Distribution showroom was verified through the live React browser and Odoo API. The capture selected completed, reviewed forecast run `12` for Engine Oil Filter, opened its exact run detail, and verified the rendered chart's first future day, prediction and heuristic bounds against the API response. Saved timestamps were checked in the authenticated user's `Africa/Casablanca` timezone. Captures checked page overflow and recorded **0 browser page errors, 0 console errors and 0 failed AutoStock API responses**.
+The authenticated Atlas Auto Distribution showroom was verified through the live React browser and Odoo API. The capture selected completed, reviewed forecast run `12` for Engine Oil Filter, opened its exact run detail, and verified the rendered chart's first future day, prediction and heuristic bounds against the API response. Saved timestamps were checked in the authenticated user's `Africa/Casablanca` timezone. The Source cutoff now explicitly identifies its localized timestamp as `(your local time)` instead of appending the source's UTC timezone to converted output. The 1440px, 1024px and 390px reviewed-detail screenshots were refreshed after this correction. Captures checked page overflow and recorded **0 browser page errors, 0 console errors and 0 failed AutoStock API responses**.
 
 Actual live screenshots are committed under `docs/qa/screenshots/issue-34-gate-7/`:
 
