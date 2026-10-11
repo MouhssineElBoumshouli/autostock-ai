@@ -161,11 +161,55 @@ class TestAutoStockInventoryApi(HttpCase):
         self.assertIn("movements_available", detail)
         self.assertIsInstance(detail["movements"], list)
 
+        warehouse_inventory = self._get_json(
+            f"/autostock/api/v1/warehouses/{warehouse.id}/inventory"
+            "?q=G4-LARGE-1000&page=1&page_size=10"
+        )
+        self.assertEqual(warehouse_inventory["pagination"]["total_count"], 1)
+        self.assertEqual(warehouse_inventory["filters"]["warehouse_id"], warehouse.id)
+        self.assertEqual(warehouse_inventory["items"][0]["product_id"], product.id)
+        self.assertEqual(warehouse_inventory["items"][0]["on_hand"], 2)
+
+        large_warehouse_page = self._get_json(
+            f"/autostock/api/v1/warehouses/{warehouse.id}/inventory"
+            "?q=Gate4%20Catalog%20Part&page=41&page_size=25"
+        )
+        self.assertEqual(large_warehouse_page["pagination"]["total_count"], 1001)
+        self.assertEqual(large_warehouse_page["pagination"]["page"], 41)
+        self.assertEqual(len(large_warehouse_page["items"]), 1)
+        self.assertEqual(large_warehouse_page["items"][0]["product_id"], product.id)
+        warehouse_detail = self._get_json(
+            f"/autostock/api/v1/warehouses/{warehouse.id}"
+        )
+        self.assertGreaterEqual(warehouse_detail["summary"]["catalog_parts"], 1001)
+        self.assertTrue(warehouse_detail["read_only"])
+        first_warehouse_page = self._get_json(
+            f"/autostock/api/v1/warehouses/{warehouse.id}/inventory"
+            "?q=Gate4%20Catalog%20Part&page=1&page_size=25"
+        )
+        self.assertEqual(first_warehouse_page["pagination"]["total_count"], 1001)
+        self.assertEqual(len(first_warehouse_page["items"]), 25)
+        sorted_warehouse_page = self._get_json(
+            f"/autostock/api/v1/warehouses/{warehouse.id}/inventory"
+            "?q=Gate4%20Catalog%20Part&sort=sku&direction=desc&page_size=3"
+        )
+        self.assertEqual(
+            [row["sku"] for row in sorted_warehouse_page["items"]],
+            ["G4-LARGE-1000", "G4-LARGE-0999", "G4-LARGE-0998"],
+        )
+
     def test_inventory_company_and_warehouse_scopes_preserve_isolation(self):
         company_a, company_b = self.env["res.company"].create(
             [{"name": "AutoStock Gate 4 A"}, {"name": "AutoStock Gate 4 B"}]
         )
         warehouse_a = self._warehouse(company_a)
+        warehouse_a_second = self.env["stock.warehouse"].create(
+            {
+                "name": "AutoStock Gate 5 A Secondary",
+                "code": "G5A2",
+                "company_id": company_a.id,
+            }
+        )
         warehouse_b = self._warehouse(company_b)
         unit = self.env.ref("uom.product_uom_unit")
 
@@ -179,21 +223,35 @@ class TestAutoStockInventoryApi(HttpCase):
                     "uom_id": unit.id,
                 }
             )
+            template.write(
+                {"autostock_enabled": True, "autostock_safety_stock": 5}
+            )
             return template.product_variant_id
 
         product_a = create_product("Gate4 A Filter", "G4-A-001", company_a)
         product_b = create_product("Gate4 B Filter", "G4-B-001", company_b)
         shared = create_product("Gate4 Shared Filter", "G4-SHARED-001", company_a)
         shared.product_tmpl_id.company_id = False
+        child_location = self.env["stock.location"].with_company(company_a).create(
+            {
+                "name": "Gate 5 child pick face",
+                "location_id": warehouse_a.lot_stock_id.id,
+                "usage": "internal",
+                "company_id": company_a.id,
+            }
+        )
         quant = self.env["stock.quant"]
         quant.with_company(company_a)._update_available_quantity(
-            product_a, warehouse_a.lot_stock_id, 4
+            product_a, child_location, 4
         )
         quant.with_company(company_b)._update_available_quantity(
             product_b, warehouse_b.lot_stock_id, 9
         )
         quant.with_company(company_a)._update_available_quantity(
-            shared, warehouse_a.lot_stock_id, 3
+            shared, child_location, 3
+        )
+        quant.with_company(company_a)._update_available_quantity(
+            shared, warehouse_a_second.lot_stock_id, 8
         )
         quant.with_company(company_b)._update_available_quantity(
             shared, warehouse_b.lot_stock_id, 14
@@ -232,7 +290,7 @@ class TestAutoStockInventoryApi(HttpCase):
         self.assertIn(product_b.default_code, rows_b)
         self.assertIn(shared.default_code, rows_b)
         self.assertNotIn(product_a.default_code, rows_b)
-        self.assertEqual(rows_a[shared.default_code]["on_hand"], 3)
+        self.assertEqual(rows_a[shared.default_code]["on_hand"], 11)
         self.assertEqual(rows_b[shared.default_code]["on_hand"], 14)
         self.assertTrue(
             all(
@@ -256,6 +314,77 @@ class TestAutoStockInventoryApi(HttpCase):
         self.assertEqual(scoped_a["items"][0]["warehouse_count"], 1)
         self.assertEqual(scoped_a["items"][0]["warehouses"][0]["id"], warehouse_a.id)
 
+        warehouse_page_a = self._get_json(
+            f"/autostock/api/v1/warehouses?company_id={company_a.id}"
+        )
+        visible_warehouse_ids = {row["id"] for row in warehouse_page_a["warehouses"]}
+        self.assertIn(warehouse_a.id, visible_warehouse_ids)
+        self.assertIn(warehouse_a_second.id, visible_warehouse_ids)
+        self.assertNotIn(warehouse_b.id, visible_warehouse_ids)
+        warehouse_page_b = self._get_json(
+            f"/autostock/api/v1/warehouses?company_id={company_b.id}"
+        )
+        visible_warehouse_ids_b = {row["id"] for row in warehouse_page_b["warehouses"]}
+        self.assertIn(warehouse_b.id, visible_warehouse_ids_b)
+        self.assertNotIn(warehouse_a.id, visible_warehouse_ids_b)
+        self.assertNotIn(warehouse_a_second.id, visible_warehouse_ids_b)
+        searched_warehouse = self._get_json(
+            f"/autostock/api/v1/warehouses?company_id={company_a.id}&q=G5A2"
+        )
+        self.assertEqual(searched_warehouse["pagination"]["total_count"], 1)
+        self.assertEqual(searched_warehouse["warehouses"][0]["id"], warehouse_a_second.id)
+        sorted_warehouses = self._get_json(
+            f"/autostock/api/v1/warehouses?company_id={company_a.id}"
+            "&sort=name&direction=desc&page_size=1"
+        )
+        self.assertEqual(sorted_warehouses["pagination"]["total_count"], 2)
+        self.assertEqual(sorted_warehouses["pagination"]["page_size"], 1)
+        self.assertEqual(sorted_warehouses["warehouses"][0]["id"], warehouse_a_second.id)
+
+        warehouse_a_detail = self._get_json(
+            f"/autostock/api/v1/warehouses/{warehouse_a.id}?company_id={company_a.id}"
+        )
+        self.assertGreaterEqual(warehouse_a_detail["summary"]["low_stock_parts"], 1)
+        self.assertIn(
+            product_a.id,
+            [part["product_id"] for part in warehouse_a_detail["attention_parts"]],
+        )
+        self.assertNotIn(
+            product_b.default_code,
+            [move["sku"] for move in warehouse_a_detail["activity"]],
+        )
+        warehouse_a_stock = self._get_json(
+            f"/autostock/api/v1/warehouses/{warehouse_a.id}/inventory"
+            f"?company_id={company_a.id}&q=G4-A-001"
+        )
+        self.assertEqual(warehouse_a_stock["pagination"]["total_count"], 1)
+        self.assertEqual(warehouse_a_stock["items"][0]["on_hand"], 4)
+        self.assertEqual(warehouse_a_stock["items"][0]["available"], 4)
+        self.assertEqual(warehouse_a_stock["filters"]["warehouse_id"], warehouse_a.id)
+
+        shared_stock_a = self._get_json(
+            f"/autostock/api/v1/warehouses/{warehouse_a.id}/inventory"
+            f"?company_id={company_a.id}&q=G4-SHARED-001"
+        )
+        shared_stock_b = self._get_json(
+            f"/autostock/api/v1/warehouses/{warehouse_b.id}/inventory"
+            f"?company_id={company_b.id}&q=G4-SHARED-001"
+        )
+        self.assertEqual(shared_stock_a["items"][0]["on_hand"], 3)
+        self.assertEqual(shared_stock_b["items"][0]["on_hand"], 14)
+        self.assertEqual(
+            self._get_json(
+                f"/autostock/api/v1/warehouses/{warehouse_a_second.id}/inventory"
+                f"?company_id={company_a.id}&q=G4-SHARED-001"
+            )["items"][0]["on_hand"],
+            8,
+        )
+        denied_cross_company_warehouse = self._get_json(
+            f"/autostock/api/v1/warehouses/{warehouse_b.id}?company_id={company_a.id}",
+            expected_status=403,
+        )
+        self.assertEqual(denied_cross_company_warehouse["error"]["code"], "forbidden")
+
     def test_inventory_routes_keep_the_odoo_inventory_access_gate(self):
         user = self.env["res.users"].create(
             {
@@ -273,6 +402,9 @@ class TestAutoStockInventoryApi(HttpCase):
             "/autostock/api/v1/inventory",
             "/autostock/api/v1/inventory/options",
             "/autostock/api/v1/products/1/inventory-detail",
+            "/autostock/api/v1/warehouses",
+            "/autostock/api/v1/warehouses/1",
+            "/autostock/api/v1/warehouses/1/inventory",
         ):
             data = self._get_json(path, expected_status=403)
             self.assertEqual(data["error"]["code"], "forbidden")
@@ -280,6 +412,14 @@ class TestAutoStockInventoryApi(HttpCase):
     def test_detail_uses_completed_receipts_and_current_reserved_deliveries_as_activity(self):
         company = self.env.company
         warehouse = self._warehouse(company)
+        child_location = self.env["stock.location"].with_company(company).create(
+            {
+                "name": "Gate 5 receiving child location",
+                "location_id": warehouse.lot_stock_id.id,
+                "usage": "internal",
+                "company_id": company.id,
+            }
+        )
         template = self.env["product.template"].create(
             {
                 "name": "Gate4 Movement History Part",
@@ -302,7 +442,7 @@ class TestAutoStockInventoryApi(HttpCase):
                 "picking_type_id": receipt_type.id,
                 "partner_id": vendor.id,
                 "location_id": receipt_type.default_location_src_id.id,
-                "location_dest_id": receipt_type.default_location_dest_id.id,
+                "location_dest_id": child_location.id,
                 "move_ids": [
                     Command.create(
                         {
@@ -310,7 +450,7 @@ class TestAutoStockInventoryApi(HttpCase):
                             "product_uom": product.uom_id.id,
                             "product_uom_qty": 30,
                             "location_id": receipt_type.default_location_src_id.id,
-                            "location_dest_id": receipt_type.default_location_dest_id.id,
+                            "location_dest_id": child_location.id,
                             "company_id": company.id,
                         }
                     )
@@ -423,3 +563,31 @@ class TestAutoStockInventoryApi(HttpCase):
         )
         self.assertEqual(activity["reserved_delivery"]["quantity"], 24)
         self.assertIn("Expected moves", detail["movement_note"])
+
+        warehouse_inventory = self._get_json(
+            f"/autostock/api/v1/warehouses/{warehouse.id}/inventory"
+            "?q=G4-MOVEMENT-001"
+        )
+        movement_row = warehouse_inventory["items"][0]
+        self.assertEqual(movement_row["on_hand"], 30)
+        self.assertEqual(movement_row["available"], 6)
+        self.assertEqual(movement_row["reserved"], 24)
+        self.assertEqual(movement_row["incoming"], 24)
+        self.assertEqual(movement_row["outgoing"], 24)
+        self.assertEqual(movement_row["warehouse_count"], 1)
+
+        warehouse_detail = self._get_json(
+            f"/autostock/api/v1/warehouses/{warehouse.id}"
+        )
+        self.assertGreaterEqual(
+            warehouse_detail["summary"]["parts_with_incoming_stock"], 1
+        )
+        self.assertGreaterEqual(
+            warehouse_detail["summary"]["parts_with_outgoing_stock"], 1
+        )
+        warehouse_activity = {
+            row["kind"]: row for row in warehouse_detail["activity"]
+        }
+        self.assertIn("received", warehouse_activity)
+        self.assertIn("incoming_purchase", warehouse_activity)
+        self.assertIn("reserved_delivery", warehouse_activity)

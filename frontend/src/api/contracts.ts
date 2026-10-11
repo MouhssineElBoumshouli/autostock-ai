@@ -419,6 +419,130 @@ export const inventoryDetailSchema = z.object({
   read_only: z.literal(true),
 })
 
+const warehouseCountSchema = z.union([z.number().int().nonnegative(), z.literal(false)])
+
+export const warehouseRowSchema = z.object({
+  id: z.number().int().positive(),
+  name: z.string(),
+  code: z.string(),
+  company_name: z.string(),
+  catalog_parts: warehouseCountSchema,
+  tracked_catalog_parts: warehouseCountSchema,
+  stocked_parts: warehouseCountSchema,
+  tracked_parts_present: warehouseCountSchema,
+  low_stock_parts: warehouseCountSchema,
+  out_of_stock_parts: warehouseCountSchema,
+  parts_with_reserved_stock: warehouseCountSchema,
+  parts_with_incoming_stock: warehouseCountSchema,
+  parts_with_outgoing_stock: warehouseCountSchema,
+  summary_complete: z.boolean(),
+  summary_note: z.union([z.string(), z.literal(false)]),
+  status: z.enum(['needs_attention', 'healthy', 'no_tracked_stock', 'unknown']),
+  recent_activity_at: z.union([z.string(), z.literal(false)]),
+  activity_available: z.boolean(),
+})
+
+const warehouseMetricsSchema = z.object({
+  active_warehouses: z.number().int().nonnegative(),
+  warehouses_needing_attention: warehouseCountSchema,
+  warehouses_with_low_stock: warehouseCountSchema,
+  warehouses_with_stockouts: warehouseCountSchema,
+  warehouses_with_incoming: warehouseCountSchema,
+  complete: z.boolean(),
+})
+
+export const warehousesSchema = z.object({
+  schema_version: z.literal(1),
+  company: companySchema,
+  as_of: z.string(),
+  summary: warehouseMetricsSchema,
+  filters: z.object({
+    query: z.string(),
+    status: z.enum(['all', 'attention', 'low_stock', 'out_of_stock', 'healthy', 'no_tracked_stock']),
+    sort: z.enum(['name', 'attention', 'recent']),
+    direction: z.enum(['asc', 'desc']),
+  }),
+  warehouses: z.array(warehouseRowSchema).max(50),
+  pagination: z.object({
+    page: z.number().int().positive(),
+    page_size: z.number().int().positive().max(50),
+    total_count: z.number().int().nonnegative(),
+    total_pages: z.number().int().nonnegative(),
+    has_previous: z.boolean(),
+    has_next: z.boolean(),
+  }),
+  coverage: z.object({
+    summary_complete: z.boolean(),
+    catalog_product_count: z.number().int().nonnegative(),
+    catalog_scan_limit: z.number().int().positive(),
+    warehouse_count: z.number().int().nonnegative(),
+    warehouse_limit: z.number().int().positive(),
+    activity_available: z.boolean(),
+  }),
+})
+
+const warehouseAttentionPartSchema = z.object({
+  product_id: z.number().int().positive(),
+  name: z.string(),
+  sku: z.string(),
+  uom: z.string(),
+  status: z.enum(['low_stock', 'out_of_stock']),
+  on_hand: z.number(),
+  available: z.number(),
+})
+
+const warehouseActivitySchema = z.object({
+  id: z.number().int().positive(),
+  kind: z.enum([
+    'adjustment', 'received', 'shipped', 'transfer_out', 'transfer_in',
+    'incoming_purchase', 'reserved_delivery', 'scheduled_delivery', 'stock_movement',
+  ]),
+  label: z.string(),
+  date: z.union([z.string(), z.literal(false)]),
+  completed: z.boolean(),
+  product_id: z.number().int().positive(),
+  product_name: z.string(),
+  sku: z.string(),
+  quantity: z.number(),
+  uom: z.string(),
+  reference: z.union([z.string(), z.literal(false)]),
+  counterpart_warehouse: z.union([z.string(), z.literal(false)]),
+})
+
+export const warehouseDetailSchema = z.object({
+  schema_version: z.literal(1),
+  company: companySchema,
+  warehouse: z.object({
+    id: z.number().int().positive(),
+    name: z.string(),
+    code: z.string(),
+    company_name: z.string(),
+  }),
+  summary: warehouseRowSchema.pick({
+    catalog_parts: true,
+    tracked_catalog_parts: true,
+    stocked_parts: true,
+    tracked_parts_present: true,
+    low_stock_parts: true,
+    out_of_stock_parts: true,
+    parts_with_reserved_stock: true,
+    parts_with_incoming_stock: true,
+    parts_with_outgoing_stock: true,
+    summary_complete: true,
+    summary_note: true,
+  }).extend({
+    reorder_suggestions: warehouseCountSchema,
+    reorder_suggestions_complete: z.boolean(),
+    reorder_suggestions_note: z.union([z.string(), z.literal(false)]),
+  }),
+  attention_parts: z.array(warehouseAttentionPartSchema).max(5),
+  activity_available: z.boolean(),
+  activity: z.array(warehouseActivitySchema).max(20),
+  activity_note: z.string(),
+  as_of: z.string(),
+  read_only: z.literal(true),
+})
+
 export type SessionData = z.infer<typeof sessionSchema>
 export type DashboardData = z.infer<typeof dashboardSchema>
 export type RestockData = z.infer<typeof restockSchema>
@@ -428,6 +552,9 @@ export type ProductQuickViewData = z.infer<typeof productQuickViewSchema>
 export type InventoryOptions = z.infer<typeof inventoryOptionsSchema>
 export type InventoryData = z.infer<typeof inventorySchema>
 export type InventoryDetailData = z.infer<typeof inventoryDetailSchema>
+export type WarehouseData = z.infer<typeof warehousesSchema>
+export type WarehouseRow = z.infer<typeof warehouseRowSchema>
+export type WarehouseDetailData = z.infer<typeof warehouseDetailSchema>
 export type ForecastRun = Extract<ForecastData, { status: 'available' }>['forecast']
 export type DashboardInsight = z.infer<typeof insightSchema>
 export type RiskItem = z.infer<typeof riskItemSchema>

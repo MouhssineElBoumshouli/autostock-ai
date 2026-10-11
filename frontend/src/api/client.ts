@@ -3,6 +3,8 @@ import {
   inventoryDetailSchema,
   inventoryOptionsSchema,
   inventorySchema,
+  warehouseDetailSchema,
+  warehousesSchema,
   forecastSchema,
   searchSchema,
   sessionSchema,
@@ -12,6 +14,8 @@ import {
   type InventoryData,
   type InventoryDetailData,
   type InventoryOptions,
+  type WarehouseData,
+  type WarehouseDetailData,
   type ForecastData,
   type ProductSearchData,
   type ProductQuickViewData,
@@ -143,6 +147,60 @@ export const api = {
       companyId,
     ).then((data) => requireCompany(companyId, data))
   },
+  warehouses: (companyId: number, filters: WarehouseRequest = {}) => {
+    const params = new URLSearchParams()
+    const values: Record<string, string | number | undefined> = {
+      q: filters.query,
+      status: filters.status,
+      sort: filters.sort,
+      direction: filters.direction,
+      page: filters.page,
+      page_size: filters.pageSize,
+    }
+    for (const [key, value] of Object.entries(values)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
+    }
+    return get(`/autostock/api/v1/warehouses?${params}`, warehousesSchema, companyId)
+      .then((data) => requireCompany(companyId, data))
+  },
+  warehouseDetail: (companyId: number, warehouseId: number) => get(
+    `/autostock/api/v1/warehouses/${warehouseId}`,
+    warehouseDetailSchema,
+    companyId,
+  ).then((data) => {
+    requireCompany(companyId, data)
+    if (data.warehouse.id !== warehouseId) {
+      throw new ApiError('Odoo returned details for a different warehouse. Refresh the page before continuing.', 'contract')
+    }
+    return data
+  }),
+  warehouseInventory: (companyId: number, warehouseId: number, filters: InventoryRequest = {}) => {
+    const params = new URLSearchParams()
+    const values: Record<string, string | number | undefined> = {
+      q: filters.query,
+      supplier_q: filters.supplierQuery,
+      status: filters.status,
+      category_id: filters.categoryId,
+      supplier_id: filters.supplierId,
+      tracked: filters.tracked,
+      active: filters.active,
+      sort: filters.sort,
+      direction: filters.direction,
+      page: filters.page,
+      page_size: filters.pageSize,
+    }
+    for (const [key, value] of Object.entries(values)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
+    }
+    return get(`/autostock/api/v1/warehouses/${warehouseId}/inventory?${params}`, inventorySchema, companyId)
+      .then((data) => {
+        requireCompany(companyId, data)
+        if (data.filters.warehouse_id !== warehouseId) {
+          throw new ApiError('Odoo returned inventory for a different warehouse. Refresh the page before continuing.', 'contract')
+        }
+        return data
+      })
+  },
 }
 
 export type InventoryRequest = {
@@ -155,6 +213,15 @@ export type InventoryRequest = {
   tracked?: 'all' | 'tracked' | 'not_tracked'
   active?: 'active' | 'archived' | 'all'
   sort?: 'name' | 'sku'
+  direction?: 'asc' | 'desc'
+  page?: number
+  pageSize?: number
+}
+
+export type WarehouseRequest = {
+  query?: string
+  status?: 'all' | 'attention' | 'low_stock' | 'out_of_stock' | 'healthy' | 'no_tracked_stock'
+  sort?: 'name' | 'attention' | 'recent'
   direction?: 'asc' | 'desc'
   page?: number
   pageSize?: number
@@ -210,6 +277,8 @@ export type {
   InventoryData,
   InventoryDetailData,
   InventoryOptions,
+  WarehouseData,
+  WarehouseDetailData,
   ProductSearchData,
   ProductQuickViewData,
   RestockData,

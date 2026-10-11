@@ -848,3 +848,75 @@ class AutoStockApiV1(http.Controller):
             **result,
             "recommendations": recommendations,
         }
+
+    @http.route(
+        "/autostock/api/v1/warehouses",
+        type="http",
+        auth="user",
+        methods=["GET"],
+    )
+    def warehouses(self, **_kwargs):
+        return self._dispatch(self._warehouses_payload)
+
+    def _warehouses_payload(self):
+        company = self._selected_company()
+        args = request.httprequest.args
+        result = self._scoped_model(
+            "autostock.inventory.catalog", company
+        ).get_warehouse_page(
+            query=args.get("q", ""),
+            status=args.get("status", "all"),
+            sort=args.get("sort", "name"),
+            direction=args.get("direction", "asc"),
+            page=args.get("page", 1),
+            page_size=args.get("page_size", 12),
+        )
+        return {"schema_version": 1, "company": self._company_contract(company), **result}
+
+    @http.route(
+        "/autostock/api/v1/warehouses/<int:warehouse_id>",
+        type="http",
+        auth="user",
+        methods=["GET"],
+    )
+    def warehouse_detail(self, warehouse_id, **_kwargs):
+        return self._dispatch(lambda: self._warehouse_detail_payload(warehouse_id))
+
+    def _warehouse_detail_payload(self, warehouse_id):
+        company = self._selected_company()
+        result = self._scoped_model(
+            "autostock.inventory.catalog", company
+        ).get_warehouse_detail(warehouse_id)
+        return {"schema_version": 1, "company": self._company_contract(company), **result}
+
+    @http.route(
+        "/autostock/api/v1/warehouses/<int:warehouse_id>/inventory",
+        type="http",
+        auth="user",
+        methods=["GET"],
+    )
+    def warehouse_inventory(self, warehouse_id, **_kwargs):
+        return self._dispatch(
+            lambda: self._warehouse_inventory_payload(warehouse_id)
+        )
+
+    def _warehouse_inventory_payload(self, warehouse_id):
+        company = self._selected_company()
+        args = request.httprequest.args
+        result = self._scoped_model(
+            "autostock.inventory.catalog", company
+        ).get_inventory_page(
+            query=args.get("q", ""),
+            supplier_query=args.get("supplier_q", ""),
+            status=args.get("status", "all"),
+            warehouse_id=warehouse_id,
+            category_id=args.get("category_id"),
+            supplier_id=args.get("supplier_id"),
+            tracked=args.get("tracked", "all"),
+            active=args.get("active", "active"),
+            sort=args.get("sort", "name"),
+            direction=args.get("direction", "asc"),
+            page=args.get("page", 1),
+            page_size=args.get("page_size", 25),
+        )
+        return {"schema_version": 1, "company": self._company_contract(company), **result}

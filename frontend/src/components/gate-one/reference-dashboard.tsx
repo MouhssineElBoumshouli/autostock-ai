@@ -140,6 +140,10 @@ function ReferenceDashboard({ session, companyId, onSwitchCompany, onSignOut }: 
       void navigate({ to: '/inventory' })
       return
     }
+    if (section === 'warehouses') {
+      void navigate({ to: '/warehouses' })
+      return
+    }
     window.requestAnimationFrame(() => scrollToTarget('forecast-panel'))
   }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   dashboardSchema, forecastSchema, inventoryDetailSchema, inventorySchema,
-  restockSchema, sessionSchema,
+  restockSchema, sessionSchema, warehouseDetailSchema, warehousesSchema,
 } from '../../src/api/contracts'
 
 const company = {
@@ -149,6 +149,48 @@ describe('Odoo v1 API contracts', () => {
       movement_note: 'No stock changes were recorded in the last 90 days.',
       coverage: { warehouse_scope_limited: false, total_warehouses: 1, supplier_terms_available: false },
       read_only: true,
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('accepts warehouse summaries as part-position counts without summing mixed product units', () => {
+    const row = {
+      id: 8, name: 'Central Warehouse', code: 'CENT', company_name: company.name,
+      catalog_parts: 1001, tracked_catalog_parts: 64, stocked_parts: 40, tracked_parts_present: 38,
+      low_stock_parts: 16, out_of_stock_parts: 8, parts_with_reserved_stock: 12,
+      parts_with_incoming_stock: 9, parts_with_outgoing_stock: 7,
+      summary_complete: true, summary_note: false, status: 'needs_attention',
+      recent_activity_at: '2026-10-10T14:00:00Z', activity_available: true,
+    }
+    const parsed = warehousesSchema.safeParse({
+      schema_version: 1, company, as_of: '2026-10-10 12:00:00',
+      summary: { active_warehouses: 2, warehouses_needing_attention: 1, warehouses_with_low_stock: 1, warehouses_with_stockouts: 1, warehouses_with_incoming: 1, complete: true },
+      filters: { query: '', status: 'all', sort: 'attention', direction: 'desc' },
+      warehouses: [row],
+      pagination: { page: 1, page_size: 12, total_count: 2, total_pages: 1, has_previous: false, has_next: false },
+      coverage: { summary_complete: true, catalog_product_count: 1001, catalog_scan_limit: 50000, warehouse_count: 2, warehouse_limit: 500, activity_available: true },
+    })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.warehouses[0].parts_with_reserved_stock).toBe(12)
+      expect(parsed.data.warehouses[0].catalog_parts).toBe(1001)
+    }
+  })
+
+  it('requires warehouse detail movements and part-specific inventory figures to stay explicit', () => {
+    const parsed = warehouseDetailSchema.safeParse({
+      schema_version: 1, company,
+      warehouse: { id: 8, name: 'Central Warehouse', code: 'CENT', company_name: company.name },
+      summary: {
+        catalog_parts: 1001, tracked_catalog_parts: 64, stocked_parts: 40, tracked_parts_present: 38,
+        low_stock_parts: 16, out_of_stock_parts: 8, parts_with_reserved_stock: 12,
+        parts_with_incoming_stock: 9, parts_with_outgoing_stock: 7, summary_complete: true,
+        summary_note: false, reorder_suggestions: 5, reorder_suggestions_complete: true, reorder_suggestions_note: false,
+      },
+      attention_parts: [{ product_id: 1001, name: 'Water Pump', sku: 'WP-1001', uom: 'Units', status: 'low_stock', on_hand: 2, available: 1 }],
+      activity_available: true,
+      activity: [{ id: 90, kind: 'received', label: 'Received', date: '2026-10-10T10:00:00Z', completed: true, product_id: 1001, product_name: 'Water Pump', sku: 'WP-1001', quantity: 6, uom: 'Units', reference: 'WH/IN/0090', counterpart_warehouse: false }],
+      activity_note: 'Completed changes cover the last 90 days.', as_of: '2026-10-10 12:00:00', read_only: true,
     })
     expect(parsed.success).toBe(true)
   })
