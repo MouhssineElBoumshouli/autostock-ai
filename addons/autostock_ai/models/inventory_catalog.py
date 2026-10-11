@@ -55,7 +55,7 @@ class AutoStockInventoryCatalog(models.AbstractModel):
 
     @api.model
     def _parse_id(self, value, label, *, allow_empty=True):
-        if value in (None, "") and allow_empty:
+        if (value is None or value == "" or value is False) and allow_empty:
             return False
         try:
             parsed = int(value)
@@ -66,20 +66,25 @@ class AutoStockInventoryCatalog(models.AbstractModel):
         return parsed
 
     @api.model
-    def _supplier_domain(self, company, today, *, query=False, supplier_id=False):
+    def _supplier_domain(
+        self, company, today, *, query=False, supplier_id=False, current_only=True
+    ):
         domain = [
             ("company_id", "in", [False, company.id]),
             ("partner_id", "!=", False),
             ("product_tmpl_id.active", "=", True),
             ("product_tmpl_id.is_storable", "=", True),
             ("product_tmpl_id.company_id", "in", [False, company.id]),
-            "|",
-            ("date_start", "=", False),
-            ("date_start", "<=", today),
-            "|",
-            ("date_end", "=", False),
-            ("date_end", ">=", today),
         ]
+        if current_only:
+            domain += [
+                "|",
+                ("date_start", "=", False),
+                ("date_start", "<=", today),
+                "|",
+                ("date_end", "=", False),
+                ("date_end", ">=", today),
+            ]
         if supplier_id:
             domain.append(("partner_id", "=", supplier_id))
         if query:
@@ -87,12 +92,16 @@ class AutoStockInventoryCatalog(models.AbstractModel):
         return domain
 
     @api.model
-    def _supplier_product_domain(self, SupplierInfo, company, *, query=False, supplier_id=False):
+    def _supplier_product_domain(
+        self, SupplierInfo, company, *, query=False, supplier_id=False,
+        current_only=True,
+    ):
         """Find exact vendor-linked variants, without a first-page product cap."""
         today = fields.Date.today()
         grouped_lines = SupplierInfo._read_group(
             self._supplier_domain(
-                company, today, query=query, supplier_id=supplier_id
+                company, today, query=query, supplier_id=supplier_id,
+                current_only=current_only,
             ),
             ["product_tmpl_id", "product_id"],
             [],
@@ -422,6 +431,7 @@ class AutoStockInventoryCatalog(models.AbstractModel):
         supplier_id=False,
         tracked="all",
         active="active",
+        missing_supplier=False,
         sort="name",
         direction="asc",
         page=1,
@@ -498,6 +508,18 @@ class AutoStockInventoryCatalog(models.AbstractModel):
             active=active,
             supplier_access=supplier_access,
         )
+        if missing_supplier:
+            if supplier_id or supplier_query:
+                raise ValidationError(
+                    _("Clear the supplier filter to find parts without vendor terms.")
+                )
+            if not supplier_access:
+                raise AccessError(
+                    _("Your Odoo role cannot check which parts have no supplier terms.")
+                )
+            base_domain &= ~self._supplier_product_domain(
+                SupplierInfo, company, current_only=False
+            )
         quantity_context = {"allowed_company_ids": [company.id]}
         if selected_warehouse:
             quantity_context["warehouse_id"] = selected_warehouse.id

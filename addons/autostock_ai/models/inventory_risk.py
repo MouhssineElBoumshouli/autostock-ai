@@ -177,6 +177,7 @@ class AutoStockInventoryRisk(models.AbstractModel):
         self,
         warehouse_id=False,
         product_id=False,
+        product_ids=False,
         search="",
         supplier_id=False,
         risk_filter="all",
@@ -244,6 +245,16 @@ class AutoStockInventoryRisk(models.AbstractModel):
             if product_id <= 0:
                 raise ValidationError(_("Choose a valid product."))
             product_domain.append(("id", "=", product_id))
+        if product_ids:
+            if not isinstance(product_ids, (list, tuple, set)) or len(product_ids) > 100:
+                raise ValidationError(_("Choose up to 100 visible parts for this stock check."))
+            try:
+                selected_product_ids = sorted({int(value) for value in product_ids})
+            except (TypeError, ValueError) as error:
+                raise ValidationError(_("Choose valid parts for this stock check.")) from error
+            if any(value <= 0 for value in selected_product_ids):
+                raise ValidationError(_("Choose valid parts for this stock check."))
+            product_domain.append(("id", "in", selected_product_ids))
         if search:
             product_domain += [
                 "|", "|",

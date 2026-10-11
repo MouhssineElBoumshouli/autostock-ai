@@ -920,3 +920,109 @@ class AutoStockApiV1(http.Controller):
             page_size=args.get("page_size", 25),
         )
         return {"schema_version": 1, "company": self._company_contract(company), **result}
+
+    @http.route(
+        "/autostock/api/v1/suppliers",
+        type="http",
+        auth="user",
+        methods=["GET"],
+    )
+    def suppliers(self, **_kwargs):
+        return self._dispatch(self._suppliers_payload)
+
+    def _suppliers_payload(self):
+        company = self._selected_company()
+        args = request.httprequest.args
+        result = self._scoped_model("autostock.supplier.catalog", company).get_supplier_page(
+            query=args.get("q", ""),
+            attention=args.get("attention", "all"),
+            terms=args.get("terms", "all"),
+            sort=args.get("sort", "name"),
+            direction=args.get("direction", "asc"),
+            page=args.get("page", 1),
+            page_size=args.get("page_size", 12),
+        )
+        return {"schema_version": 1, "company": self._company_contract(company), **result}
+
+    @http.route(
+        "/autostock/api/v1/suppliers/<int:supplier_id>",
+        type="http",
+        auth="user",
+        methods=["GET"],
+    )
+    def supplier_detail(self, supplier_id, **_kwargs):
+        return self._dispatch(lambda: self._supplier_detail_payload(supplier_id))
+
+    def _supplier_detail_payload(self, supplier_id):
+        company = self._selected_company()
+        result = self._scoped_model(
+            "autostock.supplier.catalog", company
+        ).get_supplier_detail(supplier_id)
+        return {"schema_version": 1, "company": self._company_contract(company), **result}
+
+    @http.route(
+        "/autostock/api/v1/suppliers/<int:supplier_id>/parts",
+        type="http",
+        auth="user",
+        methods=["GET"],
+    )
+    def supplier_parts(self, supplier_id, **_kwargs):
+        return self._dispatch(lambda: self._supplier_parts_payload(supplier_id))
+
+    def _supplier_parts_payload(self, supplier_id):
+        company = self._selected_company()
+        args = request.httprequest.args
+        result = self._scoped_model(
+            "autostock.supplier.catalog", company
+        ).get_supplier_parts(
+            supplier_id,
+            query=args.get("q", ""),
+            status=args.get("status", "all"),
+            sort=args.get("sort", "name"),
+            direction=args.get("direction", "asc"),
+            page=args.get("page", 1),
+            page_size=args.get("page_size", 25),
+        )
+        return {"schema_version": 1, "company": self._company_contract(company), **result}
+
+    @http.route(
+        "/autostock/api/v1/suppliers/<int:supplier_id>/parts/<int:product_id>/terms",
+        type="http",
+        auth="user",
+        methods=["GET"],
+    )
+    def supplier_part_terms(self, supplier_id, product_id, **_kwargs):
+        return self._dispatch(
+            lambda: self._supplier_part_terms_payload(supplier_id, product_id)
+        )
+
+    def _supplier_part_terms_payload(self, supplier_id, product_id):
+        company = self._selected_company()
+        result = self._scoped_model(
+            "autostock.supplier.catalog", company
+        ).get_supplier_terms(supplier_id, product_id)
+        return {"schema_version": 1, "company": self._company_contract(company), **result}
+
+    @http.route(
+        "/autostock/api/v1/supplier-gaps",
+        type="http",
+        auth="user",
+        methods=["GET"],
+    )
+    def supplier_gaps(self, **_kwargs):
+        return self._dispatch(self._supplier_gaps_payload)
+
+    def _supplier_gaps_payload(self):
+        company = self._selected_company()
+        args = request.httprequest.args
+        result = self._scoped_model(
+            "autostock.supplier.catalog", company
+        ).get_supplier_gaps(
+            query=args.get("q", ""),
+            status=args.get("status", "all"),
+            sort=args.get("sort", "name"),
+            direction=args.get("direction", "asc"),
+            page=args.get("page", 1),
+            page_size=args.get("page_size", 25),
+        )
+        return {"schema_version": 1, "company": self._company_contract(company), **result}

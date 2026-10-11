@@ -341,6 +341,167 @@ export const inventorySchema = z.object({
   empty_catalog: z.boolean(),
 })
 
+const supplierCount = z.union([z.number().int().nonnegative(), z.literal(false)])
+const reorderPositionSchema = z.object({
+  warehouse_id: z.number().int().positive(),
+  warehouse: z.string(),
+  quantity: z.number().nonnegative(),
+  uom: z.string(),
+})
+const supplierPartItemSchema = inventoryItemSchema.extend({
+  supplier_terms_count: z.number().int().nonnegative(),
+  lead_time_min_days: z.union([z.number().int().nonnegative(), z.literal(false)]),
+  lead_time_max_days: z.union([z.number().int().nonnegative(), z.literal(false)]),
+  reorder_locations: z.array(reorderPositionSchema).max(5000),
+  reorder_parts: z.boolean(),
+})
+
+const supplierRowSchema = z.object({
+  id: z.number().int().positive(),
+  name: z.string(),
+  vendor_code: z.union([z.string(), z.literal(false)]),
+  company_name: z.union([z.string(), z.literal(false)]),
+  email: z.union([z.string(), z.literal(false)]),
+  phone: z.union([z.string(), z.literal(false)]),
+  city: z.union([z.string(), z.literal(false)]),
+  country: z.union([z.string(), z.literal(false)]),
+  partner_company: z.union([z.string(), z.literal(false)]),
+  active: z.boolean(),
+  active_parts: supplierCount,
+  tracked_parts: supplierCount,
+  low_or_out_parts: supplierCount,
+  reorder_parts: supplierCount,
+  reorder_locations: supplierCount,
+  active_terms: supplierCount,
+  has_active_terms: z.boolean(),
+  active_terms_status: z.enum(['has_terms', 'no_terms', 'unknown']),
+  has_configured_terms: z.boolean(),
+  configured_terms_status: z.enum(['has_terms', 'no_terms', 'unknown']),
+  lead_time_min_days: z.union([z.number().int().nonnegative(), z.literal(false)]),
+  lead_time_max_days: z.union([z.number().int().nonnegative(), z.literal(false)]),
+  attention: z.boolean(),
+})
+
+export const suppliersSchema = z.object({
+  schema_version: z.literal(1),
+  company: companySchema,
+  as_of: z.string(),
+  summary: z.object({
+    active_suppliers: supplierCount,
+    parts_with_supplier: supplierCount,
+    parts_missing_supplier: supplierCount,
+    suppliers_with_reorder_needs: supplierCount,
+  }),
+  filters: z.object({
+    query: z.string(),
+    attention: z.enum(['all', 'reorder']),
+    terms: z.enum(['all', 'active', 'none']),
+    sort: z.enum(['name', 'reorder', 'parts', 'lead_time']),
+    direction: z.enum(['asc', 'desc']),
+  }),
+  suppliers: z.array(supplierRowSchema).max(5000),
+  pagination: z.object({
+    page: z.number().int().positive(),
+    page_size: z.number().int().positive().max(50),
+    total_count: z.number().int().nonnegative(),
+    total_pages: z.number().int().nonnegative(),
+    has_previous: z.boolean(),
+    has_next: z.boolean(),
+  }),
+  coverage: z.object({
+    supplier_terms_complete: z.boolean(),
+    product_catalog_complete: z.boolean(),
+    stock_complete: z.boolean(),
+    reorder_complete: z.boolean(),
+    supplier_limit: z.number().int().positive(),
+    term_scan_limit: z.number().int().positive(),
+    product_scan_limit: z.number().int().positive(),
+    reorder_scan_limit: z.number().int().positive(),
+    note: z.union([z.string(), z.literal(false)]),
+  }),
+  read_only: z.literal(true),
+})
+
+export const supplierDetailSchema = z.object({
+  schema_version: z.literal(1),
+  company: companySchema,
+  supplier: z.object({
+    id: z.number().int().positive(),
+    name: z.string(),
+    vendor_code: z.union([z.string(), z.literal(false)]),
+    company_name: z.union([z.string(), z.literal(false)]),
+    email: z.union([z.string(), z.literal(false)]),
+    phone: z.union([z.string(), z.literal(false)]),
+    city: z.union([z.string(), z.literal(false)]),
+    country: z.union([z.string(), z.literal(false)]),
+    partner_company: z.union([z.string(), z.literal(false)]),
+  }),
+  summary: supplierRowSchema,
+  purchase_history: z.object({
+    available: z.boolean(),
+    note: z.string(),
+    items: z.array(z.object({
+      id: z.number().int().positive(),
+      kind: z.enum(['purchase_order', 'receipt']),
+      label: z.string(),
+      reference: z.union([z.string(), z.literal(false)]),
+      date: z.union([z.string(), z.literal(false)]),
+    })).max(10),
+  }),
+  coverage: z.object({
+    supplier_terms_complete: z.boolean(),
+    stock_complete: z.boolean(),
+    reorder_complete: z.boolean(),
+    reorder_scanned: z.number().int().nonnegative(),
+    reorder_candidates: z.number().int().nonnegative(),
+  }),
+  as_of: z.string(),
+  read_only: z.literal(true),
+})
+
+export const supplierPartsSchema = inventorySchema.extend({
+  items: z.array(supplierPartItemSchema).max(100),
+  coverage: inventorySchema.shape.coverage.extend({
+    supplier_terms_complete: z.boolean(),
+    reorder_complete: z.boolean(),
+  }),
+})
+
+export const supplierGapsSchema = supplierPartsSchema
+
+export const supplierTermsSchema = z.object({
+  schema_version: z.literal(1),
+  company: companySchema,
+  product: z.object({
+    id: z.number().int().positive(),
+    name: z.string(),
+    sku: z.string(),
+  }),
+  supplier: z.object({ id: z.number().int().positive(), name: z.string() }),
+  terms: z.array(z.object({
+    id: z.number().int().positive(),
+    sequence: z.number().int(),
+    vendor_product_name: z.union([z.string(), z.literal(false)]),
+    vendor_product_code: z.union([z.string(), z.literal(false)]),
+    price: z.union([z.number().nonnegative(), z.literal(false)]),
+    price_available: z.boolean(),
+    currency: z.object({ code: z.string(), symbol: z.string(), decimal_places: z.number().int().nonnegative() }),
+    price_break_min_qty: z.number().nonnegative(),
+    price_break_uom: z.string(),
+    minimum_order_qty: z.number().nonnegative(),
+    minimum_order_uom: z.string(),
+    lead_time_days: z.number().int().nonnegative(),
+    company_id: z.union([z.number().int().positive(), z.literal(false)]),
+    company_name: z.union([z.string(), z.literal(false)]),
+    valid_from: z.union([z.string(), z.literal(false)]),
+    valid_until: z.union([z.string(), z.literal(false)]),
+    active_today: z.boolean(),
+    variant_specific: z.boolean(),
+  })).max(10000),
+  terms_truncated: z.boolean(),
+  read_only: z.literal(true),
+})
+
 const inventoryDetailWarehouseSchema = inventoryWarehouseSchema.extend({
   selected: z.boolean(),
   projected: z.number(),
@@ -555,6 +716,13 @@ export type InventoryDetailData = z.infer<typeof inventoryDetailSchema>
 export type WarehouseData = z.infer<typeof warehousesSchema>
 export type WarehouseRow = z.infer<typeof warehouseRowSchema>
 export type WarehouseDetailData = z.infer<typeof warehouseDetailSchema>
+export type SupplierData = z.infer<typeof suppliersSchema>
+export type SupplierRow = z.infer<typeof supplierRowSchema>
+export type SupplierDetailData = z.infer<typeof supplierDetailSchema>
+export type SupplierPartsData = z.infer<typeof supplierPartsSchema>
+export type SupplierPartItem = z.infer<typeof supplierPartItemSchema>
+export type SupplierTermsData = z.infer<typeof supplierTermsSchema>
+export type SupplierGapsData = z.infer<typeof supplierGapsSchema>
 export type ForecastRun = Extract<ForecastData, { status: 'available' }>['forecast']
 export type DashboardInsight = z.infer<typeof insightSchema>
 export type RiskItem = z.infer<typeof riskItemSchema>

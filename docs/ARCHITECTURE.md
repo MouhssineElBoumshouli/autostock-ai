@@ -13,7 +13,7 @@ Odoo 19 Community
 
 React 19 client (`frontend/`)
   ├─ Odoo-authenticated session and company selection
-  ├─ Dashboard backed by purpose-built, versioned Odoo API routes
+  ├─ Dashboard, Inventory, Warehouses, and Suppliers backed by purpose-built Odoo API routes
   └─ TanStack Query and Router; no business calculations are duplicated client-side
 
 Offline laboratory
@@ -45,6 +45,10 @@ The current React scope and API/security boundaries are described in [Frontend a
 6. Odoo's projected stock already includes confirmed outgoing stock moves. The service reconciles future sale-linked outbound quantities and subtracts only forecast demand not already represented in those moves. If required access or bounded data is unavailable, the numeric recommendation is withheld or falls back to explicitly labeled visible Odoo policy only.
 
 The result is read-only planning evidence. Phase 3A does not create purchase quotations, purchase orders, supplier commitments, stock moves or quants. It never presents a forecast as guaranteed accuracy. See the [Phase 3A QA report](qa/phase3a-risk-replenishment.md) for test and browser evidence.
+
+## Supplier screen data
+
+The Suppliers interface is built on the selected company's partner and `product.supplierinfo` records, existing Inventory quantity methods, and the existing risk/reorder service. Current-company and shared supplier terms are kept separate; shared supplier contacts without a term for the selected company are not exposed in its supplier list. Native price-break quantities, separate minimum order quantities, price currencies, sequence and validity dates are shown per term. No supplier performance score or cross-currency total is derived. Purchase history is an optional read-only section and reports when the Purchase model or access is unavailable.
 
 ## Forecast request and data source
 

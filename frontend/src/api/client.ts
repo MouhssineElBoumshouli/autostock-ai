@@ -5,6 +5,11 @@ import {
   inventorySchema,
   warehouseDetailSchema,
   warehousesSchema,
+  supplierDetailSchema,
+  supplierGapsSchema,
+  supplierPartsSchema,
+  supplierTermsSchema,
+  suppliersSchema,
   forecastSchema,
   searchSchema,
   sessionSchema,
@@ -16,6 +21,11 @@ import {
   type InventoryOptions,
   type WarehouseData,
   type WarehouseDetailData,
+  type SupplierData,
+  type SupplierDetailData,
+  type SupplierPartsData,
+  type SupplierTermsData,
+  type SupplierGapsData,
   type ForecastData,
   type ProductSearchData,
   type ProductQuickViewData,
@@ -201,6 +211,77 @@ export const api = {
         return data
       })
   },
+  suppliers: (companyId: number, filters: SupplierRequest = {}) => {
+    const params = new URLSearchParams()
+    const values: Record<string, string | number | undefined> = {
+      q: filters.query,
+      attention: filters.attention,
+      terms: filters.terms,
+      sort: filters.sort,
+      direction: filters.direction,
+      page: filters.page,
+      page_size: filters.pageSize,
+    }
+    for (const [key, value] of Object.entries(values)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
+    }
+    return get(`/autostock/api/v1/suppliers?${params}`, suppliersSchema, companyId)
+      .then((data) => requireCompany(companyId, data))
+  },
+  supplierDetail: (companyId: number, supplierId: number) => get(
+    `/autostock/api/v1/suppliers/${supplierId}`,
+    supplierDetailSchema,
+    companyId,
+  ).then((data) => {
+    requireCompany(companyId, data)
+    if (data.supplier.id !== supplierId) {
+      throw new ApiError('Odoo returned details for a different supplier. Refresh the page before continuing.', 'contract')
+    }
+    return data
+  }),
+  supplierParts: (companyId: number, supplierId: number, filters: SupplierPartsRequest = {}) => {
+    const params = new URLSearchParams()
+    const values: Record<string, string | number | undefined> = {
+      q: filters.query,
+      status: filters.status,
+      sort: filters.sort,
+      direction: filters.direction,
+      page: filters.page,
+      page_size: filters.pageSize,
+    }
+    for (const [key, value] of Object.entries(values)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
+    }
+    return get(`/autostock/api/v1/suppliers/${supplierId}/parts?${params}`, supplierPartsSchema, companyId)
+      .then((data) => requireCompany(companyId, data))
+  },
+  supplierTerms: (companyId: number, supplierId: number, productId: number) => get(
+    `/autostock/api/v1/suppliers/${supplierId}/parts/${productId}/terms`,
+    supplierTermsSchema,
+    companyId,
+  ).then((data) => {
+    requireCompany(companyId, data)
+    if (data.supplier.id !== supplierId || data.product.id !== productId) {
+      throw new ApiError('Odoo returned terms for a different supplier or part. Refresh the page before continuing.', 'contract')
+    }
+    return data
+  }),
+  supplierGaps: (companyId: number, filters: SupplierGapsRequest = {}) => {
+    const params = new URLSearchParams()
+    const values: Record<string, string | number | undefined> = {
+      q: filters.query,
+      status: filters.status,
+      sort: filters.sort,
+      direction: filters.direction,
+      page: filters.page,
+      page_size: filters.pageSize,
+    }
+    for (const [key, value] of Object.entries(values)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
+    }
+    return get(`/autostock/api/v1/supplier-gaps?${params}`, supplierGapsSchema, companyId)
+      .then((data) => requireCompany(companyId, data))
+  },
 }
 
 export type InventoryRequest = {
@@ -226,6 +307,27 @@ export type WarehouseRequest = {
   page?: number
   pageSize?: number
 }
+
+export type SupplierRequest = {
+  query?: string
+  attention?: 'all' | 'reorder'
+  terms?: 'all' | 'active' | 'none'
+  sort?: 'name' | 'reorder' | 'parts' | 'lead_time'
+  direction?: 'asc' | 'desc'
+  page?: number
+  pageSize?: number
+}
+
+export type SupplierPartsRequest = {
+  query?: string
+  status?: 'all' | 'in_stock' | 'low_stock' | 'out_of_stock'
+  sort?: 'name' | 'sku'
+  direction?: 'asc' | 'desc'
+  page?: number
+  pageSize?: number
+}
+
+export type SupplierGapsRequest = SupplierPartsRequest
 
 export async function signIn(login: string, password: string): Promise<void> {
   if (!database) {
@@ -279,6 +381,11 @@ export type {
   InventoryOptions,
   WarehouseData,
   WarehouseDetailData,
+  SupplierData,
+  SupplierDetailData,
+  SupplierPartsData,
+  SupplierTermsData,
+  SupplierGapsData,
   ProductSearchData,
   ProductQuickViewData,
   RestockData,
