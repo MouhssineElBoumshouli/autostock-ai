@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/sheet'
 import type { SessionData } from '@/api/contracts'
 
-export type DashboardSection = 'dashboard' | 'inventory' | 'warehouses' | 'forecast'
+export type DashboardSection = 'dashboard' | 'inventory' | 'warehouses' | 'suppliers' | 'forecast'
 
 type NavigationItem = { label: string; icon: LucideIcon; section?: DashboardSection }
 
@@ -21,7 +21,7 @@ const workspaceLinks: NavigationItem[] = [
   { label: 'Dashboard', icon: House, section: 'dashboard' },
   { label: 'Inventory', icon: Boxes, section: 'inventory' },
   { label: 'Warehouses', icon: Warehouse, section: 'warehouses' },
-  { label: 'Suppliers', icon: Building2 },
+  { label: 'Suppliers', icon: Building2, section: 'suppliers' },
   { label: 'Purchase Orders', icon: ClipboardList },
   { label: 'Forecasts', icon: ChartNoAxesCombined, section: 'forecast' },
   { label: 'Reports', icon: FileBarChart2 },

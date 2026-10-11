@@ -5,3 +5,4 @@ from . import dashboard
 from . import forecast
 from . import inventory_risk
 from . import inventory_catalog
+from . import supplier_catalog

@@ -21,7 +21,9 @@ Browser ── Odoo session cookie ──> /web/session/authenticate
                                        ├─ current user and authorized companies
                                        ├─ dashboard, forecast and restock previews
                                        ├─ permission-aware product search and quick view
-                                       └─ inventory catalog and product details
+                                       ├─ inventory catalog and product details
+                                       ├─ warehouse summaries, detail and inventory
+                                       └─ supplier catalog, vendor terms and missing-supplier parts
 ```
 
 The browser holds only the Odoo session cookie. API routes use `auth="user"` and ORM access without `sudo()`, validate a selected company against `request.env.companies`, and narrow company context with `with_company()` and `allowed_company_ids=[company.id]`. Warehouse filters are validated against the selected company so Odoo ACLs and record rules stay in force.
@@ -42,6 +44,11 @@ The API client and Zod contracts describe the live routes. Fixture-only Gate 1 a
 | `GET /autostock/api/v1/warehouses` | Company warehouses and existing inventory/risk services | Scoped warehouse summary, truthful attention counts, server-side search/sort/paging |
 | `GET /autostock/api/v1/warehouses/{id}` | Warehouse locations, inventory/risk services and stock moves | Warehouse-specific counts, attention, reorder guidance and recent activity |
 | `GET /autostock/api/v1/warehouses/{id}/inventory` | Existing `get_inventory_page` catalog method | Existing server-side stock quantities, filters and paging scoped to the warehouse |
+| `GET /autostock/api/v1/suppliers` | Scoped partners, supplierinfo, inventory catalog and existing risk service | Supplier and parts coverage, server-side search/filter/sort/paging, current restock links |
+| `GET /autostock/api/v1/suppliers/{id}` | Scoped partner, supplier terms and optional Purchase/receipt models | Supplier contact, lead-time range, reorder context and visible recent activity |
+| `GET /autostock/api/v1/suppliers/{id}/parts` | Existing `get_inventory_page` and risk service | Paged supplied parts, stock positions, and current restock locations |
+| `GET /autostock/api/v1/suppliers/{id}/parts/{product_id}/terms` | Company-scoped `product.supplierinfo` records | Separate vendor price tiers, currencies, MOQ, lead times, dates and term scope |
+| `GET /autostock/api/v1/supplier-gaps` | Inventory catalog supplier-domain filter and existing risk service | Paged active parts without any configured supplier term |
 
 The React client must map server values for display rather than calculate stock, coverage, reorder quantities, lead time, forecast or evaluation metrics. Incomplete coverage and unavailable forecasts must be disclosed plainly.
 
@@ -61,6 +68,14 @@ The routes use the authenticated request environment, ordinary Odoo ACLs and rec
 
 Gate 5 implementation details, test evidence and live Atlas Auto Distribution screenshots are recorded in [`docs/qa/issue-30-gate-5.md`](qa/issue-30-gate-5.md) and [`docs/qa/screenshots/issue-30-gate-5/`](qa/screenshots/issue-30-gate-5/).
 
+## Gate 6 Suppliers route
+
+Suppliers is a read-only company-scoped screen. Supplier search, attention and term filters, sorting and pagination run through Odoo. Summary counts disclose unavailable coverage rather than inferring a value from a partial scan. Company-shared vendor contacts appear only when the selected company has supplier terms for them; company-owned supplier records can also be listed locally. Company-specific products, supplier terms and stock are filtered through the selected company while standard Odoo ACLs and record rules remain in force.
+
+Supplier parts reuse the Inventory catalog quantity logic, and current reorder links reuse `autostock.inventory.risk`. Lead times are shown as a range. Each vendor term keeps its own currency, native price-break minimum quantity, separate AutoStock minimum order quantity, vendor code, date validity and company/shared scope. Prices are never aggregated across currencies, and no vendor score or savings metric is presented. Purchase orders and receipts are read only when the module and the user's access make them available; otherwise the screen gives a clear unavailable message. Parts without any configured supplier term have their own server-filtered view. No purchase action is exposed.
+
+Gate 6 Odoo integration, frontend/browser checks and live showroom screenshot evidence are recorded in [`docs/qa/issue-32-gate-6.md`](qa/issue-32-gate-6.md) and [`docs/qa/screenshots/issue-32-gate-6/`](qa/screenshots/issue-32-gate-6/).
+
 ## Local frontend development
 
 ```powershell
@@ -69,6 +84,6 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173/`. The fixture-only Gate 1 and Gate 2 journeys can run without Odoo. To use live Dashboard, Inventory and Warehouses routes, run the local Odoo showroom on `127.0.0.1:8177` (or set `ODOO_PROXY_TARGET` in a local Vite environment file), then sign in with a permitted user. Gate 1 and Gate 2 fixture states can be reviewed with `?fixtureState=loading`, `?fixtureState=empty`, or `?fixtureState=error`.
+Open `http://127.0.0.1:5173/`. The fixture-only Gate 1 and Gate 2 journeys can run without Odoo. To use live Dashboard, Inventory, Warehouses and Suppliers routes, run the local Odoo showroom on `127.0.0.1:8177` (or set `ODOO_PROXY_TARGET` in a local Vite environment file), then sign in with a permitted user. Gate 1 and Gate 2 fixture states can be reviewed with `?fixtureState=loading`, `?fixtureState=empty`, or `?fixtureState=error`.
 
 The frontend gates are `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run test:contract`, `npm run test:browser`, and `npm run build`. Browser journeys verify responsive fit at 1440, 1024 and 390 CSS pixels, keyboard and reduced-motion behavior, zero browser errors, and server-side catalog interactions. Fixture-only journeys explicitly assert zero `/autostock/api/` requests; live showroom smoke checks exercise the authenticated API. Screenshot evidence is kept with the corresponding gate QA report.

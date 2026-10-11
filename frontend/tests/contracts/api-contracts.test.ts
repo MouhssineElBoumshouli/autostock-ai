@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   dashboardSchema, forecastSchema, inventoryDetailSchema, inventorySchema,
-  restockSchema, sessionSchema, warehouseDetailSchema, warehousesSchema,
+  restockSchema, sessionSchema, supplierDetailSchema, supplierGapsSchema,
+  supplierTermsSchema, suppliersSchema, warehouseDetailSchema, warehousesSchema,
 } from '../../src/api/contracts'
 
 const company = {
@@ -21,6 +22,84 @@ describe('Odoo v1 API contracts', () => {
       user: { id: 3, name: 'Demo Operator', locale: 'en_US', timezone: 'UTC', permissions: { inventory: true, sales: true, inventory_manager: false } },
       current_company: company,
       allowed_companies: [company],
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('keeps supplier summaries honest when a catalog scan is incomplete', () => {
+    const parsed = suppliersSchema.safeParse({
+      schema_version: 1, company, as_of: '2026-10-10 12:00:00',
+      summary: { active_suppliers: 2, parts_with_supplier: false, parts_missing_supplier: false, suppliers_with_reorder_needs: false },
+      filters: { query: '', attention: 'all', terms: 'all', sort: 'name', direction: 'asc' },
+      suppliers: [{
+        id: 7, name: 'Northline Auto Supply', vendor_code: 'NORTH', company_name: false,
+        email: 'orders@example.invalid', phone: false, city: 'Rabat', country: 'Morocco', partner_company: false,
+        active: true, active_parts: false, tracked_parts: false, low_or_out_parts: false,
+        reorder_parts: false, reorder_locations: false, active_terms: false,
+        has_active_terms: false, active_terms_status: 'unknown', has_configured_terms: false,
+        configured_terms_status: 'unknown', lead_time_min_days: false, lead_time_max_days: false, attention: false,
+      }],
+      pagination: { page: 1, page_size: 12, total_count: 1, total_pages: 1, has_previous: false, has_next: false },
+      coverage: { supplier_terms_complete: false, product_catalog_complete: true, stock_complete: false, reorder_complete: false, supplier_limit: 5000, term_scan_limit: 100000, product_scan_limit: 50000, reorder_scan_limit: 5000, note: 'Supplier summary is incomplete.' },
+      read_only: true,
+    })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.summary.parts_missing_supplier).toBe(false)
+      expect(parsed.data.suppliers[0].active_terms_status).toBe('unknown')
+    }
+  })
+
+  it('preserves vendor price tiers, currency, MOQ, and lead time as separate terms', () => {
+    const parsed = supplierTermsSchema.safeParse({
+      schema_version: 1, company,
+      product: { id: 1001, name: 'Alternator Assembly', sku: 'ALT-1001' },
+      supplier: { id: 7, name: 'Northline Auto Supply' },
+      terms: [
+        { id: 12, sequence: 1, vendor_product_name: 'Alternator', vendor_product_code: 'N-ALT', price: 145, price_available: true, currency: { code: 'MAD', symbol: 'DH', decimal_places: 2 }, price_break_min_qty: 1, price_break_uom: 'Units', minimum_order_qty: 4, minimum_order_uom: 'Units', lead_time_days: 12, company_id: 1, company_name: company.name, valid_from: false, valid_until: false, active_today: true, variant_specific: false },
+        { id: 13, sequence: 2, vendor_product_name: false, vendor_product_code: false, price: 132, price_available: true, currency: { code: 'USD', symbol: '$', decimal_places: 2 }, price_break_min_qty: 10, price_break_uom: 'Units', minimum_order_qty: 4, minimum_order_uom: 'Units', lead_time_days: 14, company_id: false, company_name: false, valid_from: false, valid_until: false, active_today: true, variant_specific: true },
+      ],
+      terms_truncated: false,
+      read_only: true,
+    })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.terms).toHaveLength(2)
+      expect(parsed.data.terms.map((term) => term.currency.code)).toEqual(['MAD', 'USD'])
+      expect(parsed.data.terms.map((term) => term.price_break_min_qty)).toEqual([1, 10])
+      expect(parsed.data.terms[0].minimum_order_qty).toBe(4)
+    }
+  })
+
+  it('requires the supplier detail to say when purchase history is unavailable', () => {
+    const baseSupplier = {
+      id: 7, name: 'Northline Auto Supply', vendor_code: false, company_name: false,
+      email: false, phone: false, city: false, country: false, partner_company: false,
+    }
+    const supplierRow = {
+      ...baseSupplier, active: true, active_parts: 4, tracked_parts: 3, low_or_out_parts: 1,
+      reorder_parts: 1, reorder_locations: 1, active_terms: 5, has_active_terms: true,
+      active_terms_status: 'has_terms', has_configured_terms: true, configured_terms_status: 'has_terms',
+      lead_time_min_days: 5, lead_time_max_days: 14, attention: true,
+    }
+    const parsed = supplierDetailSchema.safeParse({
+      schema_version: 1, company, supplier: baseSupplier, summary: supplierRow,
+      purchase_history: { available: false, note: 'Purchase history is not available in this setup.', items: [] },
+      coverage: { supplier_terms_complete: true, stock_complete: true, reorder_complete: true, reorder_scanned: 2, reorder_candidates: 2 },
+      as_of: '2026-10-10 12:00:00', read_only: true,
+    })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) expect(parsed.data.purchase_history.available).toBe(false)
+  })
+
+  it('requires missing-supplier results to retain the server inventory contract', () => {
+    const parsed = supplierGapsSchema.safeParse({
+      schema_version: 1, company, as_of: '2026-10-10 12:00:00',
+      summary: { total_tracked: 2, in_stock: 1, low_stock: 1, out_of_stock: 0, complete: true, sampled_products: 2, total_catalog: 4 },
+      filters: { query: '', supplier_query: '', status: 'all', warehouse_id: false, category_id: false, supplier_id: false, tracked: 'all', active: 'active', sort: 'name', direction: 'asc' },
+      items: [], pagination: { page: 1, page_size: 25, total_count: 0, total_pages: 0, has_previous: false, has_next: false, summary_exact: true, status_scan_used: false },
+      coverage: { tracked_summary_complete: true, warehouse_scope_limited: false, supplier_lines_limited: false, supplier_terms_available: true, status_filter_complete: true, supplier_terms_complete: true, reorder_complete: true },
+      empty_catalog: false,
     })
     expect(parsed.success).toBe(true)
   })
