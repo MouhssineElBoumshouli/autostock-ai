@@ -28,7 +28,7 @@ This update keeps the work within Gate 7. Forecasts opens on **By part**, while 
 | `npm run test:browser` | Passed: 34 tests across Dashboard, Inventory, Warehouses, Suppliers, and Forecasts; includes server filters, company switching, detail evidence, partial-series handling, timezone formatting, navigation, and desktop/tablet/mobile layouts |
 | `npm run build` | Passed: production Vite build |
 | Odoo 19 + PostgreSQL 16 integration suite | Passed: **60 actual test cases, 0 failures, 0 errors**. Odoo's broader statistics counter reports 74 tests. The isolated database was in a disposable container with no showroom data attached. The two unattached anonymous PostgreSQL test volumes created during the runs were verified and removed; all named showroom volumes remain. |
-| GitHub Actions | Pending for the update commit; link and result will be recorded after push. |
+| GitHub Actions | Passed: [run 38185654129](https://github.com/MouhssineElBoumshouli/autostock-ai/actions/runs/38185654129); Python, React frontend, and Odoo 19 integration jobs all succeeded on commit `ae9d65003fb0a53a70997d34e0aeb62223e89959`. |
 
 The Odoo integration coverage includes a 1,002-run grouped catalog, server-side pagination/search, the newest failed/unreviewed run, no history, one-day and missing-day series, exact saved daily totals/date boundaries, ended estimate windows, demo/real separation, Sales-restricted access, and company/warehouse isolation. The >1,000 catalog integration case passed; its warmed API response grouped the 25 requested product/warehouse groups in under 0.1 seconds in the isolated run.
 
