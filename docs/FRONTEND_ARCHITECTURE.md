@@ -39,6 +39,9 @@ The API client and Zod contracts describe the live routes. Fixture-only Gate 1 a
 | `GET /autostock/api/v1/inventory/options` | Product, category, warehouse and permitted supplier records | Filter choices for the Inventory route |
 | `GET /autostock/api/v1/inventory` | Product catalog and Odoo stock quantities | Server-side search, filters, sorting, paging, and company/warehouse stock values |
 | `GET /autostock/api/v1/products/{id}/inventory-detail` | Product, stock, supplier, movement, forecast and risk services | Read-only product detail with warehouse balances and available history |
+| `GET /autostock/api/v1/warehouses` | Company warehouses and existing inventory/risk services | Scoped warehouse summary, truthful attention counts, server-side search/sort/paging |
+| `GET /autostock/api/v1/warehouses/{id}` | Warehouse locations, inventory/risk services and stock moves | Warehouse-specific counts, attention, reorder guidance and recent activity |
+| `GET /autostock/api/v1/warehouses/{id}/inventory` | Existing `get_inventory_page` catalog method | Existing server-side stock quantities, filters and paging scoped to the warehouse |
 
 The React client must map server values for display rather than calculate stock, coverage, reorder quantities, lead time, forecast or evaluation metrics. Incomplete coverage and unavailable forecasts must be disclosed plainly.
 
@@ -50,6 +53,14 @@ The list shows company-wide on-hand, available, reserved and incoming amounts. S
 
 Gate 4 browser evidence and test results are recorded in [`docs/qa/issue-28-gate-4.md`](qa/issue-28-gate-4.md) with real showroom screenshots in [`docs/qa/screenshots/issue-28-gate-4/`](qa/screenshots/issue-28-gate-4/).
 
+## Gate 5 Warehouses route
+
+Warehouses is a read-only route that reuses the approved shell and the Inventory catalog's quantity calculation. Overview cards count warehouse locations and distinct part positions; they do not add quantities measured in different units. Each warehouse detail aggregates its view location and child locations, labels physical on-hand separately from available (not reserved) stock, and presents reserved, incoming and outgoing values in each part's unit. Search, sorting, warehouse inventory filters and pagination run in Odoo. Completed and expected stock activity is translated into plain business language. No transfer or stock-write actions are exposed.
+
+The routes use the authenticated request environment, ordinary Odoo ACLs and record rules, and the selected-company context already used by the Inventory service. A warehouse ID must belong to the selected company. Summary and risk scans have explicit safe limits; when a complete summary cannot be calculated within those limits, the service returns a disclosed unavailable state instead of an incomplete total. A 1,001-part integration scenario verifies that the warehouse catalog remains searchable and paginated beyond the first page.
+
+Gate 5 implementation details, test evidence and live Atlas Auto Distribution screenshots are recorded in [`docs/qa/issue-30-gate-5.md`](qa/issue-30-gate-5.md) and [`docs/qa/screenshots/issue-30-gate-5/`](qa/screenshots/issue-30-gate-5/).
+
 ## Local frontend development
 
 ```powershell
@@ -58,6 +69,6 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173/`. The fixture-only Gate 1 and Gate 2 journeys can run without Odoo. To use live Dashboard and Inventory routes, run the local Odoo showroom on `127.0.0.1:8177` (or set `ODOO_PROXY_TARGET` in a local Vite environment file), then sign in with a permitted user. Gate 1 and Gate 2 fixture states can be reviewed with `?fixtureState=loading`, `?fixtureState=empty`, or `?fixtureState=error`.
+Open `http://127.0.0.1:5173/`. The fixture-only Gate 1 and Gate 2 journeys can run without Odoo. To use live Dashboard, Inventory and Warehouses routes, run the local Odoo showroom on `127.0.0.1:8177` (or set `ODOO_PROXY_TARGET` in a local Vite environment file), then sign in with a permitted user. Gate 1 and Gate 2 fixture states can be reviewed with `?fixtureState=loading`, `?fixtureState=empty`, or `?fixtureState=error`.
 
 The frontend gates are `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run test:contract`, `npm run test:browser`, and `npm run build`. Browser journeys verify responsive fit at 1440, 1024 and 390 CSS pixels, keyboard and reduced-motion behavior, zero browser errors, and server-side catalog interactions. Fixture-only journeys explicitly assert zero `/autostock/api/` requests; live showroom smoke checks exercise the authenticated API. Screenshot evidence is kept with the corresponding gate QA report.

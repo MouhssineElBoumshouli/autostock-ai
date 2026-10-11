@@ -244,6 +244,7 @@ function InventoryPageContent({
   function navigateTo(section: DashboardSection) {
     if (section === 'dashboard') void navigate({ to: '/' })
     if (section === 'inventory') void navigate({ to: '/inventory' })
+    if (section === 'warehouses') void navigate({ to: '/warehouses' })
     if (section === 'forecast') void navigate({ to: '/' })
   }
 

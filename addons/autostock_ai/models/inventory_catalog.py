@@ -19,6 +19,12 @@ MAX_INVENTORY_CATEGORIES = 500
 MAX_INVENTORY_SUPPLIERS = 500
 MAX_SUPPLIER_LINES_PER_PAGE = 20000
 MAX_RECENT_MOVEMENTS = 20
+DEFAULT_WAREHOUSE_PAGE_SIZE = 12
+MAX_WAREHOUSE_PAGE_SIZE = 50
+MAX_WAREHOUSE_OVERVIEW = 500
+MAX_WAREHOUSE_CATALOG = 50000
+MAX_WAREHOUSE_SUMMARY_SCANS = 1000000
+MAX_WAREHOUSE_REORDER_SCAN = 5000
 OPEN_MOVE_STATES = ("waiting", "confirmed", "assigned", "partially_available")
 
 
@@ -669,6 +675,533 @@ class AutoStockInventoryCatalog(models.AbstractModel):
             },
             "empty_catalog": total_catalog == 0,
         }
+
+    @api.model
+    def _warehouse_record(self, Scoped, company, warehouse_id):
+        warehouse_id = self._parse_id(warehouse_id, _("warehouse"), allow_empty=False)
+        warehouse = Scoped.env["stock.warehouse"].search(
+            [("id", "=", warehouse_id), ("company_id", "=", company.id)],
+            limit=1,
+        )
+        if not warehouse:
+            raise AccessError(_("That warehouse is not available in the selected company."))
+        return warehouse
+
+    @api.model
+    def _empty_warehouse_summary(self, *, note=False, complete=True):
+        values = {
+            "catalog_parts": 0,
+            "tracked_catalog_parts": 0,
+            "stocked_parts": 0,
+            "tracked_parts_present": 0,
+            "low_stock_parts": 0,
+            "out_of_stock_parts": 0,
+            "parts_with_reserved_stock": 0,
+            "parts_with_incoming_stock": 0,
+            "parts_with_outgoing_stock": 0,
+        }
+        if not complete:
+            values = {key: False for key in values}
+        return {**values, "summary_complete": complete, "summary_note": note}
+
+    @api.model
+    def _warehouse_stock_summary(self, Product, company, warehouse, product_domain, product_count):
+        """Count warehouse product positions using Odoo's warehouse-scoped quantities."""
+        if product_count > MAX_WAREHOUSE_CATALOG:
+            return self._empty_warehouse_summary(
+                note=_(
+                    "This warehouse has more than %(limit)s catalog parts, so its attention summary is unavailable. Search the warehouse inventory to review a part.",
+                    limit=MAX_WAREHOUSE_CATALOG,
+                ),
+                complete=False,
+            ), []
+        if not product_count:
+            return self._empty_warehouse_summary(
+                note=_("No active storable parts are available in this company."),
+            ), []
+
+        products = Product.search(product_domain, order="name, id", limit=product_count)
+        summary = self._empty_warehouse_summary()
+        summary["catalog_parts"] = len(products)
+        attention_out = []
+        attention_low = []
+        for offset in range(0, len(products), STATUS_SCAN_BATCH_SIZE):
+            batch = products[offset : offset + STATUS_SCAN_BATCH_SIZE]
+            quantities = self._quantity_values(Product, batch, company, warehouse)
+            for product in batch:
+                values = quantities.get(product.id, {})
+                on_hand = values.get("qty_available", 0.0)
+                free_qty = values.get("free_qty", 0.0)
+                incoming = values.get("incoming_qty", 0.0)
+                outgoing = values.get("outgoing_qty", 0.0)
+                if on_hand > 0:
+                    summary["stocked_parts"] += 1
+                if max(0.0, on_hand - free_qty) > 0:
+                    summary["parts_with_reserved_stock"] += 1
+                if incoming > 0:
+                    summary["parts_with_incoming_stock"] += 1
+                if outgoing > 0:
+                    summary["parts_with_outgoing_stock"] += 1
+
+                if not product.autostock_enabled:
+                    continue
+                summary["tracked_catalog_parts"] += 1
+                status = self._stock_status(product, on_hand)
+                if on_hand > 0:
+                    summary["tracked_parts_present"] += 1
+                if status == "low_stock":
+                    summary["low_stock_parts"] += 1
+                    if len(attention_low) < 5:
+                        attention_low.append(
+                            self._warehouse_attention_part(product, values, status)
+                        )
+                elif status == "out_of_stock":
+                    summary["out_of_stock_parts"] += 1
+                    if len(attention_out) < 5:
+                        attention_out.append(
+                            self._warehouse_attention_part(product, values, status)
+                        )
+        summary["catalog_parts"] = product_count
+        attention = attention_out[:5]
+        if len(attention) < 5:
+            attention.extend(attention_low[: 5 - len(attention)])
+        return summary, attention
+
+    @api.model
+    def _warehouse_attention_part(self, product, quantities, status):
+        on_hand = quantities.get("qty_available", 0.0)
+        free_qty = quantities.get("free_qty", 0.0)
+        return {
+            "product_id": product.id,
+            "name": product.product_tmpl_id.name,
+            "sku": product.default_code or "—",
+            "uom": product.uom_id.display_name,
+            "status": status,
+            "on_hand": self._rounded(product, on_hand),
+            "available": self._rounded(product, free_qty),
+        }
+
+    @api.model
+    def _warehouse_row_status(self, summary):
+        if not summary["summary_complete"]:
+            return "unknown"
+        if summary["low_stock_parts"] or summary["out_of_stock_parts"]:
+            return "needs_attention"
+        if (
+            summary["stocked_parts"]
+            or summary["parts_with_incoming_stock"]
+            or summary["parts_with_outgoing_stock"]
+        ):
+            return "healthy"
+        return "no_tracked_stock"
+
+    @api.model
+    def get_warehouse_page(
+        self,
+        *,
+        query="",
+        status="all",
+        sort="name",
+        direction="asc",
+        page=1,
+        page_size=DEFAULT_WAREHOUSE_PAGE_SIZE,
+    ):
+        """Return a bounded company warehouse list with complete stock-count summaries."""
+        self._require_inventory_access()
+        company = self.env.company
+        Scoped = self._company_env(company)
+        Warehouse = Scoped.env["stock.warehouse"]
+        Product = Scoped.env["product.product"]
+        Warehouse.check_access("read")
+        Product.check_access("read")
+
+        query = (query or "").strip()[:80]
+        status = (status or "all").strip()
+        sort = (sort or "name").strip()
+        direction = (direction or "asc").strip()
+        if status not in {"all", "attention", "low_stock", "out_of_stock", "healthy", "no_tracked_stock"}:
+            raise ValidationError(_("Choose a supported warehouse status."))
+        if sort not in {"name", "attention", "recent"}:
+            raise ValidationError(_("Sort warehouses by name, attention, or recent activity."))
+        if direction not in {"asc", "desc"}:
+            raise ValidationError(_("Choose ascending or descending sort order."))
+        try:
+            page = int(page)
+            page_size = int(page_size)
+        except (TypeError, ValueError) as error:
+            raise ValidationError(_("Choose a valid warehouse page.")) from error
+        if page < 1 or page > 1000000:
+            raise ValidationError(_("Choose a valid warehouse page."))
+        if page_size < 1 or page_size > MAX_WAREHOUSE_PAGE_SIZE:
+            raise ValidationError(
+                _("Page size must be between 1 and %(limit)s warehouses.", limit=MAX_WAREHOUSE_PAGE_SIZE)
+            )
+
+        warehouse_domain = [("company_id", "=", company.id)]
+        warehouse_count = Warehouse.search_count(warehouse_domain)
+        if warehouse_count > MAX_WAREHOUSE_OVERVIEW:
+            raise ValidationError(
+                _(
+                    "This company has more than %(limit)s warehouses. Narrowing this overview is required before stock summaries can be calculated safely.",
+                    limit=MAX_WAREHOUSE_OVERVIEW,
+                )
+            )
+        warehouses = Warehouse.search(
+            warehouse_domain, order="name, id", limit=MAX_WAREHOUSE_OVERVIEW + 1
+        )
+        product_domain = [
+            ("active", "=", True),
+            ("is_storable", "=", True),
+            ("company_id", "in", [False, company.id]),
+        ]
+        product_count = Product.search_count(product_domain)
+        scan_budget_exceeded = (
+            product_count > MAX_WAREHOUSE_CATALOG
+            or product_count * len(warehouses) > MAX_WAREHOUSE_SUMMARY_SCANS
+        )
+        summary_records = []
+        all_stock_summaries_complete = not scan_budget_exceeded
+        stock_move_access = self._can_read(Scoped.env["stock.move"])
+        for warehouse in warehouses:
+            if scan_budget_exceeded:
+                stock_summary, _attention = self._empty_warehouse_summary(
+                    note=_(
+                        "The company catalog exceeds the safe warehouse summary scan limit. Search inventory for a part to review its stock."
+                    ),
+                    complete=False,
+                ), []
+            else:
+                stock_summary, _attention = self._warehouse_stock_summary(
+                    Product, company, warehouse, product_domain, product_count
+                )
+            all_stock_summaries_complete &= stock_summary["summary_complete"]
+            activity_available, activity, _activity_note = self._warehouse_activity(
+                Scoped, company, warehouse, warehouses, limit=1
+            )
+            latest_activity = next(
+                (row["date"] for row in activity if row["completed"]), False
+            )
+            row = {
+                "id": warehouse.id,
+                "name": warehouse.display_name,
+                "code": warehouse.code or "—",
+                "company_name": warehouse.company_id.display_name,
+                **stock_summary,
+                "status": self._warehouse_row_status(stock_summary),
+                "recent_activity_at": latest_activity,
+                "activity_available": activity_available,
+            }
+            summary_records.append(row)
+
+        summary_complete = all_stock_summaries_complete
+        if status != "all" and not summary_complete:
+            raise ValidationError(
+                _("Warehouse status filters are unavailable while one or more stock summaries are incomplete.")
+            )
+
+        matched_ids = set(warehouses.ids)
+        if query:
+            matched_ids = set(
+                Warehouse.search(
+                    warehouse_domain
+                    + ["|", ("name", "ilike", query), ("code", "ilike", query)]
+                ).ids
+            )
+        matched = [row for row in summary_records if row["id"] in matched_ids]
+        if status == "attention":
+            matched = [row for row in matched if row["status"] == "needs_attention"]
+        elif status == "low_stock":
+            matched = [row for row in matched if row["low_stock_parts"] > 0]
+        elif status == "out_of_stock":
+            matched = [row for row in matched if row["out_of_stock_parts"] > 0]
+        elif status == "healthy":
+            matched = [row for row in matched if row["status"] == "healthy"]
+        elif status == "no_tracked_stock":
+            matched = [row for row in matched if row["status"] == "no_tracked_stock"]
+
+        if sort == "name":
+            matched.sort(key=lambda row: row["name"].casefold(), reverse=direction == "desc")
+        elif sort == "attention":
+            matched.sort(
+                key=lambda row: (
+                    row["status"] == "unknown",
+                    -(row["out_of_stock_parts"] if row["out_of_stock_parts"] is not False else 0),
+                    -(row["low_stock_parts"] if row["low_stock_parts"] is not False else 0),
+                    row["name"].casefold(),
+                ),
+                reverse=direction == "asc",
+            )
+        else:
+            matched.sort(
+                key=lambda row: (bool(row["recent_activity_at"]), row["recent_activity_at"] or ""),
+                reverse=direction == "desc",
+            )
+
+        total_matched = len(matched)
+        page_count = math.ceil(total_matched / page_size) if total_matched else 0
+        page = min(page, page_count) if page_count else 1
+        offset = (page - 1) * page_size
+        rows = matched[offset : offset + page_size]
+        summary_metrics = {
+            "active_warehouses": warehouse_count,
+            "warehouses_needing_attention": False,
+            "warehouses_with_low_stock": False,
+            "warehouses_with_stockouts": False,
+            "warehouses_with_incoming": False,
+            "complete": summary_complete,
+        }
+        if summary_complete:
+            summary_metrics.update(
+                {
+                    "warehouses_needing_attention": sum(row["status"] == "needs_attention" for row in summary_records),
+                    "warehouses_with_low_stock": sum(row["low_stock_parts"] > 0 for row in summary_records),
+                    "warehouses_with_stockouts": sum(row["out_of_stock_parts"] > 0 for row in summary_records),
+                    "warehouses_with_incoming": sum(row["parts_with_incoming_stock"] > 0 for row in summary_records),
+                }
+            )
+        return {
+            "as_of": fields.Datetime.to_string(fields.Datetime.now()),
+            "summary": summary_metrics,
+            "filters": {"query": query, "status": status, "sort": sort, "direction": direction},
+            "warehouses": rows,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total_count": total_matched,
+                "total_pages": page_count,
+                "has_previous": page > 1 and page_count > 0,
+                "has_next": page < page_count,
+            },
+            "coverage": {
+                "summary_complete": summary_complete,
+                "catalog_product_count": product_count,
+                "catalog_scan_limit": MAX_WAREHOUSE_CATALOG,
+                "warehouse_count": warehouse_count,
+                "warehouse_limit": MAX_WAREHOUSE_OVERVIEW,
+                "activity_available": stock_move_access,
+            },
+        }
+
+    @api.model
+    def _warehouse_reorder_summary(self, Scoped, warehouse):
+        """Count reorder suggestions only when the existing risk service can scan all pairs."""
+        Risk = Scoped.env["autostock.inventory.risk"]
+        first = Risk.get_risk_data(warehouse_id=warehouse.id, offset=0)
+        pagination = first["pagination"]
+        pair_count = pagination["candidate_pair_count"]
+        if pair_count > MAX_WAREHOUSE_REORDER_SCAN:
+            return False, False, _(
+                "Reorder suggestions are not counted because this warehouse has more than %(limit)s tracked part positions. The list remains available in the stock-risk view.",
+                limit=MAX_WAREHOUSE_REORDER_SCAN,
+            )
+        count = first["recommendation_count"]
+        next_offset = pagination["next_offset"]
+        while next_offset:
+            page_data = Risk.get_risk_data(
+                warehouse_id=warehouse.id, offset=next_offset
+            )
+            count += page_data["recommendation_count"]
+            next_offset = page_data["pagination"]["next_offset"]
+        return count, True, False
+
+    @api.model
+    def get_warehouse_detail(self, warehouse_id):
+        """Return a read-only warehouse summary and its visible stock activity."""
+        self._require_inventory_access()
+        company = self.env.company
+        Scoped = self._company_env(company)
+        Product = Scoped.env["product.product"]
+        Warehouse = Scoped.env["stock.warehouse"]
+        Product.check_access("read")
+        warehouse = self._warehouse_record(Scoped, company, warehouse_id)
+        warehouses = Warehouse.search(
+            [("company_id", "=", company.id)],
+            order="name, id",
+            limit=MAX_WAREHOUSE_OVERVIEW,
+        )
+        product_domain = [
+            ("active", "=", True),
+            ("is_storable", "=", True),
+            ("company_id", "in", [False, company.id]),
+        ]
+        product_count = Product.search_count(product_domain)
+        if product_count > MAX_WAREHOUSE_CATALOG:
+            stock_summary, attention_parts = self._empty_warehouse_summary(
+                note=_(
+                    "This warehouse has more than %(limit)s catalog parts, so its stock summary is unavailable. Use the inventory search below to review specific parts.",
+                    limit=MAX_WAREHOUSE_CATALOG,
+                ),
+                complete=False,
+            ), []
+        else:
+            stock_summary, attention_parts = self._warehouse_stock_summary(
+                Product, company, warehouse, product_domain, product_count
+            )
+        reorder_count, reorder_complete, reorder_note = self._warehouse_reorder_summary(
+            Scoped, warehouse
+        )
+        activity_available, activity, activity_note = self._warehouse_activity(
+            Scoped, company, warehouse, warehouses, limit=MAX_RECENT_MOVEMENTS
+        )
+        return {
+            "warehouse": {
+                "id": warehouse.id,
+                "name": warehouse.display_name,
+                "code": warehouse.code or "—",
+                "company_name": warehouse.company_id.display_name,
+            },
+            "summary": {
+                **stock_summary,
+                "reorder_suggestions": reorder_count,
+                "reorder_suggestions_complete": reorder_complete,
+                "reorder_suggestions_note": reorder_note,
+            },
+            "attention_parts": attention_parts,
+            "activity_available": activity_available,
+            "activity": activity,
+            "activity_note": activity_note,
+            "as_of": fields.Datetime.to_string(fields.Datetime.now()),
+            "read_only": True,
+        }
+
+    @api.model
+    def _location_in_warehouse(self, location, warehouse):
+        if not location or not warehouse.view_location_id:
+            return False
+        ancestors = (location.parent_path or "").strip("/").split("/")
+        return str(warehouse.view_location_id.id) in ancestors
+
+    @api.model
+    def _warehouse_activity(self, Scoped, company, warehouse, warehouses, *, limit=MAX_RECENT_MOVEMENTS):
+        """Read visible recent/expected moves scoped through the warehouse hierarchy."""
+        StockMove = Scoped.env["stock.move"]
+        try:
+            StockMove.check_access("read")
+        except AccessError:
+            return False, [], _("Your role cannot view recent warehouse stock activity.")
+
+        now = fields.Datetime.to_datetime(fields.Datetime.now())
+        recent_start = fields.Datetime.to_string(now - timedelta(days=90))
+        future_limit = fields.Datetime.to_string(now + timedelta(days=90))
+        recent_done = Domain(
+            [
+                ("state", "=", "done"),
+                ("date", ">=", recent_start),
+                ("date", "<=", now),
+            ]
+        )
+        upcoming = Domain(
+            [
+                ("state", "in", list(OPEN_MOVE_STATES)),
+                ("date", ">=", now),
+                ("date", "<=", future_limit),
+            ]
+        )
+        in_scope = Domain.OR(
+            [
+                Domain([("location_id", "child_of", warehouse.view_location_id.id)]),
+                Domain([("location_dest_id", "child_of", warehouse.view_location_id.id)]),
+            ]
+        )
+        company_domain = Domain([("company_id", "=", company.id)])
+        try:
+            completed_moves = StockMove.search(
+                company_domain & recent_done & in_scope,
+                order="date desc, id desc",
+                limit=limit,
+            )
+            upcoming_moves = StockMove.search(
+                company_domain & upcoming & in_scope,
+                order="date asc, id asc",
+                limit=limit,
+            )
+        except AccessError:
+            return False, [], _("Your role cannot view recent warehouse stock activity.")
+
+        move_records = list(completed_moves) + list(upcoming_moves)
+        has_more = len(move_records) > limit
+        move_records = move_records[:limit]
+
+        def warehouse_for(location, default=False):
+            if not location:
+                return default
+            for candidate in warehouses:
+                if self._location_in_warehouse(location, candidate):
+                    return candidate
+            return default
+
+        records = []
+        for move in move_records:
+            source_warehouse = warehouse_for(move.location_id, move.warehouse_id)
+            destination_warehouse = warehouse_for(move.location_dest_id)
+            source_here = bool(
+                self._location_in_warehouse(move.location_id, warehouse)
+            )
+            destination_here = bool(
+                self._location_in_warehouse(move.location_dest_id, warehouse)
+            )
+            counterpart = False
+            if move.is_inventory:
+                kind, label = "adjustment", _("Stock adjustment")
+            elif source_here and destination_warehouse and destination_warehouse != warehouse:
+                kind, label = "transfer_out", _("Transfer out")
+                counterpart = destination_warehouse.display_name
+            elif destination_here and source_warehouse and source_warehouse != warehouse:
+                kind, label = "transfer_in", _("Transfer in")
+                counterpart = source_warehouse.display_name
+            elif move.state == "done":
+                if destination_here and move.location_usage in ("supplier", "transit"):
+                    kind, label = "received", _("Received")
+                elif source_here and move.location_dest_usage == "customer":
+                    kind, label = "shipped", _("Shipped")
+                else:
+                    kind, label = "stock_movement", _("Stock movement")
+            elif move.picking_code == "incoming" and destination_here:
+                kind, label = "incoming_purchase", _("Incoming purchase")
+            elif (
+                move.picking_code == "outgoing"
+                and source_here
+                and move.quantity
+            ):
+                kind, label = "reserved_delivery", _("Reserved for customer orders")
+            elif move.picking_code == "outgoing" and source_here:
+                kind, label = "scheduled_delivery", _("Customer delivery scheduled")
+            else:
+                kind, label = "stock_movement", _("Stock movement")
+
+            product = move.product_id
+            if move.state == "done" or (
+                move.picking_code == "outgoing" and move.quantity
+            ):
+                quantity = move.product_uom._compute_quantity(
+                    move.quantity, product.uom_id, round=False
+                )
+            else:
+                quantity = move.product_qty
+            move_date = fields.Datetime.to_datetime(move.date)
+            records.append(
+                {
+                    "id": move.id,
+                    "kind": kind,
+                    "label": label,
+                    "date": move_date.strftime("%Y-%m-%dT%H:%M:%SZ") if move_date else False,
+                    "completed": move.state == "done",
+                    "product_id": product.id,
+                    "product_name": product.product_tmpl_id.name,
+                    "sku": product.default_code or "—",
+                    "quantity": self._rounded(product, quantity),
+                    "uom": product.uom_id.display_name,
+                    "reference": move.reference or move.origin or False,
+                    "counterpart_warehouse": counterpart,
+                }
+            )
+        if not records:
+            note = _("No recent stock activity or expected moves are visible for this warehouse.")
+        elif has_more:
+            note = _("Showing recent completed changes first, followed by expected moves visible to your role.")
+        else:
+            note = _("Completed changes cover the last 90 days. Expected moves are current planned activity.")
+        return True, records, note
 
     @api.model
     def _movement_label(self, move):
