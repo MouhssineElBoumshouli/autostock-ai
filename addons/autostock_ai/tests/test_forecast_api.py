@@ -206,13 +206,16 @@ class TestAutoStockForecastApi(HttpCase):
         self.assertEqual(last_page["pagination"]["total_count"], 1001)
         self.assertEqual(last_page["pagination"]["page"], 41)
         self.assertEqual(len(last_page["runs"]), 1)
-        self.assertEqual(last_page["runs"][0]["sku"], "G7-BULK-1000")
+        # The API orders newest IDs first, so the oldest of this batch is
+        # the single row on page 41. Searching the newest row below also
+        # verifies that a part beyond the first page remains discoverable.
+        self.assertEqual(last_page["runs"][0]["sku"], "G7-BULK-0000")
 
         sku_search = self._get_json(
-            "/autostock/api/v1/forecasts?q=G7-BULK-1000&page_size=12"
+            "/autostock/api/v1/forecasts?q=G7-BULK-0000&page_size=12"
         )
         self.assertEqual(sku_search["pagination"]["total_count"], 1)
-        self.assertEqual(sku_search["runs"][0]["sku"], "G7-BULK-1000")
+        self.assertEqual(sku_search["runs"][0]["sku"], "G7-BULK-0000")
 
     def test_forecast_detail_reads_one_exact_run_without_changing_records(self):
         company = self.env.company
