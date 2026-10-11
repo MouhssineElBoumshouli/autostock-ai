@@ -151,6 +151,10 @@ test('forecast detail separates history, future estimates, provenance, and evalu
   await expect(page.getByRole('heading', { name: 'Front Brake Pad Set', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Delivered history and forecast' })).toBeVisible()
   await expect(page.getByText('Forecast starts', { exact: true })).toBeVisible()
+  await expect(page.locator('.forecast-chart-wrap')).toHaveAttribute('data-first-forecast-day', '2026-09-27')
+  await expect(page.locator('.forecast-chart-wrap')).toHaveAttribute('data-first-forecast-units', '2')
+  await expect(page.locator('.forecast-chart-wrap')).toHaveAttribute('data-first-forecast-lower', '1')
+  await expect(page.locator('.forecast-chart-wrap')).toHaveAttribute('data-first-forecast-upper', '4')
   await expect(page.getByText('Used for current restock guidance')).toBeVisible()
   await expect(page.getByText('History source', { exact: true })).toBeVisible()
   await page.getByText('How this forecast was calculated', { exact: true }).click()
@@ -177,4 +181,49 @@ test('mobile navigation opens the Forecasts route and restricted/no-results stat
   await page.goto('/forecasts')
   await expect(page.getByRole('heading', { name: 'Forecast history is restricted' })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false)
+})
+
+test('Saved forecast dates format Odoo datetimes in the session timezone on desktop and mobile', async ({ page }) => {
+  await installForecastRoutes(page)
+  const expected = await page.evaluate(() => {
+    const instant = new Date('2026-09-27T14:20:00Z')
+    return {
+      desktopDate: new Intl.DateTimeFormat(undefined, {
+        timeZone: 'Africa/Casablanca', month: 'short', day: 'numeric', year: 'numeric',
+      }).format(instant),
+      mobileDate: new Intl.DateTimeFormat(undefined, {
+        timeZone: 'Africa/Casablanca', month: 'short', day: 'numeric',
+      }).format(instant),
+      time: new Intl.DateTimeFormat(undefined, {
+        timeZone: 'Africa/Casablanca', hour: 'numeric', minute: '2-digit',
+      }).format(instant),
+    }
+  })
+
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto('/forecasts')
+  const desktopRow = page.locator('.forecast-table tbody tr').filter({ hasText: 'BP-FR-420' }).first()
+  await expect(desktopRow.getByTestId('forecast-saved-date')).toHaveText(expected.desktopDate)
+  await expect(desktopRow.getByTestId('forecast-saved-time')).toHaveText(expected.time)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.reload()
+  const mobileCard = page.locator('.forecast-mobile-card').filter({ hasText: 'BP-FR-420' }).first()
+  await expect(mobileCard.getByTestId('forecast-saved-date')).toHaveText(expected.mobileDate)
+  await expect(mobileCard.locator('.forecast-mobile-foot')).toContainText(`Saved ${expected.mobileDate}`)
+})
+
+test('tablet forecast table headers wrap within their own columns', async ({ page }) => {
+  await installForecastRoutes(page)
+  await page.setViewportSize({ width: 1024, height: 900 })
+  await page.goto('/forecasts')
+  const overflowingHeaders = await page.locator('.forecast-table thead th').evaluateAll((headers) => headers.flatMap((header) => {
+    const range = document.createRange()
+    range.selectNodeContents(header)
+    const bounds = header.getBoundingClientRect()
+    return Array.from(range.getClientRects())
+      .filter((rect) => rect.width > 0 && rect.height > 0 && (rect.left < bounds.left - 1 || rect.right > bounds.right + 1))
+      .map(() => header.textContent?.trim() ?? '')
+  }))
+  expect(overflowingHeaders).toEqual([])
 })

@@ -19,26 +19,43 @@ This branch adds the real, authenticated Forecasts workspace and exact-run detai
 | --- | --- |
 | `python -m pytest -q` | Passed: 38 tests |
 | `python -m compileall -q addons ml scripts tests` | Passed |
-| `python scripts/generate_synthetic_sales.py` then `python -m ml.evaluate ml/output/synthetic_daily_sales.csv --days 30 --output "$env:TEMP\autostock-gate7-forecast-evaluation.json"` | Passed: 6 synthetic series evaluated. This is an offline test fixture, not Atlas or customer accuracy evidence. |
+| Synthetic forecast evaluation | Passed: 6 labeled offline fixture series evaluated. These are test fixtures, not Atlas or customer accuracy evidence. |
 | `npm run lint` | Passed |
 | `npm run typecheck` | Passed |
-| `npm run test:unit` | Passed: 3 tests |
+| `npm run test:unit` | Passed: 8 tests, including first forecast point/range preservation and Odoo/ISO/date-only date handling |
 | `npm run test:contract` | Passed: 15 tests |
-| `npm run test:browser` | Passed: 29 tests, including Forecasts desktop/tablet/mobile, filters, exact detail, read-only behavior, restricted/no-result states, reduced motion and mobile navigation |
-| `npm run build` | Passed: Vite production build |
-| Odoo 19 + PostgreSQL 16 integration run in GitHub Actions | **Passed: 57 actual Odoo test cases, 0 failures, 0 errors.** Odoo's broader stats line reports 71 tests; 57 is the actual database-loading test-case count. Run [38155713172](https://github.com/MouhssineElBoumshouli/autostock-ai/actions/runs/38155713172) ran the test suite against a fresh PostgreSQL 16 database and installed the addon successfully. |
-| Local Odoo 19 + PostgreSQL 16 integration run | **Blocked before Odoo started.** Docker Desktop returned HTTP 500 from its Linux engine API; after a restart, Docker Desktop remained in `stopping`, and a direct WSL command timed out (`Wsl/Service/WSAETIMEDOUT`). This local setup failure is separate from the successful isolated GitHub Actions run. |
+| `npm run test:browser` | Passed: 31 tests. Includes chart data bound to the first API prediction, desktop/mobile Saved date formatting, tablet table-header wrapping, read-only behavior, server filters, permission/no-result/error states and responsive navigation. |
+| `npm run build` | Passed: production Vite build |
+| Local Odoo 19 + PostgreSQL 16 integration run | Passed against a fresh `autostock_gate7_pr35_test` database: **57 actual Odoo test cases, 0 failures, 0 errors**. Odoo's broader stats line reports 71 tests. The isolated PostgreSQL data directory used `tmpfs`; the test-only container and network were removed afterward, and no named volumes were created. |
+| GitHub Actions | The required Python, frontend and Odoo integration jobs run for every PR update; use PR #35's check status for the current commit-specific result. |
 
-The isolated test command was `docker compose --project-name autostock-gate7-int up --detach --wait db`, followed by `docker compose --project-name autostock-gate7-int run --rm --no-deps odoo odoo --database=autostock_gate7_test --init=autostock_ai --test-enable --test-tags=/autostock_ai --stop-after-init --without-demo=true --log-level=test`. It failed on the first command because Docker Desktop's engine did not respond successfully. No test database was created and the Atlas showroom data volume was not removed.
+Forecast chart regression coverage verifies that the final observed point anchors the line while the first future point retains its saved units and heuristic bounds. Browser tests verify those first future values against the Forecasts detail API. Date regression coverage handles Odoo's UTC-naive datetime string, ISO values with and without offsets, timezone conversion, stable date-only labels, and invalid values.
+
+## Local Docker and showroom recovery
+
+Docker Desktop was stopped because startup failed while clearing stale Docker Model Runner and secrets-engine Unix socket endpoints. I preserved the socket files by moving the affected runtime directories aside and disabled Docker AI inference in Docker Desktop settings after saving a settings backup. The preserved items remain under `%LOCALAPPDATA%\Docker\run-recovery-preserved-20261011-215224`, `%LOCALAPPDATA%\Docker\run-recovery-preserved-20261011-215327`, and `%LOCALAPPDATA%\docker-secrets-engine-recovery-preserved-20261011-215327`; the settings backup is `%APPDATA%\Docker\settings-store.json.pre-g7-recovery-20261011-215224`.
+
+Docker Desktop now reports `running`. The Atlas showroom Odoo container is running and its PostgreSQL container is healthy. The existing Atlas showroom filestore and PostgreSQL volumes remain present. All pre-existing AutoStock containers and volumes remained visible after recovery and after the isolated integration run. `docker_data.vhdx` remained the same size in the before/after observations: 44,280,315,904 bytes. No showroom database, database file, filestore, or pre-existing Docker volume was removed, reset, or used by the isolated integration tests.
 
 ## Live Atlas browser QA and screenshots
 
-**Blocked; no live screenshots are included.** At capture time, `127.0.0.1:8069` and `127.0.0.1:8177` did not respond, and the local Docker engine could not start or inspect containers. The browser suite above uses isolated typed fixtures and is not presented as a live Atlas check. The successful GitHub Actions run validates the addon and integration tests, but it does not contain the Atlas showroom database or replace visual QA against the live showroom.
+The authenticated Atlas Auto Distribution showroom was verified through the live React browser and Odoo API. The capture selected completed, reviewed forecast run `12` for Engine Oil Filter, opened its exact run detail, and verified the rendered chart's first future day, prediction and heuristic bounds against the API response. Saved timestamps were checked in the authenticated user's `Africa/Casablanca` timezone. Captures checked page overflow and recorded **0 browser page errors, 0 console errors and 0 failed AutoStock API responses**.
 
-The guarded capture script is `frontend/scripts/capture-forecasts-showroom.mjs`, invoked with `npm run capture:forecasts-showroom` after the Atlas showroom and frontend are available. It logs in from the ignored local credential file without printing credentials, requires the live API to identify Atlas Auto Distribution, captures actual server-returned overview/detail states at 1440, 1024 and 390 pixels, checks horizontal overflow, and fails on browser or API errors. It writes images to `docs/qa/screenshots/issue-34-gate-7/`. Run that command and the isolated Odoo test after Docker Desktop/WSL is healthy; do not treat the fixture browser tests or offline evaluation as a substitute.
+Actual live screenshots are committed under `docs/qa/screenshots/issue-34-gate-7/`:
 
-## Limitations before review completion
+| View | Screenshot |
+| --- | --- |
+| Forecast list, desktop (1440px) | [forecasts-overview-1440.png](screenshots/issue-34-gate-7/forecasts-overview-1440.png) |
+| Forecast list, tablet (1024px) | [forecasts-overview-1024.png](screenshots/issue-34-gate-7/forecasts-overview-1024.png) |
+| Forecast list, mobile (390px) | [forecasts-overview-390.png](screenshots/issue-34-gate-7/forecasts-overview-390.png) |
+| Completed and reviewed run with evaluation disclosure open, desktop | [forecast-reviewed-detail-evaluation-open-1440.png](screenshots/issue-34-gate-7/forecast-reviewed-detail-evaluation-open-1440.png) |
+| Same run detail, tablet | [forecast-reviewed-detail-evaluation-open-1024.png](screenshots/issue-34-gate-7/forecast-reviewed-detail-evaluation-open-1024.png) |
+| Same run detail, mobile | [forecast-reviewed-detail-evaluation-open-390.png](screenshots/issue-34-gate-7/forecast-reviewed-detail-evaluation-open-390.png) |
+| Live no-results state, desktop | [forecasts-no-results-1440.png](screenshots/issue-34-gate-7/forecasts-no-results-1440.png) |
+| Live unreviewed forecast state, desktop | [forecasts-real-unreviewed-1440.png](screenshots/issue-34-gate-7/forecasts-real-unreviewed-1440.png) |
 
-- The local addon installation and Atlas live browser screenshots remain blocked by the host Docker/WSL failure described above. The CI addon install and Odoo integration suite passed on the PR head.
-- CI also passed the Python job and the React lint, typecheck, unit, API contract, browser, and production build steps. CI does not create the missing live showroom screenshots.
-- No real-business forecasting accuracy or commercial-readiness claim is made.
+Two live states were unavailable: Atlas currently has no real completed-delivery forecast with insufficient history, and no separate restricted Atlas account is configured for browser capture. The browser suite still covers restricted access using isolated API fixtures; that fixture is not represented as a live screenshot.
+
+## Remaining review note
+
+No real-business forecasting accuracy or commercial-readiness claim is made.

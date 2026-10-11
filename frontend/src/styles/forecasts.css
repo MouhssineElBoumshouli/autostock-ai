@@ -20,7 +20,7 @@
 .forecast-table { width: 100%; min-width: 760px; border-collapse: collapse; table-layout: fixed; color: #37415b; }
 .forecast-table th,.forecast-table td { height: 66px; padding: 9px 10px; border-bottom: 1px solid #eef0f5; text-align: left; vertical-align: middle; font-size: 13px; }
 .forecast-table thead { background: #fafafd; }
-.forecast-table th { height: 40px; color: #707a91; font-size: 12px; font-weight: 650; white-space: nowrap; }
+.forecast-table th { height: 40px; color: #707a91; font-size: 12px; font-weight: 650; line-height: 1.25; white-space: normal; }
 .forecast-table th:nth-child(1) { width: 23%; }
 .forecast-table th:nth-child(2) { width: 16%; }
 .forecast-table th:nth-child(3) { width: 19%; }

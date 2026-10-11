@@ -18,6 +18,7 @@ import { ProductSearchDialog, type ProductSearchItem } from '@/components/gate-t
 import { WorkspaceSession, type WorkspaceSessionValue } from '@/components/workspace-session'
 import { useDebounce } from '@/hooks/use-debounce'
 import { formatQuantity } from '@/lib/dashboard'
+import { buildForecastChartPoints, formatForecastDate, formatForecastDateTime, formatForecastTime, type ForecastChartPoint } from '@/lib/forecasts'
 import '@/styles/inventory.css'
 import '@/styles/forecasts.css'
 
@@ -30,31 +31,6 @@ type HorizonFilter = NonNullable<ForecastsRequest['horizonDays']>
 
 function count(value: number) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value)
-}
-
-function localDate(value: string, timezone: string, options: Intl.DateTimeFormatOptions = {}) {
-  const source = value.includes('T') ? `${value}Z` : `${value}T12:00:00Z`
-  const date = new Date(source)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat(undefined, {
-    timeZone: timezone,
-    month: 'short',
-    day: 'numeric',
-    ...options,
-  }).format(date)
-}
-
-function localDateTime(value: string, timezone: string) {
-  const date = new Date(`${value.replace(' ', 'T')}Z`)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat(undefined, {
-    timeZone: timezone,
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date)
 }
 
 function statusLabel(state: ForecastListRun['state']) {
@@ -125,7 +101,7 @@ function ForecastMobileCard({ run, timezone }: { run: ForecastListRun; timezone:
     <div className="forecast-mobile-card-top"><span className="forecast-mobile-part"><strong>{run.product_name}</strong><small>SKU {run.sku}</small></span><ChevronRight size={17} aria-hidden="true" /></div>
     <div className="forecast-mobile-badges"><ForecastPill run={run} /><span className={`forecast-review ${run.review_status === 'reviewed' ? 'is-reviewed' : 'is-unreviewed'}`}>{reviewLabel(run.review_status, run.source_type)}</span></div>
     <div className="forecast-mobile-details"><span><WarehouseIcon size={13} aria-hidden="true" />{run.warehouse_name || 'Company-wide'}</span><span><CalendarDays size={13} aria-hidden="true" />{run.horizon_days} days</span></div>
-    <div className="forecast-mobile-foot"><SourcePill sourceType={run.source_type} /><span>Saved {localDate(run.created_at, timezone)}</span></div>
+    <div className="forecast-mobile-foot"><SourcePill sourceType={run.source_type} /><span>Saved <span data-testid="forecast-saved-date">{formatForecastDate(run.created_at, timezone)}</span></span></div>
   </Link>
 }
 
@@ -178,7 +154,7 @@ function ForecastOverview({ companyId, session, onSwitchCompany, onSignOut }: Wo
           </div>
           {forecasts.data.warehouse_options_limited && <p className="forecast-filter-note" role="note">This company has {count(forecasts.data.warehouse_count)} warehouses. Choose from the first 100 alphabetically; enter a warehouse-specific link only if your administrator has granted access.</p>}
           {forecasts.data.runs.length ? <>
-            <div className="forecast-table-wrap"><table className="forecast-table"><thead><tr><th>Part</th><th>Warehouse / source</th><th>Horizon / history</th><th>Run status</th><th>Review</th><th>Saved</th><th><span className="sr-only">Details</span></th></tr></thead><tbody>{forecasts.data.runs.map((run) => <tr key={run.id}><td><ForecastRowPart run={run} /></td><td><span className="forecast-table-scope">{run.warehouse_name || 'Company-wide'}</span><small className="forecast-table-source">{run.source_type === 'synthetic_demo' ? 'Synthetic showroom' : 'Completed deliveries'}</small></td><td><strong>{run.horizon_days} days</strong><small>{localDate(run.history_start, session.user.timezone)} – {localDate(run.history_end, session.user.timezone)}</small></td><td><ForecastPill run={run} /></td><td><span className={`forecast-review ${run.review_status === 'reviewed' ? 'is-reviewed' : 'is-unreviewed'}`}>{reviewLabel(run.review_status, run.source_type)}</span></td><td><strong>{localDate(run.created_at, session.user.timezone, { year: 'numeric' })}</strong><small>{localDateTime(run.created_at, session.user.timezone).split(', ').slice(-1)[0]}</small></td><td><Link className="forecast-table-open" to="/forecasts/$runId" params={{ runId: String(run.id) }} aria-label={`Open forecast for ${run.product_name}, SKU ${run.sku}`}><ChevronRight size={17} aria-hidden="true" /></Link></td></tr>)}</tbody></table></div>
+            <div className="forecast-table-wrap"><table className="forecast-table"><thead><tr><th>Part</th><th>Warehouse / source</th><th>Horizon / history</th><th>Run status</th><th>Review</th><th>Saved</th><th><span className="sr-only">Details</span></th></tr></thead><tbody>{forecasts.data.runs.map((run) => <tr key={run.id}><td><ForecastRowPart run={run} /></td><td><span className="forecast-table-scope">{run.warehouse_name || 'Company-wide'}</span><small className="forecast-table-source">{run.source_type === 'synthetic_demo' ? 'Synthetic showroom' : 'Completed deliveries'}</small></td><td><strong>{run.horizon_days} days</strong><small>{formatForecastDate(run.history_start, session.user.timezone)} – {formatForecastDate(run.history_end, session.user.timezone)}</small></td><td><ForecastPill run={run} /></td><td><span className={`forecast-review ${run.review_status === 'reviewed' ? 'is-reviewed' : 'is-unreviewed'}`}>{reviewLabel(run.review_status, run.source_type)}</span></td><td><strong data-testid="forecast-saved-date">{formatForecastDate(run.created_at, session.user.timezone, { year: 'numeric' })}</strong><small data-testid="forecast-saved-time">{formatForecastTime(run.created_at, session.user.timezone)}</small></td><td><Link className="forecast-table-open" to="/forecasts/$runId" params={{ runId: String(run.id) }} aria-label={`Open forecast for ${run.product_name}, SKU ${run.sku}`}><ChevronRight size={17} aria-hidden="true" /></Link></td></tr>)}</tbody></table></div>
             <div className="forecast-mobile-list">{forecasts.data.runs.map((run) => <ForecastMobileCard key={run.id} run={run} timezone={session.user.timezone} />)}</div>
             <ForecastPagination data={forecasts.data} onPage={setPage} />
           </> : <div className="forecast-empty"><span className="inventory-state-icon"><PackageSearch size={22} aria-hidden="true" /></span><h2>{filterActive ? 'No forecasts match these filters' : 'No saved forecasts yet'}</h2><p>{filterActive ? 'Try a different part, warehouse, status, or horizon. You can clear the filters to see all saved runs available to your role.' : 'Forecast runs will appear here after they have been created through the separately approved forecasting workflow.'}</p>{filterActive && <button className="inventory-secondary-button" type="button" onClick={clearFilters}>Clear filters</button>}</div>}
@@ -193,48 +169,9 @@ function ForecastRowPart({ run }: { run: ForecastListRun }) {
   return <Link className="forecast-table-part" to="/forecasts/$runId" params={{ runId: String(run.id) }}><span className="forecast-row-icon"><Boxes size={16} aria-hidden="true" /></span><span><strong>{run.product_name}</strong><small>SKU {run.sku}</small></span></Link>
 }
 
-type ChartPoint = {
-  date: string
-  actual: number | null
-  forecast: number | null
-  lower: number | null
-  band: number | null
-  returns: number | null
-  events: number | null
-  future: boolean
-}
-
-function chartPoints(run: ForecastDetailData['run']): ChartPoint[] {
-  const history: ChartPoint[] = run.observations.map((item) => ({
-    date: item.day,
-    actual: item.delivered_units,
-    forecast: null,
-    lower: null,
-    band: null,
-    returns: item.returned_units,
-    events: item.source_event_count,
-    future: false,
-  }))
-  const predictions: ChartPoint[] = run.predictions.map((item) => ({
-    date: item.day,
-    actual: null,
-    forecast: item.units,
-    lower: item.lower_heuristic,
-    band: Math.max(0, item.upper_heuristic - item.lower_heuristic),
-    returns: null,
-    events: null,
-    future: true,
-  }))
-  if (history.length && predictions.length) {
-    const last = history.at(-1)!
-    predictions[0] = { ...predictions[0], forecast: last.actual, lower: null, band: null }
-  }
-  return [...history, ...predictions]
-}
-
 function ForecastTooltip({ active, payload, label, uom }: {
   active?: boolean
-  payload?: ReadonlyArray<{ payload: ChartPoint; dataKey?: string }>
+  payload?: ReadonlyArray<{ payload: ForecastChartPoint; dataKey?: string }>
   label?: string | number
   uom: string
 }) {
@@ -251,22 +188,23 @@ function ForecastTooltip({ active, payload, label, uom }: {
 }
 
 function ForecastChart({ run, timezone }: { run: ForecastDetailData['run']; timezone: string }) {
-  const data = useMemo(() => chartPoints(run), [run])
+  const data = useMemo(() => buildForecastChartPoints(run), [run])
   const firstFutureDate = run.predictions[0]?.day
-  const formatter = (value: string) => localDate(value, timezone)
+  const firstPrediction = run.predictions[0]
+  const formatter = (value: string) => formatForecastDate(value, timezone)
   if (!run.observations.length && !run.predictions.length) return <ForecastState title="No chart data is available">This saved run has no recorded daily deliveries or forecast points to display.</ForecastState>
 
   return <section className="forecast-chart-panel panel" aria-labelledby="forecast-chart-title">
     <div className="forecast-detail-section-heading"><div><span className="inventory-catalog-icon"><ChartNoAxesCombined size={18} aria-hidden="true" /></span><div><h2 id="forecast-chart-title">Delivered history and forecast</h2><p>Completed customer deliveries are shown as recorded; the forecast begins after the history window.</p></div></div><span className="forecast-chart-uom">{run.uom || 'Synthetic units'} per day</span></div>
     {run.source_type === 'completed_deliveries' && <p className="forecast-demand-note"><CircleHelp size={14} aria-hidden="true" />Completed deliveries are a fulfilled-sales record, not a measure of all customer demand. Stockouts can limit what the history shows.</p>}
     <div className="forecast-chart-legend"><span><i className="is-history" />Completed deliveries</span><span><i className="is-future" />Forecast</span>{run.predictions.length > 0 && <span><i className="is-range" />Heuristic range</span>}</div>
-    <div className="forecast-chart-wrap" role="img" aria-label={`Daily completed deliveries and forecast for ${run.product_name}`}>
+    <div className="forecast-chart-wrap" role="img" aria-label={`Daily completed deliveries and forecast for ${run.product_name}`} data-first-forecast-day={firstPrediction?.day} data-first-forecast-units={firstPrediction ? String(firstPrediction.units) : undefined} data-first-forecast-lower={firstPrediction ? String(firstPrediction.lower_heuristic) : undefined} data-first-forecast-upper={firstPrediction ? String(firstPrediction.upper_heuristic) : undefined}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 22, right: 18, left: 3, bottom: 1 }}>
           <CartesianGrid stroke="#edf0f5" strokeDasharray="3 4" vertical={false} />
           <XAxis dataKey="date" tickFormatter={formatter} tickLine={false} axisLine={false} minTickGap={34} tick={{ fill: '#788198', fontSize: 11 }} />
           <YAxis width={48} tickLine={false} axisLine={false} allowDecimals tick={{ fill: '#788198', fontSize: 11 }} tickFormatter={(value: number) => formatQuantity(value, 0)} />
-          <Tooltip content={(props) => <ForecastTooltip active={props.active} payload={props.payload as unknown as ReadonlyArray<{ payload: ChartPoint; dataKey?: string }> | undefined} label={props.label} uom={run.uom || 'example units'} />} />
+          <Tooltip content={(props) => <ForecastTooltip active={props.active} payload={props.payload as unknown as ReadonlyArray<{ payload: ForecastChartPoint; dataKey?: string }> | undefined} label={props.label} uom={run.uom || 'example units'} />} />
           <Area dataKey="lower" stackId="heuristic" stroke="none" fill="transparent" isAnimationActive={false} legendType="none" tooltipType="none" />
           <Area dataKey="band" stackId="heuristic" stroke="none" fill="#e9e4ff" fillOpacity={0.82} isAnimationActive={false} legendType="none" tooltipType="none" />
           <Line dataKey="actual" type="monotone" stroke="#5f6d85" strokeWidth={2.2} dot={false} connectNulls={false} isAnimationActive={false} name="Completed deliveries" />
@@ -354,10 +292,10 @@ function ForecastRunDetail({ runId, companyId, session, onSwitchCompany, onSignO
         {run.source_type === 'synthetic_demo' && <div className="forecast-demo-banner" role="note"><Sparkles size={16} aria-hidden="true" /><div><strong>Synthetic showroom example</strong><p>Generated values for demonstration only. This chart is not based on Atlas delivery history and is never used for real stock or restock guidance.</p></div></div>}
         <div className="forecast-detail-facts" aria-label="Forecast details">
           <article><span>Forecast period</span><strong>{count(run.horizon_days)} days</strong></article>
-          <article><span>Recorded history</span><strong>{localDate(run.history_start, session.user.timezone)} – {localDate(run.history_end, session.user.timezone)}</strong></article>
+          <article><span>Recorded history</span><strong>{formatForecastDate(run.history_start, session.user.timezone)} – {formatForecastDate(run.history_end, session.user.timezone)}</strong></article>
           <article><span>Inventory unit</span><strong>{run.uom || 'Synthetic example units'}</strong></article>
-          <article><span>Saved</span><strong>{localDateTime(run.created_at, session.user.timezone)}</strong></article>
-          <article><span>Source cutoff</span><strong>{localDateTime(run.source_cutoff, session.user.timezone)}</strong></article>
+          <article><span>Saved</span><strong>{formatForecastDateTime(run.created_at, session.user.timezone)}</strong></article>
+          <article><span>Source cutoff</span><strong>{formatForecastDateTime(run.source_cutoff, session.user.timezone)}</strong></article>
         </div>
         {run.failure_reason && run.state !== 'completed' && <div className="forecast-run-reason" role="note"><AlertCircle size={16} aria-hidden="true" /><span>{run.failure_reason}</span></div>}
         <ForecastChart run={run} timezone={session.user.timezone} />
@@ -369,9 +307,9 @@ function ForecastRunDetail({ runId, companyId, session, onSwitchCompany, onSignO
               <div><dt>History source</dt><dd>{run.source_label}</dd></div>
               <div><dt>{run.source_type === 'synthetic_demo' ? 'Generated daily values' : 'Completed delivery and return events'}</dt><dd>{run.source_type === 'synthetic_demo' ? `${count(run.history_days)} calendar days` : `${count(run.source_event_count)} source events · ${count(run.history_days)} calendar days`}</dd></div>
               <div><dt>Days with deliveries</dt><dd>{count(run.nonzero_days)}</dd></div>
-              <div><dt>Source cutoff</dt><dd>{localDateTime(run.source_cutoff, session.user.timezone)} ({run.source_timezone})</dd></div>
+              <div><dt>Source cutoff</dt><dd>{formatForecastDateTime(run.source_cutoff, session.user.timezone)} ({run.source_timezone})</dd></div>
               {run.review_status === 'reviewed' && <div><dt>Reviewed by</dt><dd>{run.reviewed_by || 'Inventory manager'}</dd></div>}
-              {run.reviewed_at && <div><dt>Review date</dt><dd>{localDateTime(run.reviewed_at, session.user.timezone)}</dd></div>}
+              {run.reviewed_at && <div><dt>Review date</dt><dd>{formatForecastDateTime(run.reviewed_at, session.user.timezone)}</dd></div>}
             </dl>
             {run.source_type === 'completed_deliveries' && <p className={`forecast-coverage-note${detail.data.history_coverage.configured && detail.data.history_coverage.run_starts_within_coverage ? ' is-covered' : ''}`}><CircleHelp size={14} aria-hidden="true" />{detail.data.history_coverage.configured ? detail.data.history_coverage.run_starts_within_coverage ? `The run starts on or after the current configured complete-history date (${detail.data.history_coverage.complete_from}). This setting is an administrator assertion.` : `The run starts before the currently configured complete-history date (${detail.data.history_coverage.complete_from}).` : 'A complete-history start date is not currently configured for this scope.'}</p>}
           </section>
