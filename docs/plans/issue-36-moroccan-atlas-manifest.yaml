@@ -391,6 +391,13 @@ safety_and_idempotency:
   apply_requires_exact_target_uuid_confirmation: true
   require_compose_project_db_cluster_and_volume_cross_checks: true
   require_matching_db_and_filestore_backup_manifest_before_apply: true
+  backup_manifest:
+    artifacts: [database_dump, matching_filestore_snapshot]
+    required_bindings: [database_name, target_uuid, compose_project, postgres_system_identifier, postgres_volume, filestore_volume, localhost_endpoint, artifact_sizes, artifact_sha256, verified_restore_target]
+    signature_algorithm: HMAC-SHA256
+    signing_key_storage: private_outside_repository
+    restore_project: separate_disposable_compose_project
+    verify_signature_bindings_and_actual_artifact_bytes_before_apply: true
   deny_original_endpoint_containers_and_volumes: true
   idempotent_replay_same_dataset_version: zero_creates_and_zero_writes
   changed_completed_event: new_version_and_disposable_restore_required
