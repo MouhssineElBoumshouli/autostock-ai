@@ -422,7 +422,6 @@ class OdooMoroccoImporter:
                     "categ_id": references["categories"][item.category].id,
                     "is_storable": True,
                     "uom_id": unit.id,
-                    "uom_po_id": unit.id,
                     "list_price": item.sale_price_mad,
                     "standard_price": first_cost,
                     "sale_ok": True,
