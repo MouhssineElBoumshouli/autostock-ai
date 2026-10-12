@@ -753,8 +753,11 @@ class OdooMoroccoImporter:
         picking.action_assign()
         for move in picking.move_ids.filtered(lambda item: item.state not in {"done", "cancel"}):
             expected = move.product_uom_qty
-            if fully_reserved and move.product_uom_qty - move.quantity < move.product_uom.rounding / 2:
-                raise OdooImportError("A planned completed movement cannot be reserved in full.")
+            if fully_reserved and expected - move.quantity >= move.product_uom.rounding / 2:
+                raise OdooImportError(
+                    f"Planned completed movement for {move.product_id.default_code} was not "
+                    f"fully reserved ({move.quantity:g} of {expected:g} {move.product_uom.name})."
+                )
             if not move.quantity:
                 move.write({"quantity": expected})
             move.write({"picked": True})
