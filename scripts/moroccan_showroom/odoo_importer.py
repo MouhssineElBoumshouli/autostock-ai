@@ -655,7 +655,7 @@ class OdooMoroccoImporter:
                 "partner_id": references["suppliers"][event.partner_key].id,
                 "location_id": operation.default_location_src_id.id,
                 "location_dest_id": warehouse.lot_stock_id.id,
-                "scheduled_date": event.effective_at_utc,
+                "scheduled_date": _odoo_datetime(event.effective_at_utc),
                 "origin": event.key,
                 "move_ids": [
                     Command.create(
@@ -691,7 +691,7 @@ class OdooMoroccoImporter:
                 "picking_type_id": operation.id,
                 "location_id": source.lot_stock_id.id,
                 "location_dest_id": destination.lot_stock_id.id,
-                "scheduled_date": event.effective_at_utc,
+                "scheduled_date": _odoo_datetime(event.effective_at_utc),
                 "origin": event.journey_key,
                 "move_ids": [
                     Command.create(
@@ -786,7 +786,7 @@ class OdooMoroccoImporter:
         if not effective_at_utc:
             raise OdooImportError("A business movement is missing its pinned effective date.")
         moves = records if records._name == "stock.move" else records.move_ids
-        effective = effective_at_utc.replace("T", " ")
+        effective = _odoo_datetime(effective_at_utc)
         moves.write({"date": effective})
         for move in moves:
             if "date" in move.move_line_ids._fields:
@@ -929,6 +929,14 @@ def _effective_utc(day: date) -> str:
     return datetime.combine(day, time(12, 0), tzinfo=MOROCCO_ZONE).astimezone(
         timezone.utc
     ).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _odoo_datetime(value: str) -> str:
+    """Format a generated UTC timestamp as an Odoo ORM datetime string."""
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _stable_number(value: float) -> int | float:
