@@ -729,7 +729,15 @@ class OdooMoroccoImporter:
         ).sorted(key=lambda item: item.id)[:1]
         if not line:
             raise OdooImportError(f"Odoo did not offer a return line for {event.key}.")
-        if event.quantity > line.quantity:
+        already_returned = sum(
+            returned.product_uom._compute_quantity(returned.quantity, original_move.product_uom)
+            for returned in original_move.returned_move_ids.filtered(
+                lambda move: move.state != "cancel"
+            )
+        )
+        remaining = max(0.0, original_move.quantity - already_returned)
+        rounding = original_move.product_uom.rounding
+        if event.quantity - remaining > rounding / 2:
             raise OdooImportError(f"Return {event.key} exceeds its original delivered quantity.")
         line.write({"quantity": event.quantity})
         action = wizard.action_create_returns()

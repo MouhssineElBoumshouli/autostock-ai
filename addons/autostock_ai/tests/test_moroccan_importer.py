@@ -93,6 +93,17 @@ class TestMoroccanOdooImporter(TransactionCase):
         self.assertTrue(all(picking.state == "done" for picking in receipts))
         self.assertEqual(len(returns), self.dataset.counts["linked_customer_returns"])
         self.assertEqual(len(transfers), self.dataset.counts["internal_transfer_journeys"])
+        for original_move in returns.mapped("origin_returned_move_id"):
+            returned_quantity = sum(
+                returned.product_uom._compute_quantity(returned.quantity, original_move.product_uom)
+                for returned in original_move.returned_move_ids.filtered(
+                    lambda move: move.state == "done"
+                )
+            )
+            self.assertLessEqual(
+                returned_quantity,
+                original_move.quantity + original_move.product_uom.rounding / 2,
+            )
         self.assertEqual(
             len(done_outgoing),
             self.dataset.counts["focus_completed_orders"] + self.dataset.counts["history_orders_before_focus"],
