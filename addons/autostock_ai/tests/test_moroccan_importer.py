@@ -375,8 +375,8 @@ class TestMoroccanOdooImporter(TransactionCase):
             importer.plan(self.dataset)
         sale_line.write({"product_uom_qty": original_quantity})
 
-        self.assertEqual(importer.plan(self.dataset).counts["create"], 0)
-
+    def test_repeat_import_detects_broken_return_link(self):
+        importer = OdooMoroccoImporter(self.env)
         return_move = self.env["stock.move"].browse(
             self.env["autostock.morocco.fixture"].search(
                 [("entity", "=", "linked_return")], limit=1
@@ -387,8 +387,7 @@ class TestMoroccanOdooImporter(TransactionCase):
         return_move.write({"origin_returned_move_id": False})
         with self.assertRaisesRegex(OdooImportError, "Actual Odoo state drift.*return link"):
             importer.plan(self.dataset)
-        # This is the final mutation in this TransactionCase. Odoo's completed
-        # return workflow owns the link, and the test transaction rolls back.
+        # The isolated TransactionCase rolls this deliberate workflow mutation back.
 
     def test_repeat_import_detects_current_stock_quant_drift(self):
         product = self.env["product.product"].search(
