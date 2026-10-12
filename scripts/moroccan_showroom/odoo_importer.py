@@ -596,7 +596,6 @@ class OdooMoroccoImporter:
                     "product_uom_qty": line.quantity,
                     "product_uom_id": products[line.sku].uom_id.id,
                     "price_unit": next(row.sale_price_mad for row in self._dataset.products if row.sku == line.sku),
-                    "tax_id": [Command.clear()],
                 }
             )
             for line in order.lines
@@ -634,7 +633,6 @@ class OdooMoroccoImporter:
                     "product_uom_qty": order.quantity,
                     "product_uom_id": product.uom_id.id,
                     "price_unit": next(row.sale_price_mad for row in self._dataset.products if row.sku == order.sku),
-                    "tax_id": [Command.clear()],
                 }
             )
         ]
