@@ -10,6 +10,7 @@ from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, time, timedelta, timezone
 import hashlib
+from importlib.resources import files
 import json
 import random
 from zoneinfo import ZoneInfo
@@ -27,7 +28,11 @@ HISTORY_PROFILE_SKUS = frozenset(
     for number in range(101, 105)
 )
 FORECAST_PROFILE_COUNT = len(HISTORY_PROFILE_SKUS)
-LOCAL_ZONE = ZoneInfo("Africa/Casablanca")
+with files("tzdata.zoneinfo").joinpath("Africa", "Casablanca").open("rb") as _zonefile:
+    # Read the pinned IANA rules from the dependency instead of the host OS.
+    # This keeps Windows and container builds byte-identical after Morocco's
+    # announced September 2026 transition is reflected in tzdata.
+    LOCAL_ZONE = ZoneInfo.from_file(_zonefile, key="Africa/Casablanca")
 
 
 @dataclass(frozen=True)

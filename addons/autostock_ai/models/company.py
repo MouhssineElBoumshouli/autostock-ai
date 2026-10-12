@@ -14,3 +14,14 @@ class ResCompany(models.Model):
             "real-world accuracy."
         ),
     )
+    autostock_demo_target_uuid = fields.Char(
+        string="AutoStock demo target marker",
+        copy=False,
+        readonly=True,
+        help="Binds imported demo history to its isolated local database target.",
+    )
+    autostock_demo_dataset_version = fields.Char(
+        string="AutoStock demo dataset version",
+        copy=False,
+        readonly=True,
+    )

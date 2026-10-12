@@ -83,6 +83,10 @@ class AutoStockForecastRun(models.Model):
     company_id = fields.Many2one("res.company", required=True, index=True, readonly=True)
     warehouse_id = fields.Many2one("stock.warehouse", index=True, readonly=True)
     product_id = fields.Many2one("product.product", index=True, readonly=True)
+    demo_history_profile_id = fields.Many2one(
+        "autostock.morocco.history.profile", index=True, readonly=True, ondelete="restrict"
+    )
+    demo_dataset_version = fields.Char(readonly=True, index=True)
     product_name = fields.Char(readonly=True)
     sku = fields.Char(required=True, index=True, readonly=True)
     uom_id = fields.Many2one("uom.uom", readonly=True)
@@ -700,22 +704,42 @@ class AutoStockForecastRun(models.Model):
             if warehouse
             else company.autostock_history_complete_from
         )
-        if not coverage_start:
-            scope = warehouse.display_name if warehouse else company.display_name
-            raise UserError(
-                _("Set the verified complete sales-history start date for %(scope)s before forecasting.", scope=scope)
-            )
-        if start < coverage_start:
-            raise UserError(
-                _("The selected history starts before the configured complete-history date (%(date)s).", date=coverage_start)
-            )
-        product_created = fields.Datetime.to_datetime(product.create_date).date()
-        if start < product_created:
-            raise UserError(
-                _("The selected history starts before this product existed in Odoo (%(date)s).", date=product_created)
-            )
-
         source_cutoff = fields.Datetime.now()
+        product_created = fields.Datetime.to_datetime(product.create_date).date()
+        demo_profile = self.env["autostock.morocco.history.profile"]
+        needs_verified_demo_history = (
+            not coverage_start or start < coverage_start or start < product_created
+        )
+        if needs_verified_demo_history:
+            if not warehouse:
+                demo_profile = demo_profile.search(
+                    [
+                        ("company_id", "=", company.id),
+                        ("product_id", "=", product.id),
+                        ("history_start_date", "=", start),
+                        ("history_end_date", "=", end),
+                        ("dataset_version", "=", company.autostock_demo_dataset_version),
+                        ("state", "=", "verified"),
+                    ],
+                    limit=2,
+                )
+            if len(demo_profile) != 1 or not demo_profile._matches_history(
+                company, product, start, end
+            ):
+                if start < product_created:
+                    raise UserError(
+                        _("The selected history starts before this product existed in Odoo (%(date)s).", date=product_created)
+                    )
+                if not coverage_start:
+                    scope = warehouse.display_name if warehouse else company.display_name
+                    raise UserError(
+                        _("Set the verified complete sales-history start date for %(scope)s before forecasting.", scope=scope)
+                    )
+                raise UserError(
+                    _("The selected history starts before the configured complete-history date (%(date)s).", date=coverage_start)
+                )
+            demo_profile = demo_profile[0]
+
         history_days = (end - start).days + 1
         state = "queued" if history_days >= 90 else "insufficient_history"
         run = super(AutoStockForecastRun, self).create(
@@ -724,6 +748,8 @@ class AutoStockForecastRun(models.Model):
                 "company_id": company.id,
                 "warehouse_id": warehouse.id if warehouse else False,
                 "product_id": product.id,
+                "demo_history_profile_id": demo_profile.id if demo_profile else False,
+                "demo_dataset_version": demo_profile.dataset_version if demo_profile else False,
                 "product_name": product.display_name,
                 "sku": product.default_code or str(product.id),
                 "uom_id": product.uom_id.id,
@@ -1254,8 +1280,20 @@ class AutoStockForecastRun(models.Model):
                 scoped_run._require_sales_access()
                 snapshot, source_event_count = scoped_run._completed_sales_snapshot()
                 provenance = REAL_PROVENANCE
+                if self.demo_history_profile_id:
+                    provenance = _(
+                        "Fictional Moroccan showroom fixture %(version)s. The history uses completed Odoo delivery and linked return moves; Odoo create dates and users remain their actual import values. Source profile digest: %(digest)s. %(standard)s",
+                        version=self.demo_dataset_version,
+                        digest=self.demo_history_profile_id.source_move_sha256,
+                        standard=REAL_PROVENANCE,
+                    )
+                    limitations = _(
+                        "This history is generated fictional showroom activity, not evidence from a real business. It represents completed fulfilled sales, not unconstrained demand; stockouts may censor sales. The source profile is checked against current Odoo moves before processing. %(standard)s",
+                        standard=REAL_LIMITATIONS,
+                    )
+                else:
+                    limitations = REAL_LIMITATIONS
                 assumptions = REAL_ASSUMPTIONS
-                limitations = REAL_LIMITATIONS
 
             normalized_input = [Observation(row["day"], row["units"]) for row in snapshot]
             digest_payload = [
@@ -1410,9 +1448,13 @@ class AutoStockForecastRun(models.Model):
             if self.warehouse_id
             else company.autostock_history_complete_from
         )
+        profile_verified = False
         if not company_coverage or self.history_start_date < company_coverage:
-            raise UserError(_("Verified complete sales-history coverage changed after the forecast was queued."))
-
+            if self.demo_history_profile_id:
+                self.demo_history_profile_id._verify_for_run(self)
+                profile_verified = True
+            else:
+                raise UserError(_("Verified complete sales-history coverage changed after the forecast was queued."))
         Product = self.env["product.product"].with_company(company).with_context(
             allowed_company_ids=[company.id]
         )
@@ -1428,13 +1470,35 @@ class AutoStockForecastRun(models.Model):
         )
         if not product:
             raise AccessError(_("The selected tracked product is no longer available in the active company."))
+        product_created = fields.Datetime.to_datetime(product.create_date).date()
+        if self.history_start_date < product_created:
+            if not self.demo_history_profile_id:
+                raise UserError(
+                    _("The selected history starts before this product existed in Odoo (%(date)s).", date=product_created)
+                )
+            if not profile_verified:
+                self.demo_history_profile_id._verify_for_run(self)
 
-        start_utc = datetime.combine(self.history_start_date, time.min)
-        end_exclusive_utc = datetime.combine(self.history_end_date + timedelta(days=1), time.min)
-        cutoff = fields.Datetime.to_datetime(self.source_cutoff)
+        summary = self._morocco_source_summary(
+            company,
+            product,
+            self.history_start_date,
+            self.history_end_date,
+            self.source_cutoff,
+            warehouse=self.warehouse_id,
+        )
+        return summary["snapshot"], summary["source_move_count"]
+
+    @api.model
+    def _morocco_source_summary(self, company, product, start, end, cutoff, warehouse=False):
+        """Read qualifying Odoo deliveries/linked returns and digest their exact scope."""
+        start_utc = datetime.combine(fields.Date.to_date(start), time.min)
+        end_date = fields.Date.to_date(end)
+        end_exclusive_utc = datetime.combine(end_date + timedelta(days=1), time.min)
+        cutoff = fields.Datetime.to_datetime(cutoff)
         warehouse_domain = (
-            [("picking_id.picking_type_id.warehouse_id", "=", self.warehouse_id.id)]
-            if self.warehouse_id
+            [("picking_id.picking_type_id.warehouse_id", "=", warehouse.id)]
+            if warehouse
             else []
         )
         base_domain = [
@@ -1446,7 +1510,9 @@ class AutoStockForecastRun(models.Model):
             ("date", "<=", cutoff),
             *warehouse_domain,
         ]
-        Move = self.env["stock.move"]
+        Move = self.env["stock.move"].with_company(company).with_context(
+            allowed_company_ids=[company.id]
+        )
         deliveries = Move.search(
             [
                 *base_domain,
@@ -1459,7 +1525,6 @@ class AutoStockForecastRun(models.Model):
         )
         if len(deliveries) > MAX_SOURCE_MOVES:
             raise UserError(_("This SKU exceeds the bounded 50,000-move history limit; narrow the date range."))
-
         returned_moves = Move.search(
             [
                 ("state", "=", "done"),
@@ -1481,34 +1546,30 @@ class AutoStockForecastRun(models.Model):
 
         daily = defaultdict(lambda: {"delivered": 0.0, "returned": 0.0, "events": 0})
         original_deliveries = {}
+        delivery_units = return_units = 0.0
         for move in deliveries:
             day = fields.Datetime.to_datetime(move.date).date()
-            units = move.product_uom._compute_quantity(
-                move.quantity, product.uom_id, round=False
-            )
+            units = move.product_uom._compute_quantity(move.quantity, product.uom_id, round=False)
             daily[day]["delivered"] += units
             daily[day]["events"] += 1
+            delivery_units += units
             original_deliveries[move.id] = {"units": units, "returned": 0.0}
-
         for move in returned_moves:
             original = original_deliveries.get(move.origin_returned_move_id.id)
             if not original:
                 continue
-            units = move.product_uom._compute_quantity(
-                move.quantity, product.uom_id, round=False
-            )
+            units = move.product_uom._compute_quantity(move.quantity, product.uom_id, round=False)
             original["returned"] += units
             if original["returned"] - original["units"] > product.uom_id.rounding / 2:
                 raise UserError(_("A completed return exceeds its linked delivery; this SKU's history needs review."))
-            # Keep returns visible on their own completion day for audit, but
-            # do not rewrite delivery demand or create negative demand values.
             day = fields.Datetime.to_datetime(move.date).date()
             daily[day]["returned"] += units
             daily[day]["events"] += 1
+            return_units += units
 
         snapshot = []
-        current = self.history_start_date
-        while current <= self.history_end_date:
+        current = fields.Date.to_date(start)
+        while current <= end_date:
             totals = daily[current]
             snapshot.append(
                 {
@@ -1520,7 +1581,46 @@ class AutoStockForecastRun(models.Model):
                 }
             )
             current += timedelta(days=1)
-        return snapshot, len(deliveries) + len(returned_moves)
+
+        move_payload = [
+            [
+                move.id,
+                move.company_id.id,
+                move.product_id.id,
+                fields.Datetime.to_string(move.date),
+                move.quantity,
+                move.product_uom.id,
+                move.sale_line_id.id,
+                move.origin_returned_move_id.id,
+                move.location_id.id,
+                move.location_dest_id.id,
+            ]
+            for move in (deliveries | returned_moves).sorted(key=lambda row: (row.date, row.id))
+        ]
+        daily_payload = [
+            [
+                row["day"].isoformat(),
+                row["delivered_units"],
+                row["returned_units"],
+                row["units"],
+                row["source_event_count"],
+            ]
+            for row in snapshot
+        ]
+        return {
+            "snapshot": snapshot,
+            "source_move_count": len(deliveries) + len(returned_moves),
+            "delivery_count": len(deliveries),
+            "return_count": len(returned_moves),
+            "delivery_units": delivery_units,
+            "return_units": return_units,
+            "move_sha256": sha256(
+                json.dumps(move_payload, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+            ).hexdigest(),
+            "daily_sha256": sha256(
+                json.dumps(daily_payload, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+            ).hexdigest(),
+        }
 
 
 class AutoStockForecastObservation(models.Model):

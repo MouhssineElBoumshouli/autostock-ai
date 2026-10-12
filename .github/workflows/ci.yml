@@ -96,6 +96,7 @@ jobs:
         run: |
           set -euo pipefail
           project="autostock-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          target_uuid="$(python3 -c 'import uuid; print(uuid.uuid4())')"
           export POSTGRES_USER=autostock_ci
           # Hex characters avoid Odoo's wait-for-psql argv parser treating a
           # URL-safe password beginning with '-' as another command-line flag.
@@ -109,8 +110,12 @@ jobs:
           trap cleanup EXIT
 
           docker compose --project-name "$project" up --detach --wait db
-          docker compose --project-name "$project" run --rm --no-deps odoo odoo \
-            --database=autostock_ci \
+          docker compose --project-name "$project" run --rm --no-deps \
+            --volume "$PWD/scripts:/mnt/scripts:ro" \
+            --env "PYTHONPATH=/mnt:/opt/autostock-ai/python:/opt/autostock-ai" \
+            --env "AUTOSTOCK_DEMO_TARGET_UUID=$target_uuid" \
+            odoo odoo \
+            --database=autostock_atlas_morocco_demo \
             --init=autostock_ai \
             --test-enable \
             --test-tags=/autostock_ai \

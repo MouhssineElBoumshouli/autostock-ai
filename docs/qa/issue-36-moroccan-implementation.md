@@ -1,4 +1,6 @@
-# Issue #36 — Moroccan showroom implementation preparation QA
+# Issue #36 — Moroccan showroom preparation baseline QA
+
+> This report records the earlier preparation-only milestone. The Odoo writer and its current verification status are tracked in [the importer QA report](issue-36-moroccan-odoo-importer.md).
 
 ## Scope
 
