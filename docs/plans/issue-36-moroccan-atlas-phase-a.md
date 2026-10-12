@@ -10,6 +10,8 @@ Sources: [Issue #36](https://github.com/MouhssineElBoumshouli/autostock-ai/issue
 
 Database reads ran in read-only transactions that were rolled back. No secret file or container password was opened or printed.
 
+These figures are a local workstation snapshot from Phase A, not evidence independently reproducible from GitHub. The manifest records observations, not a migration guard or guarantee. A future read-only preflight must remeasure the target machine's database, module versions, IDs, volumes and counts, and stop on any unexpected drift before preparing a backup.
+
 | Item | Observed state |
 |---|---|
 | Branch base | Fetched origin/main at 29266ac26ecabc7d23082f5c8d9c89bf5e736c27 |
@@ -40,22 +42,48 @@ The companion [sample manifest](issue-36-moroccan-atlas-manifest.yaml) is human-
 
 | Area | Proposal |
 |---|---|
-| Company/warehouses | Retain Atlas and both warehouse IDs, names, codes and routes. Target Morocco / Africa-Casablanca and MAD only after the USD/inactive-MAD issue is resolved in an isolated clone. |
+| Company/warehouses | Preserve the existing Atlas company and both warehouse IDs, names, codes and routes. Keep its base currency USD by default; only change the company structure or currency after the owner chooses a path below. Morocco / Africa-Casablanca and MAD remain intended new-business settings, subject to that choice. |
 | Products | 150 total: preserve all 64 IDs/SKUs, add 86 across service filters, brakes, suspension/steering, electrical/batteries, cooling/belts/drivetrain, ignition/sensors/fluids. No invented OEM match or exact vehicle fitment. |
 | Suppliers/customers | 8 suppliers (retain 4 IDs, add 4 fictional Moroccan distributors) and 18 customers (retain 3 IDs, add 15 fictional workshops, retail desks and fleets). City-level locations only; no real street address, phone, email, tax ID or login. |
 | Sales | Add about 350 new, chronologically coherent order/delivery pairs in July 1–October 10, each with 1–5 lines. Preserve old history separately; use deterministic demand and stable event keys. |
 | Other activity | 30 vendor receipts, 12 returns linked to original deliveries, 18 internal transfer journeys and 20 confirmed outbound orders left open/assigned to create real reservations. |
-| History/forecasts | Preserve 13 snapshots and April–June prehistory. Target 181 complete observations from April 13 to October 10 for selected examples; generate fresh 7/30/60-day runs only through the existing request/worker pipeline. Keep new runs unreviewed until an authorized manager reviews them. |
+| History/forecasts | Preserve 13 snapshots and April–June prehistory. Target 181 complete calendar observations from April 13 to October 10 only for eligible pre-existing April-created products; generate fresh 7/30/60-day runs only through the existing request/worker pipeline. Keep new runs unreviewed until an authorized manager reviews them. |
 | Languages | One language-independent SKU/product/price/stock record. Prepare EN/FR/AR names, category labels and aliases for human review; UI localization and RTL stay in Issue #37. |
 
-All manifest prices are **illustrative MAD values**, not verified quotes, market research or tax advice. Keep currency and UoM on each native supplier term; never combine unlike currencies or convert without an approved rate. Tax treatment is unresolved. Do not write prices until the company currency decision is tested in a clone.
+Chronology boundary: July–October example sales, receipts, returns and transfers use only retained product records created by April 13. New catalog products are created at their actual import time and receive no earlier stock or sales events; any opening stock is entered through an Odoo adjustment dated no earlier than creation. This preserves audit dates but limits initial history and forecasts to eligible retained products.
+
+All manifest prices are **illustrative MAD values**, not verified quotes, market research or tax advice. All illustrative product and supplier prices use one provisional **tax-exclusive** display assumption; no tax rate, tax mapping or tax amount is supplied. Confirm the Moroccan tax setup before creating orders. Keep currency and UoM on each native supplier term; never combine unlike currencies or convert without an approved rate.
+
+### Currency compatibility and owner choice
+
+The existing Atlas company uses USD; MAD exists in the database but is inactive. Activating MAD only makes the currency available. It does not convert stored amounts. The same-company target of MAD, preservation of all legacy values/IDs, and a prohibition on inventing exchange rates cannot all be guaranteed by a simple currency switch.
+
+| Odoo data | Currency is stored how? | Safe Phase B treatment |
+|---|---|---|
+| res.company.currency_id | Company base/reporting currency. | Preserve USD until an owner-selected path is approved. A switch is not a conversion. |
+| res.currency | USD is active; MAD is currently inactive. Rates are separate dated records. | Enable MAD only for an approved scenario. Add no rate unless its source and effective date are approved and recorded. |
+| product.template.list_price and product.product.standard_price | Product sales price and company-dependent cost are interpreted in the active company currency; these fields do not carry an independent currency code. | Do not relabel or silently reinterpret existing values. On a MAD company, create values only with an approved basis; otherwise leave them unchanged and do not present them as MAD. |
+| product.supplierinfo price tiers | Each supplier term has an explicit currency_id; each min_qty row is its own price break. | Preserve the currency of each legacy term. New MAD terms are explicitly MAD. Do not convert or aggregate tiers across currencies. |
+| sale.order and sale.order.line | The order has an explicit currency; line prices and totals use that order currency. | Preserve historical orders and their currency. A new order must use an explicitly selected currency and a compatible pricelist/tax setup. |
+| account.move and stock valuation | Foreign-currency moves may store currency_id and amount_currency; balance is in the company currency. Stock valuation values are company-currency amounts. | Audit posted moves and valuation layers before any base-currency change. Never relabel, rewrite or “convert” posted history in place. |
+| AutoStock API | Session/company metadata reports the selected company currency; supplier-term responses report each term's own currency. | Those fields do not prove that every legacy product, cost or valuation amount is safe to render in MAD. Later API work must label each monetary value or omit mixed/ambiguous totals. |
+
+**Recommended option — preserve the existing Atlas company in USD.** Keep the current company, its IDs, historical orders, products and implicit company-currency values intact. After clone tests, activate MAD for explicitly denominated supplier terms; use a MAD sales pricelist only if Odoo's currency/rate/tax behavior is verified and each order exposes its currency. Keep unlabelled product/cost/accounting figures in USD and omit mixed-currency totals. This preserves current identity and avoids false conversions, but does not provide company-wide MAD accounting or a dashboard whose base currency is MAD. It is the safest default until the owner chooses whether that trade-off is acceptable.
+
+Other choices requiring owner approval:
+
+1. **Add a separate Moroccan company in the isolated clone.** Keep the existing company and all its values in USD; configure MAD on a new company. Use company-specific product records/prices unless the clone audit proves a record is safely shared. This provides a proper MAD company and preserves the legacy company IDs, but creates a two-company showroom. Existing sales history cannot simply be moved to the new company; copied/new products keep actual creation dates and start with insufficient history.
+2. **Convert the existing company to MAD in a separately approved accounting migration.** This best preserves a single company identity, but requires an accountant-approved dated FX source and a field-by-field migration/revaluation plan for implicit product prices/costs and any company-currency valuation/accounting balances. Keep explicitly USD orders and vendor terms denominated USD. If historic amounts cannot be preserved and explained, do not choose this path. No rate or conversion is supplied by this proposal.
+3. **Create a separate clean Moroccan database/company.** This provides a simple one-company MAD experience, but does not extend the current showroom's record IDs or historical orders.
+
+The owner must choose before importer code is written. If none of these trade-offs is acceptable, keep Phase B paused. No currency decision or setting change is authorized by this PR.
 
 All proposed entities and transactions are fictional. No real company, customer, contact detail, fitment, OEM match, sale, invoice, forecast accuracy or business validation is asserted. Keep the discreet Demo indicator and administrator-visible provenance; product names remain natural.
 
 ### Example business stories
 
-1. **Engine oil filter, Central:** opening count 24 on July 1; deliver 5 July 6; receive 12 July 12; deliver 7 July 20; return 2 August 3 linked to that delivery; transfer 6 to South September 9; reserve 3 on an unshipped October 8 order. Example arithmetic: Central 20 on hand / 3 reserved / 17 available; South 6 on hand. These are proposal values, not live stock.
-2. **Front brake pad set:** open with 4; deliver all 4 July 30; leave a five-unit confirmed order unfulfilled August 5 while stock is zero; receive 24 August 10; deliver 5 August 12. Do not count the unfulfilled order as a delivery or invent lost sales. Mark delivered-sales history stockout-censored.
+1. **Engine oil filter AT-FLT-001, Central:** this retained product existed by April 13. Receive 24 July 1; deliver 5 July 6; receive 12 July 12; deliver 7 July 20; return 2 August 3 linked to that delivery; transfer 6 to South September 9; reserve 3 on an unshipped October 8 order. These proposed events contribute +20 on-hand to Central and +6 to South; the new reservation changes Central available stock by −3. They are movement deltas to be added to the captured legacy baseline, not asserted total stock balances.
+2. **Front brake pad set AT-BRK-001:** this retained product existed by April 13. Receive 4 July 1; deliver all 4 July 30; propose a five-unit order August 5; receive 24 August 10; fulfill that same order on August 12. The August 12 delivery links to the August 5 order; it is not a second order or a second five-unit demand event. Keep the order waiting until the receipt, then complete it. Call August 5 a stockout only if a complete, location-scoped reconstruction proves zero available stock; otherwise describe it only as an unfulfilled order with unknown reason. Forecast history counts the completed delivery on August 12, not a made-up August 5 delivery or lost sale.
 3. **Battery/suspension:** slower irregular deliveries, varied lead times and pack sizes, and a return linked to a completed delivery. No supplier reliability or savings score.
 4. **South depot:** true internal transfer plus lower local deliveries. Transfer legs are not demand and must not be double-counted.
 5. **Data gaps:** one missing supplier term and one insufficient-history product remain honest empty states.
@@ -70,46 +98,68 @@ All proposed entities and transactions are fictional. No real company, customer,
 | Receipt | Native incoming stock.picking and stock.move from supplier to internal location with supplier partner. Purchase is uninstalled; do not invent purchase.order or vendor bills. |
 | Return | stock.return.picking workflow and completed reverse stock.move linked by origin_returned_move_id. Record the return on its event date; do not edit past deliveries or use negative sales. |
 | Transfer | Internal stock.picking/moves between warehouse locations. If transit is configured, retain both legs under one journey key; neither is customer demand. |
-| Opening stock/reservations | Native inventory adjustment creates moves. Read stock from stock.quant plus Odoo reservations/open moves. No SQL quant writes or quant helper to force balances. |
+| Opening stock/reservations | Apply opening quantities through Odoo's native inventory-adjustment workflow and retain its resulting stock.move evidence. Read on-hand from stock.quant and reservations/open moves separately. No SQL quant writes or quant helper to force balances. |
 | Forecast | autostock.forecast.run, observation and point through validated request, worker and source snapshot. React does not calculate demand or accuracy. |
 
 ## Historical dates and forecasting
 
-The focus window is July 1–October 10 inclusive (102 days). The engine requires at least 90 complete observations and 28 training days. Retained history April 13–October 10 is 181 days; a 60-day chronological holdout leaves 121 training days. Zero-delivery dates count only when the source is known complete.
+The focus window is July 1–October 10 inclusive (102 days). The engine requires at least 90 complete observations and 28 training days. Retained history April 13–October 10 is 181 calendar days; a 60-day chronological holdout leaves 121 training days only where that product's source history is complete. Zero-delivery dates count only when the source is known complete.
 
 Odoo stock completion sets stock.move.date to the current time. For new fictional rows only, validate with Odoo, then set predeclared event dates on the newly created order, picking and move through ORM in the same transaction before commit. Keep create_date/create_uid as actual import audit metadata. Test date fields, reservations, valuation and Forecasts/Inventory/Warehouses screens in the clone. Never edit existing completed rows; abort if dates cannot be maintained or presented truthfully.
 
-New forecastable fixture products may receive a simulated April 13 create_date on their initial ORM create in the isolated clone. Odoo 19 create preparation defaults create_date only when omitted, but the product/forecast path has not been tested with an explicit date. Stage B must prove provenance is clear and the existing forecast guard accepts history beginning then. No SQL update or production guard relaxation. Leave the 60 existing products created October 10 untouched and without earlier history.
+Do not set or backdate create_date for new products. Keep Odoo's actual ORM creation timestamp and do not attach historical sales or stock history dated before that product existed. The four retained product templates created April 13 are the only current candidates for the full April–October history, subject to per-product source completeness, evaluation, nonzero-day and review checks. The other 60 retained products have October 10 creation dates and must not receive earlier history; newly created products likewise remain in insufficient-history states until they accrue enough real post-creation demo deliveries. Do not weaken the normal forecast guard.
+
+This means the initial showroom cannot truthfully claim 181 days of valid history across all 150 products or produce long-horizon forecasts for the 60 later-created/new products. If the owner wants broad forecast coverage immediately, a separately scoped, explicitly fictional demo-history contract would need a different field and provenance from audit create_date, a clone-only gate, clear UI disclosure and its own review/tests. That alternative is not approved here. Recommended Phase B default: retain actual creation dates and limit evaluated historical forecasts to the four eligible April products; show honest insufficient-history states for the rest.
 
 Pin dates; never derive them from today(). Convert explicit Africa/Casablanca times away from midnight to Odoo's UTC-naive storage and test the engine UTC-day bucket. Order <= picking completion/move time; returns happen later and link to their delivery. One event key maps to one transaction. Never rewrite old observations, cutoffs or review statuses. New forecasts stay unreviewed; stockout-censored deliveries are not treated as unconstrained demand.
+
+### Forecast snapshot invalidation after imported history
+
+The current restock eligibility check looks at run identity, review/evaluation, cutoff age, history-end age and point coverage, but does not compare the stored source_snapshot_sha256 with a newly changed source history. A backfill could therefore leave an old, recently reviewed run eligible even though it predates the imported events.
+
+Before any backfill is enabled, Stage B must add a tested per-company/product/warehouse history revision barrier. A completed run records the source revision used to calculate it. Importing any dated delivery/return change increments the affected scope revision in the same transaction. Replenishment eligibility requires the run's revision to equal the current scope revision, as well as existing freshness and review checks. A revision mismatch makes the run ineligible without changing its saved points, hash, review status or audit fields. Keep old runs available in Saved history. Generate replacement runs through the existing worker and leave them unreviewed until a manager reviews them.
+
+Required regression: start with an old run that is still fresh, fully evaluated and manager-reviewed; add/backfill a source sale in the clone; assert the old run remains unchanged for history but is rejected by current restock eligibility; generate a new run at the new revision and verify it is not eligible before review and is eligible only after a manager reviews it. If the revision barrier cannot be implemented and tested, do not import history or show old forecasts as current replenishment evidence.
+
+### Stock reconciliation boundary
+
+The 64 retained products are already a legacy-unreconciled cohort: the read-only baseline comparison found their existing quant balances did not match a complete signed move ledger. Preserve them as found. Do not claim that adding receipts makes their full lifetime ledger reconcile.
+
+Report two populations separately in clone QA:
+
+1. **New SKU/location ledgers:** each new product/location starts with one native, recorded opening adjustment dated at or after the product's actual creation. For the same product, location and inventory UoM, verify opening adjustment + completed receipts + completed customer returns + incoming transfers − completed customer deliveries − outgoing transfers ± later adjustments equals physical on-hand. No event may precede product creation. Validate using Odoo move/quant records; test reserved and available quantities separately. Transfers are movements between locations, never sales demand.
+2. **Retained legacy products:** capture the pre-import quant balance by product/location/UoM and a move-ID/date watermark. Do not reconcile their old lifetime ledger. If a later owner-approved change touches one, compare only the post-watermark movement delta with after-minus-before quant, and report the legacy opening mismatch separately. Never rewrite an old move or quant to make the equation appear to balance.
+
+The Stage B report must state how many new ledgers reconcile and how many legacy ledgers remain unreconciled, with no single global “150 products reconcile” claim. Fail the clone acceptance check if a new ledger does not balance or if an imported write changes an unapproved legacy balance.
 
 ## Preservation and clone plan
 
 Nothing here has been executed. After approval to implement:
 
-1. Record DB name, addon/seed versions, company/warehouse IDs, baseline counts, named volumes and filestore path. Verify the exact DB guard; leave ignored credentials unchanged.
-2. Back up only autostock_showroom_demo and its matching filestore directory: PostgreSQL custom-format dump plus archive of /var/lib/odoo/filestore/autostock_showroom_demo. Save under an ignored private path, record sizes/checksums and verify restore. Do not replace an entire Docker volume or commit backups.
-3. Restore database and filestore to separate Odoo/PostgreSQL services with a distinct project/network/volumes and generated credentials. The clone may use the same internal DB name to satisfy the exact guard; isolation comes from separate services and volumes. Never attach either original named volume.
-4. Run a no-write dry-run. Check seed version, company, original SKU/partner/warehouse identities, modules, currency/language preconditions and key collisions. Report create/reuse counts and projected per-product/location/UoM deltas. Abort on mismatch.
-5. After explicit owner approval, apply additively to the clone. Match existing records by verified keys; assign stable external IDs to new records. Conflicting keys abort. Never unlink or rewrite existing products, partners, orders, pickings, quants or forecast runs.
-6. Repeat dry-run/apply. Second apply creates zero records and changes zero finalized values. A changed completed event requires a new version and restored clone.
-7. Only after clone forecast and browser QA pass may the owner separately authorize the original Atlas. Verify backup/restore first. This PR does not authorize that action.
+1. With future owner approval, record the original DB/endpoint identity, addon/seed versions, company/warehouse IDs, baseline counts, original Compose project, container IDs, PostgreSQL system identifier, volume IDs/mounts and filestore path. This is a read-only preflight; do not rely on the database name alone.
+2. Back up only autostock_showroom_demo and its matching filestore directory: PostgreSQL custom-format dump plus archive of /var/lib/odoo/filestore/autostock_showroom_demo. Record sizes and SHA-256 hashes for both artifacts in an owner-reviewed, signed backup manifest. Verify a restore before using the backup. Keep backups outside the repo in a private ignored path; never commit them.
+3. Restore to a new database named autostock_showroom_demo_morocco_clone under a distinct Compose project such as autostock-atlas-morocco-clone, with a separate network, Odoo/PostgreSQL containers, generated credentials and new named volumes. Verify the actual Compose project label, database endpoint/cluster identity and mounted volume IDs; refuse if either original volume is attached. Do not reuse the original DB name merely to pass a weak name allowlist.
+4. Only after restore verification, generate a unique clone UUID and write a clone-identity marker into the clone. Keep an approval manifest outside the repository binding that UUID to the clone DB name, PostgreSQL system identifier, Compose project, separate volume IDs and the signed-off source backup hashes. The marker must not exist in the source database.
+5. Use a two-part fail-closed gate. Inside Odoo, the importer checks the exact clone DB name, expected clone UUID/marker, dataset version, selected company and explicit Apply approval; a missing or mismatched value aborts before any business write. The Windows wrapper independently verifies the expected Compose project/service labels, database host/container identity, PostgreSQL system identifier, marker UUID, backup hashes and actual volume mounts against the approved manifest and an explicit denylist of the original endpoint and volume IDs. Odoo cannot verify Docker labels, volume mounts or the backup fingerprint; the wrapper cannot substitute for Odoo's company/record-rule checks.
+6. Dry-run is genuinely no-write: the wrapper's endpoint and manifest checks are read-only; Odoo runs the preview in a read-only transaction and uses no create/write/unlink, sequence allocation, chatter, forecast queue or marker mutation. It reports proposed counts and product/location/UoM ledger deltas only. If read-only execution cannot be enforced, abort instead of calling it a dry-run.
+7. Apply defaults to refusal. It requires an explicit clone target, exact matching approval manifest and clone UUID confirmation; DB name alone is never sufficient. No override flag may redirect the clone workflow to the original. A later import into the original showroom would need a separate owner approval, separately reviewed backup/restore, endpoint-specific guard and distinct workflow; this PR does not authorize or implement it.
+8. Repeat the clone dry-run after apply. A second apply must create zero records and change zero finalized values. A changed completed event requires a new manifest version and a restored clone.
 
 ### Windows operator flow (future tooling)
 
-Stage B can add a PowerShell command with dry-run default, for example a future prepare_atlas_morocco_clone.ps1 -Mode DryRun. Review its DB/module/key/count report. A future -Mode Apply would still target only the clone and require explicit approval. The PR #17 launcher/seed is not on main; this proposal does not claim those commands exist.
+Stage B can add a PowerShell command with dry-run default, for example a future prepare_atlas_morocco_clone.ps1 -Mode DryRun. The wrapper verifies Docker project/service identity, actual mounts, DB cluster identity, clone UUID and approved backup fingerprints before it invokes Odoo. Odoo separately verifies the exact clone DB name and clone-only marker before Apply. Review the DB/module/key/count report. A future -Mode Apply requires explicit clone approval and cannot target the original endpoint. The PR #17 launcher/seed is not on main; this proposal does not claim those commands exist.
 
 Do not use docker compose down -v, volume prune, WSL unregister, reset switches, or commands targeting the original volumes.
 
 ## Review decisions and Stage B acceptance
 
-1. **Currency:** test MAD activation/base-currency change on the clone without relabeling old fictional USD prices/orders. Do not invent an exchange rate; pause if meaning cannot be preserved.
-2. **Legacy chronology:** preserve original orders, pickings, moves and forecast runs; decide how the clone's UI explains their limitation.
-3. **Fixture dates:** approve disclosed ORM-only simulated dates for new fictional product/event rows. If unsupported, stop rather than use SQL or weaken the forecast guard.
-4. **Scope:** approve 150/8/18 catalogue, 350 new dated deliveries, 30 receipts, 12 returns, 18 transfers and 20 open reservations, subject to runtime.
+1. **Currency (owner choice before importer code):** recommended—preserve the existing USD company and use only explicit MAD supplier terms/validated MAD pricelists; alternative—add a separate MAD company in the clone; alternative—approve a documented same-company FX/accounting migration using owner-supplied rates; alternative—create a clean Moroccan database without legacy IDs/history.
+2. **Forecast breadth:** recommended—keep actual product creation timestamps and initially evaluate only the four eligible April products; show insufficient history for other products. A separately approved demo-history/provenance design is needed to claim broad historical coverage.
+3. **Legacy data:** preserve original orders, pickings, moves, quant balances and forecast snapshots; mark the 64 legacy stock ledgers unreconciled and report new controlled ledgers separately.
+4. **Scope:** approve the 150/8/18 catalogue and proposed transaction counts, knowing the four existing April-created products are the only initial candidates for 181-day history unless the owner selects another approved provenance path.
 5. **Language readiness:** review draft EN/FR/AR labels. No language switch, RTL UI, or Issue #37 implementation.
 
-Stage B tests: DB/module guards, no-write dry-run, deterministic/idempotent apply, creation/history boundary, chronological sale/receipt/return/transfer links, quant-to-move reconciliation by location/UoM, no duplicate transfer demand, reservation totals, company/warehouse permissions, truthful 7/30/60 evaluation and stockout/insufficient-history states. Then run frontend/API checks and actual Dashboard, Inventory, Warehouses, Suppliers and Forecasts browser journeys on the clone at desktop/tablet/mobile. Verify no browser errors, overflow or seed records after October 10.
+Stage B tests: clone-marker and endpoint/volume guards, signed backup fingerprint, no-write dry-run, deterministic/idempotent apply, creation/history boundary, linked order fulfillment, chronological sale/receipt/return/transfer links, new-ledger reconciliation, legacy post-watermark delta reconciliation, no duplicate transfer demand, reservation totals, per-scope forecast revision invalidation, company/warehouse permissions, truthful 7/30/60 evaluation and stockout/insufficient-history states. Report new and legacy ledger populations separately. Then run frontend/API checks and actual Dashboard, Inventory, Warehouses, Suppliers and Forecasts browser journeys on the clone at desktop/tablet/mobile. Verify no browser errors, overflow or seed records after October 10.
 
 Planning estimate: several minutes to about 15 minutes for 350 orders, stock workflows and selected forecasts on healthy local Docker. This is unmeasured; benchmark clone dry-run, apply and forecasts separately.
 
