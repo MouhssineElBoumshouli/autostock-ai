@@ -16,12 +16,17 @@ from zoneinfo import ZoneInfo
 
 from .catalog import CATEGORIES, CUSTOMERS, DEMAND_CLASSES, SUPPLIERS, WAREHOUSES
 
-DATASET_VERSION = "atlas-ma-2026.1"
+DATASET_VERSION = "atlas-ma-2026.2"
 DEFAULT_SEED = 36036
 FOCUS_START = date(2026, 7, 1)
 HISTORY_START = date(2026, 4, 13)
 END_DATE = date(2026, 10, 10)
-FORECAST_PROFILE_COUNT = 24
+HISTORY_PROFILE_SKUS = frozenset(
+    f"AT-MA-{category_code}-{number:03d}"
+    for category_code in ("FLT", "BRK", "SUS", "ELC", "CLD", "IGN")
+    for number in range(101, 105)
+)
+FORECAST_PROFILE_COUNT = len(HISTORY_PROFILE_SKUS)
 LOCAL_ZONE = ZoneInfo("Africa/Casablanca")
 
 
@@ -133,6 +138,14 @@ def _event_time_utc(day: date) -> str:
     return local_time.astimezone(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds")
 
 
+def _profiled_products(products: tuple[Product, ...]) -> tuple[Product, ...]:
+    """Return the 24 explicitly selected history examples in catalog order."""
+    selected = tuple(product for product in products if product.sku in HISTORY_PROFILE_SKUS)
+    if len(selected) != FORECAST_PROFILE_COUNT:
+        raise AssertionError("The selected historical product keys do not match the catalog.")
+    return selected
+
+
 def _product_catalog(seed: int) -> tuple[Product, ...]:
     rng = random.Random(seed)
     products = []
@@ -190,7 +203,7 @@ def _product_catalog(seed: int) -> tuple[Product, ...]:
                     demand_class=demand_class,
                     history_profile_key=(
                         f"history_{sku.lower().replace('-', '_')}"
-                        if global_index < FORECAST_PROFILE_COUNT
+                        if sku in HISTORY_PROFILE_SKUS
                         else None
                     ),
                 )
@@ -205,9 +218,10 @@ def _history_sales(products: tuple[Product, ...], rng: random.Random) -> list[tu
     quantities = {"fast": (2, 3, 4, 6), "steady": (1, 2, 3), "intermittent": (1, 2), "slow": (1,)}
     results = []
     customer_keys = [item[0] for item in CUSTOMERS]
+    history_products = _profiled_products(products)
     day = HISTORY_START
     while day < FOCUS_START:
-        for product_index, product in enumerate(products[:FORECAST_PROFILE_COUNT]):
+        for product_index, product in enumerate(history_products):
             product_rng = random.Random(rng.randrange(1, 2**31) + product_index)
             if product_rng.random() < probabilities[product.demand_class]:
                 customer = customer_keys[(product_index + day.toordinal()) % len(customer_keys)]
@@ -327,6 +341,7 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
 
     rng = random.Random(seed)
     products = _product_catalog(seed)
+    history_products = _profiled_products(products)
     product_by_index = list(products)
     customer_keys = [item[0] for item in CUSTOMERS]
     warehouse_keys = [item[0] for item in WAREHOUSES]
@@ -374,7 +389,7 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
                 candidates = product_by_index[2:]
                 product = rng.choice(candidates)
             elif order_index < FORECAST_PROFILE_COUNT and line_index == 0:
-                product = product_by_index[order_index]
+                product = history_products[order_index]
             else:
                 product = rng.choice(product_by_index)
             if order_index == 349 and line_index == 0:
@@ -498,7 +513,7 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
     delivered_by_day_sku = Counter()
     returned_by_day_sku = Counter()
     event_count_by_day_sku = Counter()
-    profiled_skus = {product.sku for product in products[:FORECAST_PROFILE_COUNT]}
+    profiled_skus = {product.sku for product in history_products}
     for movement in movements:
         if movement.kind == "sale_delivery" and movement.sku in profiled_skus:
             delivered_by_day_sku[(movement.sku, movement.day)] += movement.quantity
@@ -508,7 +523,7 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
             event_count_by_day_sku[(movement.sku, movement.day)] += 1
     daily_observations = []
     history_days = (END_DATE - HISTORY_START).days + 1
-    for product in products[:FORECAST_PROFILE_COUNT]:
+    for product in history_products:
         day = HISTORY_START
         while day <= END_DATE:
             daily_observations.append(
@@ -526,7 +541,7 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
     if len(daily_observations) != FORECAST_PROFILE_COUNT * history_days:
         raise AssertionError("The generated forecast coverage has a missing calendar day.")
     history_profiles = []
-    for product in products[:FORECAST_PROFILE_COUNT]:
+    for product in history_products:
         source_events = [
             item
             for item in movements
@@ -538,6 +553,8 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
             {
                 "key": product.history_profile_key,
                 "sku": product.sku,
+                "category": product.category,
+                "demand_class": product.demand_class,
                 "dataset_version": DATASET_VERSION,
                 "business_effective_start": HISTORY_START,
                 "business_effective_end": END_DATE,
@@ -586,6 +603,12 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
         "internal_transfer_journeys": sum(item.kind == "internal_transfer" for item in movements),
         "open_customer_orders": len(open_orders),
         "history_profiles": FORECAST_PROFILE_COUNT,
+        "history_profile_category_mix": dict(
+            sorted(Counter(product.category for product in history_products).items())
+        ),
+        "history_profile_demand_class_mix": dict(
+            sorted(Counter(product.demand_class for product in history_products).items())
+        ),
         "history_calendar_days_per_profile": history_days,
         "history_profile_move_count": sum(item["planned_qualifying_move_count"] for item in history_profiles),
         "opening_adjustments": sum(item.kind == "opening_adjustment" for item in movements),

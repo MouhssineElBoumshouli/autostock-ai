@@ -24,7 +24,7 @@ Start validates the Compose project, bind address, private database service, vol
 
 ## Dataset contract
 
-The generator uses a fixed seed and explicit dates. Its canonical digest is stable for the same version and seed. It plans 150 SKUs, 8 fictional suppliers, 18 fictional customers, two warehouses, 350 focus-window delivered orders, 30 receipts, 12 linked returns, 18 transfers, 20 open orders, and 181 daily observations for 24 declared demo-history profiles.
+The generator uses a fixed seed and explicit dates. Its canonical digest is stable for the same version and seed. It plans 150 SKUs, 8 fictional suppliers, 18 fictional customers, two warehouses, 350 focus-window delivered orders, 30 receipts, 12 linked returns, 18 transfers, 20 open orders, and 181 daily observations for 24 declared demo-history profiles. The 24 explicitly keyed examples include four products from each of the six automotive categories, with six examples in each planned demand class.
 
 The generated movement plan includes native opening adjustments and checks nonnegative intermediate stock and final ledger arithmetic per product/location. Sale deliveries, supplier receipts, customer returns, transfers, and unshipped orders remain distinct event types. Reservations do not change physical on-hand.
 
@@ -35,6 +35,7 @@ All Odoo rows created by a later importer must keep their actual create_date and
 - The source database and volumes are explicit denylist entries. The setup never clones, mounts, starts, stops, or connects to them.
 - The new target requires its own database name, Compose project, target UUID, PostgreSQL cluster identity, volume mounts, local endpoint, and matching database marker before any future Apply path can be considered.
 - The default preview has zero database mutations. Duplicate fixture keys and content drift fail closed; isolated identity and signed-backup validation helpers are unit-tested for a later authorized Apply path.
-- The backup check verifies an HMAC-SHA256 signature using a private key kept outside Git. It binds the database/project/target UUID, PostgreSQL system identifier, both named volumes, localhost endpoint, actual dump and filestore sizes/hashes, and a restore verified in a separate disposable project. No backup or signing key has been created for this PR.
+- The backup-manifest integrity check verifies an HMAC-SHA256 signature using a private key kept outside Git. It binds the database/project/target UUID, PostgreSQL system identifier, both named volumes, localhost endpoint, and actual dump and filestore sizes/hashes. This only checks signed metadata and artifact bytes; it does not verify an actual restore. Apply remains disabled until a later reviewed stage implements independent restore evidence checks and an authorized write path. No backup or signing key has been created for this PR.
+- Compose preflight checks the exact PostgreSQL and filestore named-volume mounts, the two expected read-only addon/script bind mounts, target UUID network labeling, and exclusive attachment to the private network. On a later authorized Start/Status, existing containers and network endpoints are re-inspected against the same boundary.
 - There is no Apply option in this PR. A complete Odoo writer, real dry-run comparison against a provisioned target, historical forecast eligibility, and browser QA need independent review and separately authorized follow-up work.
 - No secrets, backup archives, target database, or generated data file belongs in Git.

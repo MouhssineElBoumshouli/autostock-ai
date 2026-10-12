@@ -111,14 +111,18 @@ def backup_manifest_signature(manifest: dict, signing_key: bytes) -> str:
     return hmac.new(signing_key, payload, hashlib.sha256).hexdigest()
 
 
-def validate_backup_manifest(
+def validate_backup_manifest_integrity(
     manifest: dict,
     *,
     expected_uuid: str,
     target_identity: TargetIdentity,
     signing_key: bytes,
 ) -> None:
-    """Verify target identity, signed backup metadata, and both backup artifacts."""
+    """Verify signed backup metadata and artifact bytes, not a restore operation.
+
+    A manifest signature proves only that its contents were signed by the
+    configured key. It cannot establish that a restore actually ran or passed.
+    """
     expected = validate_uuid(expected_uuid, "Expected target UUID")
     validate_target_identity(target_identity, expected_uuid=expected)
     expected_fields = {
@@ -138,10 +142,6 @@ def validate_backup_manifest(
         value = manifest.get(key, "")
         if not re.fullmatch(r"[a-f0-9]{64}", value):
             raise SafetyError(f"Backup manifest field {key} must be a SHA-256 digest.")
-    if manifest.get("verified_restore") is not True:
-        raise SafetyError("The matching backup must have a verified restore before Apply.")
-    if manifest.get("restore_target") != "separate_disposable_project":
-        raise SafetyError("Backup restore must be verified in a separate disposable project.")
     signature = manifest.get("signature_hmac_sha256", "")
     expected_signature = backup_manifest_signature(manifest, signing_key)
     if not hmac.compare_digest(signature, expected_signature):
@@ -163,15 +163,20 @@ def validate_backup_manifest(
 def require_apply_approval(
     *,
     mode: str,
-    typed_target_uuid: str | None,
-    expected_target_uuid: str,
+    typed_target_uuid: str | None = None,
+    expected_target_uuid: str | None = None,
     target_identity: TargetIdentity | None = None,
-    backup_manifest: dict | None,
+    backup_manifest: dict | None = None,
     backup_signing_key: bytes | None = None,
 ) -> None:
-    """Default-deny Apply unless target identity, typed confirmation, and backup match."""
-    if mode != "apply":
+    """Permit previews only; Apply stays disabled until independent restore checks exist."""
+    if mode not in {"dry-run", "offline-dry-run", "preview", "apply"}:
+        raise SafetyError(f"Unsupported execution mode: {mode!r}.")
+    if mode in {"dry-run", "offline-dry-run", "preview"}:
         return
+
+    if expected_target_uuid is None:
+        raise SafetyError("Apply requires the prepared target UUID.")
     expected = validate_uuid(expected_target_uuid, "Expected target UUID")
     if typed_target_uuid != expected:
         raise SafetyError("Apply requires typing the exact prepared target UUID.")
@@ -179,12 +184,15 @@ def require_apply_approval(
         raise SafetyError("Apply requires a complete cross-checked target identity.")
     validate_target_identity(target_identity, expected_uuid=expected)
     if not backup_manifest:
-        raise SafetyError("Apply requires a verified database and matching filestore backup.")
+        raise SafetyError("Apply requires a signed database and matching filestore backup.")
     if not backup_signing_key:
-        raise SafetyError("Apply requires the private key for the signed backup manifest.")
-    validate_backup_manifest(
+        raise SafetyError("Apply requires the private key for backup-manifest integrity checks.")
+    validate_backup_manifest_integrity(
         backup_manifest,
         expected_uuid=expected,
         target_identity=target_identity,
         signing_key=backup_signing_key,
+    )
+    raise SafetyError(
+        "Apply is disabled until independent restore evidence is verified and a write path exists."
     )

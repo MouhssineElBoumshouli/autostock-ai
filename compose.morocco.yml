@@ -52,6 +52,9 @@ services:
 networks:
   morocco_private:
     name: autostock-atlas-morocco-private
+    labels:
+      com.autostock.environment: morocco-demo
+      com.autostock.target-uuid: ${ATLAS_MOROCCO_TARGET_UUID:?Prepare .env.atlas-morocco first}
 
 volumes:
   morocco_postgres:

@@ -1,6 +1,8 @@
-from collections import defaultdict
+from collections import Counter, defaultdict
+from copy import deepcopy
 from datetime import date
 import hashlib
+from pathlib import Path
 import pytest
 
 from scripts.moroccan_showroom.generator import (
@@ -17,14 +19,86 @@ from scripts.moroccan_showroom.safety import (
     TargetIdentity,
     backup_manifest_signature,
     require_apply_approval,
-    validate_backup_manifest,
+    validate_backup_manifest_integrity,
     validate_target_identity,
+)
+from scripts.moroccan_showroom.compose_contract import (
+    ADDONS_TARGET,
+    DATABASE_TARGET,
+    FILESTORE_TARGET,
+    NETWORK_KEY,
+    SCRIPTS_TARGET,
+    TARGET_NETWORK,
+    validate_compose_config,
+    validate_container_inspect,
+    validate_network_inspect,
 )
 from scripts.moroccan_showroom.import_plan import FixtureRecord, preview_import
 from scripts.moroccan_showroom.cli import build_dry_run_report
 
 
 TARGET_UUID = "0f7d8360-4aa6-48dc-9337-6438f704db12"
+
+
+def compose_config(repo_root: Path):
+    return {
+        "name": "autostock-atlas-morocco",
+        "services": {
+            "db": {
+                "volumes": [
+                    {"type": "volume", "source": "morocco_postgres", "target": DATABASE_TARGET, "read_only": False}
+                ],
+                "networks": {NETWORK_KEY: None},
+                "ports": [],
+            },
+            "web": {
+                "volumes": [
+                    {"type": "volume", "source": "morocco_filestore", "target": FILESTORE_TARGET, "read_only": False},
+                    {"type": "bind", "source": str(repo_root / "addons"), "target": ADDONS_TARGET, "read_only": True},
+                    {"type": "bind", "source": str(repo_root / "scripts" / "moroccan_showroom"), "target": SCRIPTS_TARGET, "read_only": True},
+                ],
+                "networks": {NETWORK_KEY: None},
+                "ports": [{"host_ip": "127.0.0.1", "published": "8070", "target": 8069}],
+            },
+        },
+        "volumes": {
+            "morocco_postgres": {"name": "autostock_atlas_morocco_postgres"},
+            "morocco_filestore": {"name": "autostock_atlas_morocco_filestore"},
+        },
+        "networks": {
+            NETWORK_KEY: {
+                "name": TARGET_NETWORK,
+                "labels": {"com.autostock.target-uuid": TARGET_UUID},
+            }
+        },
+    }
+
+
+def container_inspect(repo_root: Path, service: str = "web"):
+    if service == "db":
+        mounts = [{
+            "Type": "volume",
+            "Name": "autostock_atlas_morocco_postgres",
+            "Source": "/var/lib/docker/volumes/autostock_atlas_morocco_postgres/_data",
+            "Destination": DATABASE_TARGET,
+            "RW": True,
+        }]
+    else:
+        mounts = [
+            {"Type": "volume", "Name": "autostock_atlas_morocco_filestore", "Source": "/var/lib/docker/volumes/autostock_atlas_morocco_filestore/_data", "Destination": FILESTORE_TARGET, "RW": True},
+            {"Type": "bind", "Name": "", "Source": str(repo_root / "addons"), "Destination": ADDONS_TARGET, "RW": False},
+            {"Type": "bind", "Name": "", "Source": str(repo_root / "scripts" / "moroccan_showroom"), "Destination": SCRIPTS_TARGET, "RW": False},
+        ]
+    return {
+        "name": f"/autostock-atlas-morocco-{service}-1",
+        "labels": {
+            "com.docker.compose.project": "autostock-atlas-morocco",
+            "com.docker.compose.service": service,
+            "com.autostock.target-uuid": TARGET_UUID,
+        },
+        "mounts": mounts,
+        "networks": [TARGET_NETWORK],
+    }
 
 
 def safe_identity(**changes):
@@ -94,8 +168,17 @@ def test_product_and_partner_keys_are_new_and_currency_is_explicit():
     assert all(supplier["fictional"] for supplier in data.suppliers)
     assert all(customer["fictional"] for customer in data.customers)
     assert not any("create_date" in product for product in data.as_dict()["products"])
-    assert all(product.history_profile_key for product in data.products[:24])
-    assert all(product.history_profile_key is None for product in data.products[24:])
+    profiled = [product for product in data.products if product.history_profile_key]
+    assert len(profiled) == FORECAST_PROFILE_COUNT
+    assert Counter(product.category for product in profiled) == {
+        "filtration_engine_service": 4,
+        "braking": 4,
+        "suspension_steering": 4,
+        "electrical_batteries": 4,
+        "cooling_belts_drivetrain": 4,
+        "ignition_sensors_fluids": 4,
+    }
+    assert all(product.history_profile_key is None for product in data.products if product not in profiled)
 
 
 def test_history_coverage_is_contiguous_and_scoped_to_profiles():
@@ -116,10 +199,34 @@ def test_history_coverage_is_contiguous_and_scoped_to_profiles():
         assert all(row["returned_units"] >= 0 for row in rows)
     assert all(row["day"] <= END_DATE for row in data.daily_observations)
     assert len(data.history_profiles) == FORECAST_PROFILE_COUNT
+    assert Counter(profile["category"] for profile in data.history_profiles) == {
+        "filtration_engine_service": 4,
+        "braking": 4,
+        "suspension_steering": 4,
+        "electrical_batteries": 4,
+        "cooling_belts_drivetrain": 4,
+        "ignition_sensors_fluids": 4,
+    }
+    assert Counter(profile["demand_class"] for profile in data.history_profiles) == {
+        "fast": 6,
+        "steady": 6,
+        "intermittent": 6,
+        "slow": 6,
+    }
+    assert all(profile["planned_delivery_move_count"] > 0 for profile in data.history_profiles)
     assert all(
         profile["status"] == "fixture_plan_only_not_verified_in_odoo"
         and profile["calendar_days"] == 181
         and len(profile["planned_daily_rows_sha256"]) == 64
+        for profile in data.history_profiles
+    )
+    assert all(
+        any(
+            movement.kind == "sale_delivery"
+            and movement.sku == profile["sku"]
+            and movement.day < FOCUS_START
+            for movement in data.movements
+        )
         for profile in data.history_profiles
     )
 
@@ -289,7 +396,7 @@ def test_target_identity_rejects_wrong_database_uuid_and_project_names():
         )
 
 
-def test_apply_requires_exact_uuid_and_signed_verified_matching_backup(tmp_path):
+def test_backup_manifest_integrity_is_separate_from_restore_verification(tmp_path):
     signing_key = b"local-private-test-signing-key-32bytes"
     database_path = tmp_path / "target.dump"
     filestore_path = tmp_path / "target-filestore.tar"
@@ -310,11 +417,9 @@ def test_apply_requires_exact_uuid_and_signed_verified_matching_backup(tmp_path)
         "filestore_path": str(filestore_path),
         "filestore_size_bytes": filestore_path.stat().st_size,
         "filestore_sha256": hashlib.sha256(filestore_path.read_bytes()).hexdigest(),
-        "verified_restore": True,
-        "restore_target": "separate_disposable_project",
     }
     manifest["signature_hmac_sha256"] = backup_manifest_signature(manifest, signing_key)
-    validate_backup_manifest(
+    validate_backup_manifest_integrity(
         manifest,
         expected_uuid=TARGET_UUID,
         target_identity=safe_identity(),
@@ -326,21 +431,21 @@ def test_apply_requires_exact_uuid_and_signed_verified_matching_backup(tmp_path)
         wrong_target_manifest, signing_key
     )
     with pytest.raises(SafetyError, match="verified target"):
-        validate_backup_manifest(
+        validate_backup_manifest_integrity(
             wrong_target_manifest,
             expected_uuid=TARGET_UUID,
             target_identity=safe_identity(),
             signing_key=signing_key,
         )
     with pytest.raises(SafetyError, match="signature is invalid"):
-        validate_backup_manifest(
+        validate_backup_manifest_integrity(
             {**manifest, "signature_hmac_sha256": "0" * 64},
             expected_uuid=TARGET_UUID,
             target_identity=safe_identity(),
             signing_key=signing_key,
         )
     with pytest.raises(SafetyError, match="verified target"):
-        validate_backup_manifest(
+        validate_backup_manifest_integrity(
             manifest,
             expected_uuid=TARGET_UUID,
             target_identity=wrong_identity,
@@ -348,33 +453,21 @@ def test_apply_requires_exact_uuid_and_signed_verified_matching_backup(tmp_path)
         )
     filestore_path.write_bytes(b"changed backup")
     with pytest.raises(SafetyError, match="does not match"):
-        validate_backup_manifest(
+        validate_backup_manifest_integrity(
             manifest,
             expected_uuid=TARGET_UUID,
             target_identity=safe_identity(),
             signing_key=signing_key,
         )
     filestore_path.write_bytes(b"matching filestore backup fixture")
-    require_apply_approval(
-        mode="dry-run",
-        typed_target_uuid=None,
-        expected_target_uuid=TARGET_UUID,
-        backup_manifest=None,
-    )
-    with pytest.raises(SafetyError, match="typing"):
+    require_apply_approval(mode="dry-run")
+    with pytest.raises(SafetyError, match="Unsupported execution mode"):
+        require_apply_approval(mode="aply")
+    with pytest.raises(SafetyError, match="typing the exact prepared target UUID"):
         require_apply_approval(
             mode="apply",
-            typed_target_uuid=None,
             expected_target_uuid=TARGET_UUID,
             backup_manifest=manifest,
-        )
-    with pytest.raises(SafetyError, match="verified"):
-        require_apply_approval(
-            mode="apply",
-            typed_target_uuid=TARGET_UUID,
-            expected_target_uuid=TARGET_UUID,
-            target_identity=safe_identity(),
-            backup_manifest={**manifest, "verified_restore": False},
             backup_signing_key=signing_key,
         )
     with pytest.raises(SafetyError, match="cross-checked target identity"):
@@ -385,23 +478,130 @@ def test_apply_requires_exact_uuid_and_signed_verified_matching_backup(tmp_path)
             backup_manifest=manifest,
             backup_signing_key=signing_key,
         )
-    with pytest.raises(SafetyError, match="Database name"):
+    with pytest.raises(SafetyError, match="Apply is disabled"):
         require_apply_approval(
             mode="apply",
             typed_target_uuid=TARGET_UUID,
             expected_target_uuid=TARGET_UUID,
-            target_identity=safe_identity(database_name="wrong_database"),
+            target_identity=safe_identity(),
             backup_manifest=manifest,
             backup_signing_key=signing_key,
         )
-    require_apply_approval(
-        mode="apply",
-        typed_target_uuid=TARGET_UUID,
-        expected_target_uuid=TARGET_UUID,
-        target_identity=safe_identity(),
-        backup_manifest=manifest,
-        backup_signing_key=signing_key,
+
+
+def test_mocked_first_start_repeat_start_and_status_preflights_are_repeatable(tmp_path):
+    config = compose_config(tmp_path)
+    db = container_inspect(tmp_path, service="db")
+    web = container_inspect(tmp_path)
+    network = {
+        "name": TARGET_NETWORK,
+        "labels": {
+            "com.docker.compose.project": "autostock-atlas-morocco",
+            "com.autostock.target-uuid": TARGET_UUID,
+        },
+        "container_ids": ["db-id", "web-id"],
+    }
+    target_ids = {"db-id", "web-id"}
+    transitions = (
+        "first-start-before-up",
+        "first-start-after-up",
+        "repeat-start-before-up",
+        "repeat-start-after-up",
+        "status",
     )
+    for transition in transitions:
+        validate_compose_config(config, repo_root=tmp_path, expected_uuid=TARGET_UUID)
+        if transition != "first-start-before-up":
+            validate_container_inspect(db, repo_root=tmp_path, expected_uuid=TARGET_UUID)
+            validate_container_inspect(web, repo_root=tmp_path, expected_uuid=TARGET_UUID)
+            validate_network_inspect(
+                network,
+                target_container_ids=target_ids,
+                expected_uuid=TARGET_UUID,
+            )
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda config: config["services"]["db"]["volumes"][0].update(source="autostock_ai_showroom_postgres"),
+        lambda config: config["services"]["db"]["volumes"][0].update(target="/wrong/postgres"),
+        lambda config: config["services"]["web"]["volumes"][0].update(source="morocco_postgres"),
+        lambda config: config["services"]["web"]["volumes"][0].update(target="/wrong/filestore"),
+        lambda config: config["services"]["web"]["volumes"].append({"type": "bind", "source": ".showroom", "target": "/leak", "read_only": False}),
+        lambda config: config["services"]["web"]["volumes"][1].update(read_only=False),
+        lambda config: config["services"]["web"].update(networks={NETWORK_KEY: None, "default": None}),
+        lambda config: config["networks"][NETWORK_KEY]["labels"].pop("com.autostock.target-uuid"),
+    ],
+)
+def test_compose_rejects_tampered_mounts_services_and_network_identity(tmp_path, mutate):
+    config = deepcopy(compose_config(tmp_path))
+    mutate(config)
+    with pytest.raises(SafetyError):
+        validate_compose_config(config, repo_root=tmp_path, expected_uuid=TARGET_UUID)
+
+
+def test_live_container_mounts_and_network_must_match_compose_contract(tmp_path):
+    expected = container_inspect(tmp_path)
+    validate_container_inspect(expected, repo_root=tmp_path, expected_uuid=TARGET_UUID)
+
+    for changes in (
+        {"mount_index": 0, "mount_changes": {"Name": "autostock_ai_showroom_filestore"}},
+        {"mount_index": 1, "mount_changes": {"Source": str(tmp_path / ".showroom")}},
+        {"mount_index": 1, "mount_changes": {"RW": True}},
+        {"mount_index": 2, "mount_changes": {"Destination": "/unexpected"}},
+    ):
+        tampered = deepcopy(expected)
+        tampered["mounts"][changes["mount_index"]].update(changes["mount_changes"])
+        with pytest.raises(SafetyError):
+            validate_container_inspect(tampered, repo_root=tmp_path, expected_uuid=TARGET_UUID)
+
+    wrong_network = deepcopy(expected)
+    wrong_network["networks"] = [TARGET_NETWORK, "legacy-network"]
+    with pytest.raises(SafetyError):
+        validate_container_inspect(wrong_network, repo_root=tmp_path, expected_uuid=TARGET_UUID)
+
+
+def test_live_database_mount_cannot_use_another_volume_or_target(tmp_path):
+    expected = container_inspect(tmp_path, service="db")
+    validate_container_inspect(expected, repo_root=tmp_path, expected_uuid=TARGET_UUID)
+    for changes in (
+        {"Name": "autostock_ai_showroom_postgres"},
+        {"Destination": "/var/lib/postgresql"},
+        {"RW": False},
+    ):
+        tampered = deepcopy(expected)
+        tampered["mounts"][0].update(changes)
+        with pytest.raises(SafetyError):
+            validate_container_inspect(tampered, repo_root=tmp_path, expected_uuid=TARGET_UUID)
+
+
+def test_existing_network_rejects_foreign_endpoints_and_uuid(tmp_path):
+    evidence = {
+        "name": TARGET_NETWORK,
+        "labels": {
+            "com.docker.compose.project": "autostock-atlas-morocco",
+            "com.autostock.target-uuid": TARGET_UUID,
+        },
+        "container_ids": ["db-id", "web-id"],
+    }
+    validate_network_inspect(
+        evidence,
+        target_container_ids={"db-id", "web-id"},
+        expected_uuid=TARGET_UUID,
+    )
+    with pytest.raises(SafetyError, match="outside its own Compose project"):
+        validate_network_inspect(
+            {**evidence, "container_ids": ["legacy-container-id"]},
+            target_container_ids={"db-id", "web-id"},
+            expected_uuid=TARGET_UUID,
+        )
+    with pytest.raises(SafetyError, match="UUID"):
+        validate_network_inspect(
+            {**evidence, "labels": {**evidence["labels"], "com.autostock.target-uuid": "wrong"}},
+            target_container_ids={"db-id", "web-id"},
+            expected_uuid=TARGET_UUID,
+        )
 
 
 def test_example_event_window_is_explicitly_pinned():

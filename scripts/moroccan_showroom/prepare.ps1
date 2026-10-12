@@ -43,32 +43,41 @@ function Invoke-Compose([string[]]$Arguments) {
     }
 }
 
+function Invoke-IsolationContract([string]$Mode, [object]$Evidence, [string]$TargetUuid, [string[]]$TargetContainerIds = @()) {
+    $evidencePath = Join-Path ([System.IO.Path]::GetTempPath()) ("autostock-morocco-" + [guid]::NewGuid().ToString("N") + ".json")
+    try {
+        $json = ConvertTo-Json -InputObject $Evidence -Depth 30
+        [System.IO.File]::WriteAllText($evidencePath, $json, [System.Text.UTF8Encoding]::new($false))
+        $pythonArgs = @(
+            "-m", "scripts.moroccan_showroom.compose_contract",
+            "--mode", $Mode,
+            "--evidence-json", $evidencePath,
+            "--repo-root", $repoRoot,
+            "--target-uuid", $TargetUuid
+        )
+        foreach ($containerId in $TargetContainerIds) {
+            $pythonArgs += @("--target-container-id", $containerId)
+        }
+        Push-Location $repoRoot
+        try {
+            & python @pythonArgs
+            if ($LASTEXITCODE -ne 0) { throw "Moroccan $Mode isolation evidence was rejected." }
+        }
+        finally {
+            Pop-Location
+        }
+    }
+    finally {
+        if (Test-Path -LiteralPath $evidencePath) {
+            Remove-Item -LiteralPath $evidencePath -Force
+        }
+    }
+}
+
 function Assert-NewEnvironmentIsolated {
     $configJson = & docker @((Get-ComposeArgs) + @("config", "--format", "json"))
     if ($LASTEXITCODE -ne 0) { throw "Unable to validate the Moroccan Compose configuration." }
     $config = ($configJson -join [Environment]::NewLine) | ConvertFrom-Json
-    if ($config.name -ne $project) { throw "Compose project identity does not match the Moroccan target." }
-
-    $volumeNames = @($config.volumes.PSObject.Properties | ForEach-Object { $_.Value.name })
-    foreach ($volume in $expectedVolumes) {
-        if ($volume -notin $volumeNames) { throw "Expected isolated volume is missing: $volume" }
-    }
-    foreach ($volume in $legacyVolumes) {
-        if ($volume -in $volumeNames) { throw "Refusing to attach legacy Atlas volume: $volume" }
-    }
-    if ($config.services.db.ports -or $config.services.db.ports_published) {
-        throw "PostgreSQL must not publish a host port."
-    }
-    if ($config.services.web.ports[0].published -ne "8070") {
-        throw "Odoo must bind only on the isolated localhost port 8070."
-    }
-    if ($config.services.web.ports[0].host_ip -ne "127.0.0.1") {
-        throw "Odoo must bind to localhost only."
-    }
-    $mountSources = @($config.services.web.volumes | ForEach-Object { $_.source })
-    if ($mountSources -contains ".showroom") {
-        throw "The Moroccan environment must not mount the existing showroom directory."
-    }
 
     $uuidLine = Get-Content -LiteralPath $envPath | Where-Object { $_ -like "ATLAS_MOROCCO_TARGET_UUID=*" }
     if (@($uuidLine).Count -ne 1) { throw "Private target UUID is missing or duplicated." }
@@ -76,9 +85,57 @@ function Assert-NewEnvironmentIsolated {
     try { $null = [guid]::ParseExact($targetUuid, "D") }
     catch { throw "Private target UUID is malformed." }
 
+    # Send only the resource/mount contract to Python; resolved Compose config
+    # also contains passwords, so never serialize the full object to a file.
+    $serviceEvidence = @{}
+    foreach ($serviceProperty in $config.services.PSObject.Properties) {
+        $service = $serviceProperty.Value
+        $mounts = @($service.volumes | ForEach-Object {
+            @{
+                type = $_.type
+                source = $_.source
+                target = $_.target
+                read_only = [bool]$_.read_only
+            }
+        })
+        $serviceNetworks = @{}
+        foreach ($networkProperty in $service.networks.PSObject.Properties) {
+            $serviceNetworks[$networkProperty.Name] = $null
+        }
+        $ports = @($service.ports | ForEach-Object {
+            @{ host_ip = $_.host_ip; published = $_.published; target = $_.target }
+        })
+        $serviceEvidence[$serviceProperty.Name] = @{
+            volumes = $mounts
+            networks = $serviceNetworks
+            ports = $ports
+        }
+    }
+    $volumeEvidence = @{}
+    foreach ($volumeProperty in $config.volumes.PSObject.Properties) {
+        $volumeEvidence[$volumeProperty.Name] = @{ name = $volumeProperty.Value.name }
+    }
+    $networkEvidence = @{}
+    foreach ($networkProperty in $config.networks.PSObject.Properties) {
+        $networkEvidence[$networkProperty.Name] = @{
+            name = $networkProperty.Value.name
+            labels = $networkProperty.Value.labels
+        }
+    }
+    $composeEvidence = @{
+        name = $config.name
+        services = $serviceEvidence
+        volumes = $volumeEvidence
+        networks = $networkEvidence
+    }
+    Invoke-IsolationContract -Mode "config" -Evidence $composeEvidence -TargetUuid $targetUuid
+
     foreach ($volume in $expectedVolumes) {
-        $labelsJson = & docker volume inspect --format '{{json .Labels}}' $volume 2>$null
-        if ($LASTEXITCODE -eq 0) {
+        $existingVolumes = & docker volume ls --format "{{.Name}}" --filter "name=$volume"
+        if ($LASTEXITCODE -ne 0) { throw "Could not inspect Docker volumes." }
+        if ($volume -in @($existingVolumes)) {
+            $labelsJson = & docker volume inspect --format '{{json .Labels}}' $volume
+            if ($LASTEXITCODE -ne 0) { throw "Could not inspect existing volume $volume." }
             $labels = ($labelsJson -join [Environment]::NewLine) | ConvertFrom-Json
             if ($labels."com.docker.compose.project" -ne $project -or
                 $labels."com.autostock.target-uuid" -ne $targetUuid) {
@@ -86,23 +143,41 @@ function Assert-NewEnvironmentIsolated {
             }
         }
     }
-    $networkLabelsJson = & docker network inspect --format '{{json .Labels}}' $expectedNetwork 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        $networkLabels = ($networkLabelsJson -join [Environment]::NewLine) | ConvertFrom-Json
-        if ($networkLabels."com.docker.compose.project" -ne $project -or
-            $networkLabels."com.autostock.target-uuid" -ne $targetUuid) {
-            throw "Refusing to reuse an existing network with a different target identity."
-        }
-    }
+    $existingNetworks = & docker network ls --format "{{.Name}}" --filter "name=$expectedNetwork"
+    if ($LASTEXITCODE -ne 0) { throw "Could not inspect Docker networks." }
+    $networkExists = $expectedNetwork -in @($existingNetworks)
     $targetContainers = & docker ps -aq --filter "label=com.docker.compose.project=$project"
     if ($LASTEXITCODE -ne 0) { throw "Could not verify existing target containers." }
-    foreach ($containerId in @($targetContainers | Where-Object { $_ })) {
-        $labelsJson = & docker inspect --format '{{json .Config.Labels}}' $containerId
+    $targetContainerIds = @($targetContainers | Where-Object { $_ } | ForEach-Object { $_.Trim() })
+    foreach ($containerId in $targetContainerIds) {
+        $containerJson = & docker inspect $containerId
         if ($LASTEXITCODE -ne 0) { throw "Could not inspect a target container." }
-        $labels = ($labelsJson -join [Environment]::NewLine) | ConvertFrom-Json
-        if ($labels."com.autostock.target-uuid" -ne $targetUuid) {
-            throw "Refusing to reuse a target container with a different UUID."
+        $container = (($containerJson -join [Environment]::NewLine) | ConvertFrom-Json)[0]
+        $containerEvidence = @{
+            name = $container.Name
+            labels = $container.Config.Labels
+            mounts = @($container.Mounts | ForEach-Object {
+                @{ Type = $_.Type; Name = $_.Name; Source = $_.Source; Destination = $_.Destination; RW = [bool]$_.RW }
+            })
+            networks = @($container.NetworkSettings.Networks.PSObject.Properties.Name)
         }
+        Invoke-IsolationContract -Mode "container" -Evidence $containerEvidence -TargetUuid $targetUuid
+    }
+
+    if ($networkExists) {
+        $networkJson = & docker network inspect $expectedNetwork
+        if ($LASTEXITCODE -ne 0) { throw "Could not inspect the existing Moroccan network." }
+        $network = (($networkJson -join [Environment]::NewLine) | ConvertFrom-Json)[0]
+        $attachedContainerIds = @()
+        if ($network.Containers) {
+            $attachedContainerIds = @($network.Containers.PSObject.Properties.Name)
+        }
+        $networkEvidence = @{
+            name = $network.Name
+            labels = $network.Labels
+            container_ids = $attachedContainerIds
+        }
+        Invoke-IsolationContract -Mode "network" -Evidence $networkEvidence -TargetUuid $targetUuid -TargetContainerIds $targetContainerIds
     }
 
     $legacyContainer = & docker ps -a --filter "label=com.docker.compose.project=$legacyProject" --format "{{.Names}}"
@@ -138,6 +213,9 @@ switch ($Action) {
         }
         Assert-NewEnvironmentIsolated
         Invoke-Compose @("up", "--detach", "--wait", "db", "web")
+        # Verify the actual newly running mounts/network as well as the rendered
+        # Compose contract. A repeat Start follows the same fail-closed path.
+        Assert-NewEnvironmentIsolated
         Write-Host "The separate Moroccan Odoo/PostgreSQL services are running at http://127.0.0.1:8070."
         Write-Host "No database was initialized and no dataset was imported."
     }
