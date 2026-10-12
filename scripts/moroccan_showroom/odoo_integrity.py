@@ -369,7 +369,7 @@ class _FixtureAudit:
                 line.order_id != expected_order
                 or line.product_id != product
                 or line.state not in {"sale", "done"}
-                or line.product_uom != product.uom_id
+                or line.product_uom_id != product.uom_id
             ):
                 self.fail(identity, "sale line order, product, UoM, or confirmed state changed")
             self._expect_number(identity, line.product_uom_qty, line_data.quantity,
