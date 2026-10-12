@@ -84,3 +84,11 @@ The synthetic demo creates a forecast run with `source_type=synthetic_demo`, no 
 ## Production blockers
 
 No consented real-business evaluation dataset, calibrated uncertainty interval, lost-demand/stockout-censoring signal, backup/restore verification, hardened production deployment, or comprehensive independent security review is included in this development milestone.
+
+## Gate 7 Forecasts workspace
+
+The Forecasts workspace reads saved runs through `/autostock/api/v1/forecasts` and `/autostock/api/v1/forecasts/{run_id}`. Odoo performs exact-count filtering and bounded pagination in the active company's ORM context; the browser does not reconstruct counts, forecast values, coverage, evaluation metrics, or restock quantities. Detail uses the selected saved run and the existing `autostock.inventory.risk.get_risk_data` service to explain whether that exact run is currently used for restock guidance.
+
+Real completed-delivery history is available only to users with both inventory access and Sales access. Stock-only users receive synthetic examples only, with real-run counts and metadata excluded. Company and warehouse filters are validated through normal Odoo permissions and record rules; no `sudo()` is used. The screen is read-only and does not create, queue, review, or modify forecast runs or purchasing records. Synthetic Atlas showroom examples are visibly separated from operational history.
+
+The workspace explains that its input is completed fulfilled sales, not unconstrained demand; returns are separate events and do not revise delivered quantities. It displays stored holdout MAE with units and baseline context, never as an accuracy percentage. Coverage dates, heuristic ranges, stale or incomplete records, and any reason the selected run cannot inform current warehouse restock guidance are disclosed in plain language. See the [Gate 7 QA report](qa/issue-34-gate-7.md) for implementation evidence and remaining limitations.

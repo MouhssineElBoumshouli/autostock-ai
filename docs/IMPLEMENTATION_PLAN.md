@@ -1,5 +1,19 @@
 # Feature branch plan
 
+## Gate 7 — Forecasts workspace
+
+### Data and access plan
+
+- Add authenticated, read-only API endpoints for an exactly counted, server-filtered/paginated forecast-run list and exact-run detail. Validate the selected company and optional warehouse, preserve ACLs and record rules, and never use `sudo()`.
+- Keep real delivery history restricted to users who have both inventory and Sales access. A stock-only user may see only the isolated synthetic showroom examples and must not learn real-run counts or metadata.
+- Serialize saved run observations, return events, forecast points, coverage dates, evaluation facts, provenance, and review metadata. For detail, reuse the existing inventory-risk service to report whether the selected run is currently used for restock guidance; do not reproduce forecast or reorder calculations in React.
+
+### UX and verification plan
+
+- Preserve the approved AutoStock shell and readability baseline. Provide a filterable Forecasts workspace, exact-run detail, clear delivered-sales versus returns charting, a “Forecast starts” marker, an accessible method/MAE explanation, and explicit loading, empty, restricted, error, stale, insufficient-history, and synthetic states.
+- Keep the workspace read-only: no queue, review, approve, purchase, or report actions. Never translate MAE into an accuracy percentage or describe fulfilled deliveries as unconstrained demand.
+- Verify company and warehouse isolation, a catalog of more than 1,000 saved runs, detail side effects, role restrictions, API contracts, responsive browser behavior, and actual Atlas showroom evidence. Record exact commands, outcomes, screenshots, and limitations in `docs/qa/issue-34-gate-7.md`.
+
 ## Cross-phase quality requirements
 
 The [commercial-readiness charter](https://github.com/MouhssineElBoumshouli/autostock-ai/issues/7) and [premium UX acceptance criteria](https://github.com/MouhssineElBoumshouli/autostock-ai/issues/8) apply throughout all phases. They define release gates for correctness, security, operations, maintainability, usability, accessibility, and visual evidence. Phase completion does not imply commercial readiness; release status requires the full documented evidence described in issue #7.
@@ -16,6 +30,7 @@ The [commercial-readiness charter](https://github.com/MouhssineElBoumshouli/auto
 | Gate 4 (Issue #28) | Real read-only Inventory route, server-side catalog operations, product details | Odoo integration, 1,000+ product paging/search, responsive live showroom browser checks and screenshots | Approved and merged; see [Inventory QA report](qa/issue-28-gate-4.md) |
 | Gate 5 (Issue #30) | Real read-only Warehouses route, scoped stock summaries, warehouse inventory and activity | Odoo integration, child-location aggregation, 1,000+ product warehouse catalog, responsive live showroom browser checks and screenshots | Implemented on `product/warehouses-screen`, draft PR; see [Warehouses QA report](qa/issue-30-gate-5.md) |
 | Gate 6 (Issue #32) | Real read-only Suppliers route, vendor terms, current restock context and missing-supplier discovery | Odoo company/access/tier tests, large supplier/term coverage, frontend/API/browser checks and live showroom screenshots | Implemented and tested on `product/suppliers-screen`; awaiting owner review in a draft PR; see [Suppliers QA report](qa/issue-32-gate-6.md) |
+| Gate 7 (Issue #34) | Authenticated, read-only Forecasts workspace with exact run history, evaluation explanation and current guidance eligibility | Odoo company/warehouse/ACL and 1,001-run paging tests, frontend/API/browser checks and live Atlas screenshots | Implemented on `product/forecasts-screen`; local Odoo and live screenshot QA blocked by Docker Desktop engine failure; see [Gate 7 QA report](qa/issue-34-gate-7.md) |
 | P3B / P3C | Remaining Phase 3 milestones | Their own issue scope, domain tests and browser evidence | Planned; not included in Phase 3A |
 | P4 | Budget optimizer and what-if simulator | Repeatability and constraint tests | Planned |
 | P5 | Permission-aware assistant and report generator | Source-grounding and PDF rendering tests | Planned |

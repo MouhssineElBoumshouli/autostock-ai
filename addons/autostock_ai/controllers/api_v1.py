@@ -618,6 +618,64 @@ class AutoStockApiV1(http.Controller):
         }
 
     @http.route(
+        "/autostock/api/v1/forecasts",
+        type="http",
+        auth="user",
+        methods=["GET"],
+    )
+    def forecasts(self, **_kwargs):
+        return self._dispatch(self._forecasts_payload)
+
+    def _forecasts_payload(self):
+        company = self._selected_company()
+        args = request.httprequest.args
+        result = self._scoped_model("autostock.forecast.run", company).get_forecast_page(
+            query=args.get("q", ""),
+            warehouse_id=args.get("warehouse_id"),
+            horizon_days=args.get("horizon_days", "all"),
+            state=args.get("state", "all"),
+            review_status=args.get("review_status", "all"),
+            source_type=args.get("source_type", "all"),
+            page=args.get("page", 1),
+            page_size=args.get("page_size", 25),
+        )
+        return {"schema_version": 1, "company": self._company_contract(company), **result}
+
+    @http.route(
+        "/autostock/api/v1/forecasts/parts",
+        type="http",
+        auth="user",
+        methods=["GET"],
+    )
+    def forecast_parts(self, **_kwargs):
+        return self._dispatch(self._forecast_parts_payload)
+
+    def _forecast_parts_payload(self):
+        company = self._selected_company()
+        args = request.httprequest.args
+        result = self._scoped_model("autostock.forecast.run", company).get_forecast_part_page(
+            query=args.get("q", ""),
+            warehouse_id=args.get("warehouse_id"),
+            page=args.get("page", 1),
+            page_size=args.get("page_size", 12),
+        )
+        return {"schema_version": 1, "company": self._company_contract(company), **result}
+
+    @http.route(
+        "/autostock/api/v1/forecasts/<int:run_id>",
+        type="http",
+        auth="user",
+        methods=["GET"],
+    )
+    def forecast_detail(self, run_id, **_kwargs):
+        return self._dispatch(lambda: self._forecast_detail_payload(run_id))
+
+    def _forecast_detail_payload(self, run_id):
+        company = self._selected_company()
+        result = self._scoped_model("autostock.forecast.run", company).get_forecast_detail(run_id)
+        return {"schema_version": 1, "company": self._company_contract(company), **result}
+
+    @http.route(
         "/autostock/api/v1/search/products",
         type="http",
         auth="user",

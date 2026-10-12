@@ -97,7 +97,9 @@ jobs:
           set -euo pipefail
           project="autostock-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           export POSTGRES_USER=autostock_ci
-          export POSTGRES_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          # Hex characters avoid Odoo's wait-for-psql argv parser treating a
+          # URL-safe password beginning with '-' as another command-line flag.
+          export POSTGRES_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
           export POSTGRES_DB=postgres
           echo "::add-mask::$POSTGRES_PASSWORD"
 

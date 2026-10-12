@@ -1,5 +1,8 @@
 import {
   dashboardSchema,
+  forecastDetailSchema,
+  forecastPartsSchema,
+  forecastsSchema,
   inventoryDetailSchema,
   inventoryOptionsSchema,
   inventorySchema,
@@ -27,6 +30,8 @@ import {
   type SupplierTermsData,
   type SupplierGapsData,
   type ForecastData,
+  type ForecastDetailData,
+  type ForecastsData,
   type ProductSearchData,
   type ProductQuickViewData,
   type RestockData,
@@ -111,6 +116,49 @@ export const api = {
     if (warehouseId) params.set('warehouse_id', String(warehouseId))
     return get(`/autostock/api/v1/dashboard/forecast-preview?${params}`, forecastSchema, companyId).then((data) => requireCompany(companyId, data))
   },
+  forecasts: (companyId: number, filters: ForecastsRequest = {}) => {
+    const params = new URLSearchParams()
+    const values: Record<string, string | number | undefined> = {
+      q: filters.query,
+      warehouse_id: filters.warehouseId,
+      horizon_days: filters.horizonDays,
+      state: filters.state,
+      review_status: filters.reviewStatus,
+      source_type: filters.sourceType,
+      page: filters.page,
+      page_size: filters.pageSize,
+    }
+    for (const [key, value] of Object.entries(values)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
+    }
+    return get(`/autostock/api/v1/forecasts?${params}`, forecastsSchema, companyId)
+      .then((data) => requireCompany(companyId, data))
+  },
+  forecastParts: (companyId: number, filters: ForecastPartsRequest = {}) => {
+    const params = new URLSearchParams()
+    const values: Record<string, string | number | undefined> = {
+      q: filters.query,
+      warehouse_id: filters.warehouseId,
+      page: filters.page,
+      page_size: filters.pageSize,
+    }
+    for (const [key, value] of Object.entries(values)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
+    }
+    return get(`/autostock/api/v1/forecasts/parts?${params}`, forecastPartsSchema, companyId)
+      .then((data) => requireCompany(companyId, data))
+  },
+  forecastDetail: (companyId: number, runId: number) => get(
+    `/autostock/api/v1/forecasts/${runId}`,
+    forecastDetailSchema,
+    companyId,
+  ).then((data) => {
+    requireCompany(companyId, data)
+    if (data.run.id !== runId) {
+      throw new ApiError('Odoo returned details for a different forecast. Refresh the page before continuing.', 'contract')
+    }
+    return data
+  }),
   search: (companyId: number, query: string) => {
     const suffix = new URLSearchParams({ q: query }).toString()
     return get(`/autostock/api/v1/search/products?${suffix}`, searchSchema, companyId)
@@ -299,6 +347,19 @@ export type InventoryRequest = {
   pageSize?: number
 }
 
+export type ForecastsRequest = {
+  query?: string
+  warehouseId?: number
+  horizonDays?: 'all' | 7 | 30 | 60
+  state?: 'all' | 'queued' | 'running' | 'completed' | 'insufficient_history' | 'no_observed_demand' | 'failed'
+  reviewStatus?: 'all' | 'reviewed' | 'unreviewed'
+  sourceType?: 'all' | 'completed_deliveries' | 'synthetic_demo'
+  page?: number
+  pageSize?: number
+}
+
+export type ForecastPartsRequest = Pick<ForecastsRequest, 'query' | 'warehouseId' | 'page' | 'pageSize'>
+
 export type WarehouseRequest = {
   query?: string
   status?: 'all' | 'attention' | 'low_stock' | 'out_of_stock' | 'healthy' | 'no_tracked_stock'
@@ -376,6 +437,8 @@ export function friendlyError(error: unknown): string {
 export type {
   DashboardData,
   ForecastData,
+  ForecastDetailData,
+  ForecastsData,
   InventoryData,
   InventoryDetailData,
   InventoryOptions,

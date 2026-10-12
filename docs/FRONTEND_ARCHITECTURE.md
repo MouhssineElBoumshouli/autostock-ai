@@ -49,6 +49,8 @@ The API client and Zod contracts describe the live routes. Fixture-only Gate 1 a
 | `GET /autostock/api/v1/suppliers/{id}/parts` | Existing `get_inventory_page` and risk service | Paged supplied parts, stock positions, and current restock locations |
 | `GET /autostock/api/v1/suppliers/{id}/parts/{product_id}/terms` | Company-scoped `product.supplierinfo` records | Separate vendor price tiers, currencies, MOQ, lead times, dates and term scope |
 | `GET /autostock/api/v1/supplier-gaps` | Inventory catalog supplier-domain filter and existing risk service | Paged active parts without any configured supplier term |
+| `GET /autostock/api/v1/forecasts` | Company-scoped `autostock.forecast.run` search | Exact server counts, bounded paging, and run/warehouse/horizon/state/review/source filters |
+| `GET /autostock/api/v1/forecasts/{run_id}` | Exact saved forecast run, snapshot serializer, and existing `autostock.inventory.risk` service | Stored history and forecast details, provenance/evaluation explanations, and current restock eligibility |
 
 The React client must map server values for display rather than calculate stock, coverage, reorder quantities, lead time, forecast or evaluation metrics. Incomplete coverage and unavailable forecasts must be disclosed plainly.
 
@@ -76,6 +78,12 @@ Supplier parts reuse the Inventory catalog quantity logic, and current reorder l
 
 Gate 6 Odoo integration, frontend/browser checks and live showroom screenshot evidence are recorded in [`docs/qa/issue-32-gate-6.md`](qa/issue-32-gate-6.md) and [`docs/qa/screenshots/issue-32-gate-6/`](qa/screenshots/issue-32-gate-6/).
 
+## Gate 7 Forecasts workspace
+
+`/forecasts` is a server-paged view of stored forecast runs; `/forecasts/$runId` opens the exact selected run. Filters and exact totals come from Odoo. The page displays stored delivery history, separate return events, forecast horizon, company/warehouse scope, source cutoff, review state, selected method, baseline, chronological holdout length, and MAE with units. Solid historical values and a dashed future segment are separated by a labeled “Forecast starts” marker. Explanations retain the fulfilled-sales and heuristic-range limitations, and no MAE-derived accuracy percentage is shown.
+
+The frontend uses the authenticated session and Zod contracts for the two read-only endpoints. It displays server-provided access, coverage, synthetic provenance, evaluation, and current restock-guidance states. Forecast and inventory calculations stay in Odoo; no API request writes or queues a run. The `/forecasts` navigation entry routes to this workspace from the approved shell and completed live-data screens.
+
 ## Local frontend development
 
 ```powershell
@@ -84,6 +92,6 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173/`. The fixture-only Gate 1 and Gate 2 journeys can run without Odoo. To use live Dashboard, Inventory, Warehouses and Suppliers routes, run the local Odoo showroom on `127.0.0.1:8177` (or set `ODOO_PROXY_TARGET` in a local Vite environment file), then sign in with a permitted user. Gate 1 and Gate 2 fixture states can be reviewed with `?fixtureState=loading`, `?fixtureState=empty`, or `?fixtureState=error`.
+Open `http://127.0.0.1:5173/`. The fixture-only Gate 1 and Gate 2 journeys can run without Odoo. To use live Dashboard, Inventory, Warehouses, Suppliers and Forecasts routes, run the local Odoo showroom on `127.0.0.1:8177` (or set `ODOO_PROXY_TARGET` in a local Vite environment file), then sign in with a permitted user. Gate 1 and Gate 2 fixture states can be reviewed with `?fixtureState=loading`, `?fixtureState=empty`, or `?fixtureState=error`.
 
 The frontend gates are `npm run lint`, `npm run typecheck`, `npm run test:unit`, `npm run test:contract`, `npm run test:browser`, and `npm run build`. Browser journeys verify responsive fit at 1440, 1024 and 390 CSS pixels, keyboard and reduced-motion behavior, zero browser errors, and server-side catalog interactions. Fixture-only journeys explicitly assert zero `/autostock/api/` requests; live showroom smoke checks exercise the authenticated API. Screenshot evidence is kept with the corresponding gate QA report.

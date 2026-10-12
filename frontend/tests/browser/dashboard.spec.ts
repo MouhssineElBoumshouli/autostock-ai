@@ -150,6 +150,15 @@ async function installOdooContractStub(page: Page) {
         options: forecastOptions, options_limited: false, forecast: selectedForecast,
       })
     }
+    if (path.endsWith('/forecasts/parts')) {
+      return fulfillJson(route, {
+        schema_version: 1, company: company(companyId),
+        filters: { query: '', warehouse_id: false }, parts: [],
+        pagination: { page: 1, page_size: 12, has_previous: false, has_next: false },
+        warehouse_options: [], warehouse_options_limited: false, warehouse_count: 0,
+        real_history_access: true, access_note: false, read_only: true,
+      })
+    }
     if (path.endsWith('/search/products')) {
       const query = (url.searchParams.get('q') ?? '').toLowerCase()
       const results = query.includes('toyota')
@@ -428,6 +437,19 @@ test('business copy distinguishes company stock from warehouse stockouts and sho
 
 test('mobile navigation closes after a selection and product category filtering stays reachable', async ({ page }) => {
   const signals = observePage(page)
+  await page.route('**/autostock/api/v1/forecasts?**', (route) => fulfillJson(route, {
+    schema_version: 1,
+    company: company(1),
+    filters: { query: '', warehouse_id: false, horizon_days: 'all', state: 'all', review_status: 'all', source_type: 'all' },
+    runs: [],
+    pagination: { page: 1, page_size: 25, total_count: 0, total_pages: 0, has_previous: false, has_next: false },
+    warehouse_options: [],
+    warehouse_options_limited: false,
+    warehouse_count: 0,
+    real_history_access: true,
+    access_note: false,
+    read_only: true,
+  }))
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
   await page.getByRole('button', { name: 'Open navigation menu' }).click()
@@ -435,6 +457,13 @@ test('mobile navigation closes after a selection and product category filtering 
   await expect(navSheet).toBeVisible()
   await navSheet.getByRole('button', { name: 'Forecasts' }).click()
   await expect(navSheet).toBeHidden()
+  await expect(page).toHaveURL('/forecasts')
+  await expect(page.getByRole('heading', { name: 'Forecasts', exact: true })).toBeVisible()
+  await expectNoHorizontalOverflow(page, 390)
+  await page.getByRole('button', { name: 'Open navigation menu' }).click()
+  const forecastsNav = page.getByRole('dialog', { name: 'AutoStock navigation' })
+  await forecastsNav.getByRole('button', { name: 'Dashboard' }).click()
+  await expect(forecastsNav).toBeHidden()
   await expect(page.getByRole('heading', { name: 'Demand forecast' })).toBeVisible()
   await expectNoHorizontalOverflow(page, 390)
   const mobileFactsAreReadable = await page.locator('.mobile-detail > span').evaluateAll((spans) => spans.every((span) => {
