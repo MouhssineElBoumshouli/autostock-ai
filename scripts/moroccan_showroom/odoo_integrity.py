@@ -291,10 +291,18 @@ class _FixtureAudit:
             self.fail(identity, "sale identity, customer, warehouse, or confirmed state changed")
         self._expect_datetime(identity, record.date_order, effective, "business order date")
 
-        expected_lines = sorted(
-            (line.sku, line.quantity, next(p.sale_price_mad for p in self.dataset.products if p.sku == line.sku))
-            for line in order.lines
-        )
+        if open_order:
+            item = next(product for product in self.dataset.products if product.sku == order.sku)
+            expected_lines = [(order.sku, order.quantity, item.sale_price_mad)]
+        else:
+            expected_lines = sorted(
+                (
+                    line.sku,
+                    line.quantity,
+                    next(product.sale_price_mad for product in self.dataset.products if product.sku == line.sku),
+                )
+                for line in order.lines
+            )
         actual_lines = sorted(
             (
                 line.product_id.default_code,
@@ -319,13 +327,16 @@ class _FixtureAudit:
             self._expect_datetime(("open_sale_picking", f"out_{order.key}"), picking.scheduled_date,
                                   effective, "scheduled delivery date")
             moves = picking.move_ids
-            if len(moves) != len(order.lines):
+            if len(moves) != len(expected_lines):
                 self.fail(("open_sale_picking", f"out_{order.key}"), "open delivery move count changed")
             for move in moves:
-                expected_line = next((line for line in order.lines if line.sku == move.product_id.default_code), None)
+                expected_line = next(
+                    (line for line in expected_lines if line[0] == move.product_id.default_code),
+                    None,
+                )
                 if (
                     not expected_line
-                    or not self._same_number(move.product_uom_qty, expected_line.quantity, 1.0)
+                    or not self._same_number(move.product_uom_qty, expected_line[1], 1.0)
                     or move.state in {"done", "cancel"}
                 ):
                     self.fail(("open_sale_picking", f"out_{order.key}"), "open delivery product or quantity changed")
