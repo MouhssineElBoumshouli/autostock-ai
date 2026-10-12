@@ -37,7 +37,7 @@ Separately, completed or reviewed Moroccan profile runs now recheck their curren
 - Local `python -m compileall -q addons ml scripts tests`: passed.
 - Offline generator/import-plan command `python -m scripts.moroccan_showroom.cli --seed 36036`: passed; generated ledger reconciled, 6,656 identities, zero writes, dataset digest above. It did not connect to or inspect Odoo.
 - `python -m ml.evaluate ml/output/synthetic_daily_sales.csv --days 30`: completed for 6 labeled synthetic products. This checks the evaluator pipeline only; it is not a Moroccan or customer accuracy claim.
-- GitHub Actions full-suite run for the corrected PR head: **pending**. Record the final run URL and actual Python, Odoo, frontend, API-contract, browser, and build results here after CI completes.
+- GitHub Actions [full-suite run 38315149815](https://github.com/MouhssineElBoumshouli/autostock-ai/actions/runs/38315149815) on implementation commit `efd08000bbaed131ca561f9ce90dfdabce9e43cd`: **all three jobs passed**. Python CI reported **65 passed**, compileall passed, and the labeled synthetic evaluator completed for **6 products**. React lint and typecheck passed; unit tests **10 passed**, API contract tests **16 passed**, Playwright **35 passed**, and the production build passed. Odoo 19 with PostgreSQL 16 reported **74 actual test cases passed, 0 failed, 0 errors**; Odoo's broader module statistics line counted 90 test activities. The Odoo run used its unique disposable CI database and Compose project.
 - Local Moroccan showroom import, browser QA, and screenshots: **not run** by design. The showroom remains unprovisioned and unseeded.
 
 ## Remaining limitations
