@@ -604,6 +604,9 @@ class OdooMoroccoImporter:
             self._sale_order_values(order.key, order.day, customer, warehouse, line_values)
         )
         sale.action_confirm()
+        # Confirmation normalizes date_order to the current time in Odoo.
+        # Restore the fixture's business date while leaving audit create_date untouched.
+        sale.write({"date_order": _effective_utc(order.day)})
         pickings = sale.picking_ids.filtered(lambda row: row.picking_type_code == "outgoing")
         if len(pickings) != 1:
             raise OdooImportError(f"Completed sale {order.key} did not produce one outgoing picking.")
@@ -640,6 +643,7 @@ class OdooMoroccoImporter:
             self._sale_order_values(order.key, order.day, customer, warehouse, line_values)
         )
         sale.action_confirm()
+        sale.write({"date_order": _effective_utc(order.day)})
         return sale
 
     def _create_incoming(self, event, products: dict, references: dict):
@@ -864,7 +868,10 @@ class OdooMoroccoImporter:
         return profiles
 
     def _create_forecast_requests(self, dataset: Dataset, profiles: dict) -> None:
-        Forecast = self.env["autostock.forecast.run"].with_company(self.company).with_context(
+        requester = self.env.ref("base.user_admin")
+        if not requester.active:
+            raise OdooImportError("The active Odoo administrator is required to own imported forecast requests.")
+        Forecast = self.env["autostock.forecast.run"].with_user(requester).with_company(self.company).with_context(
             allowed_company_ids=[self.company.id]
         )
         for profile_data in dataset.history_profiles:

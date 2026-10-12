@@ -164,7 +164,7 @@ class TestMoroccanOdooImporter(TransactionCase):
             )
             self.assertTrue(record)
             picking = record.picking_ids.filtered(lambda row: row.picking_type_code == "outgoing").ensure_one()
-            self.assertLessEqual(record.date_order, picking.date_done)
+            self.assertEqual(fields.Datetime.to_datetime(record.date_order).date(), order.day)
             self.assertEqual(fields.Datetime.to_datetime(picking.date_done).date(), order.day)
             self.assertGreater(fields.Datetime.to_datetime(record.create_date).date(), order.day)
 
@@ -187,6 +187,8 @@ class TestMoroccanOdooImporter(TransactionCase):
             self.assertEqual(run.state, "queued")
             self.assertEqual(run.review_status, "unreviewed")
             self.assertEqual(run.demo_dataset_version, self.dataset.version)
+            self.assertEqual(run.created_by_id, self.env.ref("base.user_admin"))
+            self.assertTrue(run.created_by_id.active)
             run._process_queued_run()
             self.assertEqual(run.state, "completed", run.failure_reason)
             self.assertEqual(run.history_days, 181)
