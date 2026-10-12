@@ -2,3 +2,4 @@ numpy>=1.26,<3
 scikit-learn>=1.5,<2
 pytest>=8,<10
 lxml>=5,<7
+tzdata>=2025.2,<2027
