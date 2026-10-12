@@ -660,7 +660,6 @@ class OdooMoroccoImporter:
                 "move_ids": [
                     Command.create(
                         {
-                            "name": product.display_name,
                             "product_id": product.id,
                             "product_uom": product.uom_id.id,
                             "product_uom_qty": event.quantity,
@@ -697,7 +696,6 @@ class OdooMoroccoImporter:
                 "move_ids": [
                     Command.create(
                         {
-                            "name": product.display_name,
                             "product_id": product.id,
                             "product_uom": product.uom_id.id,
                             "product_uom_qty": event.quantity,
