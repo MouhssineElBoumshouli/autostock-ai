@@ -2,39 +2,47 @@
 
 ## Scope and safety boundary
 
-This milestone adds an Odoo 19 ORM importer and Odoo-side forecast-history provenance for the pinned `atlas-ma-2026.2` dataset. It does not start the Moroccan Compose project, initialize or seed a local Moroccan database, change the running app connection, or operate on the existing USD Atlas database, credentials, containers, or volumes.
+This review update hardens repeat-import integrity, closes stale forecast evidence, and adds an honest missing-supplier example. It does not provision or seed the local Moroccan showroom, change the app connection, or modify the existing USD Atlas showroom, its database, files, credentials, containers, or volumes. The public Apply path remains disabled behind the existing signed-backup and independent-restore evidence gate.
 
-Odoo integration coverage runs in GitHub Actions against a newly created PostgreSQL 16/Odoo 19 database within a random CI Compose project. The test transaction creates actual Odoo records and is rolled back; the workflow removes only that random project's containers and volumes. The prepared local Moroccan showroom remains unprovisioned.
+Odoo integration tests run only in GitHub Actions, against a newly created Odoo 19/PostgreSQL 16 database in a unique CI Compose project. The test transaction rolls back; the workflow removes only that CI project's containers and volumes.
 
-## Import behavior
+## Dataset and importer integrity
 
-- Validates the exact target DB name, UUID environment, company marker consistency, single-company clean first-import state, administrator access, and required installed modules before planning writes.
-- Reuses the clean database's one bootstrap `res.company`, giving it the fictional Atlas Auto Distribution identity, Morocco country, MAD currency, Marrakech city and Casablanca timezone before commercial records are created. It reuses the untouched main-company `stock.warehouse0` as Atlas Central Warehouse and adds South Service Depot, yielding exactly two warehouses.
-- Creates 150 storable automotive products, category records, 8 fictional suppliers, 18 fictional customers, two warehouses, native supplier price/MOQ/lead-time terms and 300 warehouse orderpoints.
-- Uses native Odoo stock inventory adjustments for opening balances, Sales orders and validated outbound pickings for completed deliveries, incoming pickings for receipts, the Odoo return wizard for linked returns, native internal transfer pickings, and confirmed but unshipped customer orders.
-- Restores each fixture Sales order's business `date_order` after confirmation, which normalizes that field to the current time. Odoo `create_date` and `create_uid` remain untouched.
-- Reconciles physical on-hand per product and warehouse with the deterministic ledger before completing the savepoint. Plan keys and payload hashes must be complete and unchanged for a repeat import to return a no-write result. Partial, conflicting, missing-record or dirty-target states fail closed.
-- Queues 72 forecast requests (7/30/60 days for 24 products) under an explicitly checked active Odoo administrator identity, without `sudo`. No accuracy claim is made and no forecast is auto-approved.
+- Deterministic fixture: `atlas-ma-2026.3`, seed `36036`, SHA-256 `e3a31d18253efbc61cac38310fa7d941856271d956fccd78d55096f0b7b3e508`.
+- The offline plan has 6,656 fixture identities, 150 products, 8 suppliers, 18 customers, two warehouses, 350 completed customer orders, 30 receipts, 12 linked returns, 18 transfer journeys, 20 open orders, 24 history profiles, and 298 warehouse reorder rules. The generated on-hand ledger reconciles per product/location/UoM.
+- A full existing fixture registry is now checked against current Odoo business records, not treated as proof based only on saved payload hashes. Read-only checks cover the company/currency, SKU/name/category/prices and stock settings, supplier price tiers/currency/MOQ/lead time, reorder rules, confirmed sale orders and lines, business dates, completed/open pickings and moves, return-to-delivery links, history profiles, forecast request metadata, and on-hand per warehouse.
+- Missing, canceled, changed, and unregistered fixture records fail the preview. Any ledger variance also fails closed. An unchanged repeat import remains a no-write operation and repeats the live audit immediately before returning no-op, including when given a previously generated preview.
+- Focused Odoo regressions mutate live product and supplier prices, a dated delivery move, a completed sale line, a return link, and current stock; each must fail as actual-state drift. Other regressions cover an untouched repeat/no-duplicate transaction path, a deleted registered record, and an unregistered fixture-prefixed product. Preview remains read-only.
 
-## Historical source integrity
+## Missing supplier example
 
-Product and transaction `create_date`/`create_uid` remain Odoo audit values. The importer pins only the business-effective dates of the fictional movements. Company-wide complete history is dated from 1 July 2026, when full-catalog activity begins. The 24 declared profiles have separate 181-day (13 April–10 October) histories; their requests are compared against completed Odoo delivery moves and linked returns for exact event counts, delivered/returned quantities, per-day observations and source digests. Only an exact company/product/date/dataset match in database `autostock_atlas_morocco_demo`, with matching environment/company UUID markers, can pass the existing pre-product-creation guard. This company-scope exception cannot be used for a warehouse-level forecast. Ordinary products and companies retain the original coverage and creation-date rejection. A queued run rechecks its source digest before processing, and later source changes invalidate that profile.
+`AT-MA-FLT-132` — Fuel Filter Element (Series 3) — is a slow-moving product with no supplier terms, no supplier price, no reorder policy, no historical sales, no receipts, and no customer deliveries or transfers. It has only opening inventory: 8 units at Atlas Central Warehouse and 5 at South Service Depot. The supplier-gap API test verifies zero supplier terms and no lead time, price, or suggested order. This is a supplier-information gap, not a generated purchasing recommendation.
+
+## Forecast source validity and warehouse cutover blocker
+
+The 72 imported requests remain company-wide (24 products × 7/30/60 days); they are not evidence for either warehouse. Existing restock eligibility requires an exact company/product/warehouse match, so these company-wide runs cannot support warehouse-level restock guidance. No warehouse-level history or forecasts are claimed in this milestone.
+
+**Mandatory before Moroccan showroom cutover:** implement and independently review a follow-up that creates only evidence-backed, product-and-warehouse-scoped histories and forecast runs. Cutover acceptance requires all of the following:
+
+1. Atlas Central Warehouse and South Service Depot each have at least one forecast example whose source deliveries and linked returns are independently verified for that exact product and warehouse over the declared training and holdout windows.
+2. Risk/restock results accept only a matching company, product, and warehouse. A company-wide run must never satisfy either warehouse's evidence lookup; a run for one warehouse must never appear as evidence for the other.
+3. Forecast UI and restock explanations identify the selected warehouse and withhold forecast-based guidance when qualifying history is missing or insufficient. No accuracy or reviewed-status claim is made without the corresponding evaluation and human review.
+4. Odoo integration tests cover real multi-warehouse source records, source changes, permission boundaries, and the exact-match eligibility rules before the app is switched to this database.
+
+Separately, completed or reviewed Moroccan profile runs now recheck their current source-history digest when selected as risk/replenishment evidence. A qualifying dated delivery/return-history edit makes the run ineligible as current evidence without rewriting the saved run state, forecast points, or review audit. A change to an unrelated product's history does not invalidate the profile. Tests verify both cases. This is an eligibility barrier; it does not claim that historical forecast output itself has been recalculated.
 
 ## Verification
 
-- `python -m pytest -q`: **63 passed**. Windows emitted non-fatal pytest temporary-directory cleanup warnings (`WinError 145`) after the passing run.
-- `python -m pytest -q tests/test_moroccan_showroom.py`: **25 passed**.
-- `python -m compileall -q addons ml scripts tests`: passed.
-- `python -m scripts.moroccan_showroom.cli --seed 36036`: passed as an offline plan check; **6,661** stable Odoo fixture identities, ledger reconciled, zero writes. Dataset digest remains `56c832a6e1f05b9b55127e925a2a9263b429f0767f1fc9d0ef12844f7781f839`.
-- `python -m ml.evaluate ml/output/synthetic_daily_sales.csv --days 30`: completed for **6 labeled synthetic products**. This is a pipeline check only, not a Moroccan or customer accuracy claim.
-- Frontend `lint`, `typecheck`, unit tests (**10 passed**) and API contract tests (**16 passed**): passed locally. No frontend behavior changed in this milestone.
-- Local Chromium browser suite: **35 passed**. Local production frontend build: passed. The UI was unchanged in this milestone; PR CI will rerun these checks against the committed branch.
-- GitHub Actions run [38302690664](https://github.com/MouhssineElBoumshouli/autostock-ai/actions/runs/38302690664): **67 Odoo test cases passed, 0 failed, 0 errors** while loading the isolated test database. Odoo's broader module statistics line reports 83 test activities; the final test-result line reports the actual 67 cases. The test job verified real ORM records, order business dates without audit-date changes, active forecast-request ownership and processing, stock reconciliation, and repeat-import no-op behavior.
-- The same run passed Python tests, Python compilation, labeled synthetic evaluation, frontend lint/typecheck/unit/API contract/browser checks, and the production build.
-- Local Moroccan showroom/import/browser screenshots: **not run** by design. The showroom has not been provisioned or seeded.
+- Local `python -m pytest -q`: **65 passed**. Windows emitted non-fatal pytest temporary-directory cleanup warnings (`WinError 145`) after the passing run.
+- Local `python -m compileall -q addons ml scripts tests`: passed.
+- Offline generator/import-plan command `python -m scripts.moroccan_showroom.cli --seed 36036`: passed; generated ledger reconciled, 6,656 identities, zero writes, dataset digest above. It did not connect to or inspect Odoo.
+- `python -m ml.evaluate ml/output/synthetic_daily_sales.csv --days 30`: completed for 6 labeled synthetic products. This checks the evaluator pipeline only; it is not a Moroccan or customer accuracy claim.
+- GitHub Actions full-suite run for the corrected PR head: **pending**. Record the final run URL and actual Python, Odoo, frontend, API-contract, browser, and build results here after CI completes.
+- Local Moroccan showroom import, browser QA, and screenshots: **not run** by design. The showroom remains unprovisioned and unseeded.
 
-## Remaining limits
+## Remaining limitations
 
-- The public `run_import(..., mode="apply")` path stays blocked by the existing signed-backup and independent-restore evidence gate. The private writer also rejects direct calls outside Odoo test mode, and no local Apply command is exposed in this milestone.
-- The CI integration writer runs only in its isolated disposable test database; this does not verify the prepared Windows/Docker environment or a local Odoo snapshot.
-- The synthetic records are fictional demonstrations. Forecast outputs illustrate workflow behavior and are not evidence of business forecasting accuracy.
+- Warehouse-specific forecast provenance and forecast-based restock guidance are a **mandatory blocker before Moroccan showroom cutover**; see the acceptance criteria above.
+- Public Apply stays blocked until signed-backup and independent-restore evidence are explicitly approved. No public Apply was enabled or called in this work.
+- GitHub Actions proves importer behavior in a disposable CI database only. It does not verify the prepared Windows/Docker environment or a local Odoo snapshot.
+- All generated records are fictional demonstration data. Forecasts and inventory outcomes are calculated from the imported Odoo records, but they are not evidence of real-company accuracy or commercial readiness.

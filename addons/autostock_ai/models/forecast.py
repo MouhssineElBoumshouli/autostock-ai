@@ -154,6 +154,36 @@ class AutoStockForecastRun(models.Model):
     )
     point_ids = fields.One2many("autostock.forecast.point", "run_id", readonly=True)
 
+    def _demo_source_history_is_current(self):
+        """Recheck a Moroccan profile before a saved run is used as live evidence.
+
+        Historical run values and review metadata remain immutable. A failed
+        read or changed source only closes the current-evidence path.
+        """
+        self.ensure_one()
+        profile = self.demo_history_profile_id
+        if not profile:
+            return True
+        if (
+            self.source_type != REAL_SOURCE
+            or self.company_id != profile.company_id
+            or self.product_id != profile.product_id
+            or self.demo_dataset_version != profile.dataset_version
+            or self.warehouse_id
+        ):
+            return False
+        try:
+            return profile._matches_history(
+                self.company_id,
+                self.product_id,
+                self.history_start_date,
+                self.history_end_date,
+            )
+        except (AccessError, UserError, ValidationError):
+            # Evidence is not eligible unless its current source can be read
+            # and verified through the caller's ordinary Odoo permissions.
+            return False
+
     @api.model
     def _require_inventory_access(self):
         if not self.env.user.has_group("stock.group_stock_user"):

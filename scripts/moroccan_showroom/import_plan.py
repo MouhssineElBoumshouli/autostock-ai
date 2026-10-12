@@ -78,17 +78,18 @@ def fixture_records(dataset: Dataset) -> tuple[FixtureRecord, ...]:
         add("customer", row["key"], row)
     for product in dataset.products:
         add("product", product.key, asdict(product))
-        for warehouse in dataset.warehouses:
-            add(
-                "reordering_rule",
-                f"orderpoint_{product.key}_{warehouse['key']}",
-                {
-                    "product_key": product.key,
-                    "warehouse_key": warehouse["key"],
-                    "minimum": product.reorder_minimum,
-                    "maximum": product.reorder_maximum,
-                },
-            )
+        if product.reorder_minimum is not None and product.reorder_maximum is not None:
+            for warehouse in dataset.warehouses:
+                add(
+                    "reordering_rule",
+                    f"orderpoint_{product.key}_{warehouse['key']}",
+                    {
+                        "product_key": product.key,
+                        "warehouse_key": warehouse["key"],
+                        "minimum": product.reorder_minimum,
+                        "maximum": product.reorder_maximum,
+                    },
+                )
         for index, term in enumerate(product.supplier_terms, start=1):
             for tier_index, (minimum, price) in enumerate(term.price_tiers, start=1):
                 add(

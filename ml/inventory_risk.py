@@ -46,6 +46,7 @@ def forecast_eligibility(
     today: date,
     now: datetime,
     point_dates: list[date | str] | None = None,
+    source_current: bool = True,
     freshness_days: int = FORECAST_FRESHNESS_DAYS,
 ) -> tuple[bool, str]:
     """Return whether one run can support this exact company/product/warehouse.
@@ -64,6 +65,8 @@ def forecast_eligibility(
         or int(run.get("warehouse_id") or 0) != int(warehouse_id)
     ):
         return False, "The forecast does not match the selected company, product, and warehouse."
+    if not source_current:
+        return False, "The forecast's saved history no longer matches current Odoo deliveries and returns."
     if run.get("state") != "completed":
         return False, "The forecast run is not complete."
     evaluation = run.get("evaluation_status")

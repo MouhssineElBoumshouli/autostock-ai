@@ -15,21 +15,14 @@ from zoneinfo import ZoneInfo
 
 from odoo.tools import config as odoo_config
 
-from .catalog import CATEGORIES
+from .catalog import CATEGORIES, CATEGORY_LABELS
 from .generator import Dataset, FOCUS_START, LOCAL_ZONE, canonical_json
 from .import_plan import FixtureRecord, ImportPreview, fixture_records, preview_import
+from .odoo_integrity import audit_fixture_state
 from .safety import SafetyError, TARGET_DATABASE, require_apply_approval, validate_uuid
 
 
 MOROCCO_ZONE = LOCAL_ZONE
-CATEGORY_LABELS = {
-    "filtration_engine_service": "Filters and service parts",
-    "braking": "Brakes",
-    "suspension_steering": "Suspension and steering",
-    "electrical_batteries": "Electrical and batteries",
-    "cooling_belts_drivetrain": "Cooling, belts and drivetrain",
-    "ignition_sensors_fluids": "Ignition, sensors and fluids",
-}
 SUPPORTED_MODELS = {
     "res.company",
     "product.category",
@@ -213,9 +206,14 @@ class OdooMoroccoImporter:
         for row in existing_rows:
             if row.record_model not in SUPPORTED_MODELS:
                 raise OdooImportError("The fixture registry references an unsupported Odoo model.")
-            record = self.env[row.record_model].browse(row.record_id).exists()
-            if len(record) != 1:
-                raise OdooImportError(f"Registered fixture record {row.fixture_key} is missing or ambiguous.")
+        if existing_rows:
+            audit_fixture_state(
+                self.env,
+                self.company,
+                dataset,
+                existing_rows,
+                OdooImportError,
+            )
         return plan
 
     def preview_report(self, dataset: Dataset, preview: ImportPreview) -> dict:
@@ -256,6 +254,14 @@ class OdooMoroccoImporter:
             )
         preview = preview or self.plan(dataset)
         if preview.counts["unchanged"] == len(preview.actions):
+            rows = self._registry_model.search([], order="fixture_key, id")
+            audit_fixture_state(
+                self.env,
+                self.company,
+                dataset,
+                rows,
+                OdooImportError,
+            )
             return {
                 "mode": "apply-noop",
                 "dataset_version": dataset.version,
@@ -414,24 +420,24 @@ class OdooMoroccoImporter:
         products = {}
         for item in dataset.products:
             first_cost = item.supplier_terms[0].price_tiers[0][1] if item.supplier_terms else 0
-            template = self.env["product.template"].with_company(self.company).create(
-                {
-                    "name": item.name,
-                    "default_code": item.sku,
-                    "company_id": self.company.id,
-                    "categ_id": references["categories"][item.category].id,
-                    "is_storable": True,
-                    "uom_id": unit.id,
-                    "list_price": item.sale_price_mad,
-                    "standard_price": first_cost,
-                    "sale_ok": True,
-                    "purchase_ok": True,
-                    "autostock_enabled": True,
-                    "autostock_lead_time_days": min(
-                        (term.lead_days for term in item.supplier_terms), default=7
-                    ),
-                }
-            )
+            values = {
+                "name": item.name,
+                "default_code": item.sku,
+                "company_id": self.company.id,
+                "categ_id": references["categories"][item.category].id,
+                "is_storable": True,
+                "uom_id": unit.id,
+                "list_price": item.sale_price_mad,
+                "sale_ok": True,
+                "purchase_ok": True,
+                "autostock_enabled": True,
+                "autostock_lead_time_days": min(
+                    (term.lead_days for term in item.supplier_terms), default=7
+                ),
+            }
+            if item.supplier_terms:
+                values["standard_price"] = first_cost
+            template = self.env["product.template"].with_company(self.company).create(values)
             product = template.product_variant_id
             products[item.sku] = product
             self._register("product", item.key, product)
@@ -894,6 +900,8 @@ class OdooMoroccoImporter:
             allowed_company_ids=[self.company.id]
         )
         for product_data in dataset.products:
+            if product_data.reorder_minimum is None or product_data.reorder_maximum is None:
+                continue
             product = products[product_data.sku]
             for warehouse_data in dataset.warehouses:
                 warehouse = references["warehouses"][warehouse_data["key"]]

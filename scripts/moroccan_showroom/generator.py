@@ -17,8 +17,9 @@ from zoneinfo import ZoneInfo
 
 from .catalog import CATEGORIES, CUSTOMERS, DEMAND_CLASSES, SUPPLIERS, WAREHOUSES
 
-DATASET_VERSION = "atlas-ma-2026.2"
+DATASET_VERSION = "atlas-ma-2026.3"
 DEFAULT_SEED = 36036
+MISSING_SUPPLIER_SKU = "AT-MA-FLT-132"
 FOCUS_START = date(2026, 7, 1)
 HISTORY_START = date(2026, 4, 13)
 END_DATE = date(2026, 10, 10)
@@ -55,8 +56,8 @@ class Product:
     inventory_uom: str
     sale_price_mad: int
     supplier_terms: tuple[SupplierTerm, ...]
-    reorder_minimum: int
-    reorder_maximum: int
+    reorder_minimum: int | None
+    reorder_maximum: int | None
     demand_class: str
     history_profile_key: str | None
 
@@ -202,9 +203,15 @@ def _product_catalog(seed: int) -> tuple[Product, ...]:
                     name=name,
                     inventory_uom="unit",
                     sale_price_mad=sale_price,
-                    supplier_terms=tuple(terms),
-                    reorder_minimum=(3, 5, 8, 10, 12, 18)[global_index % 6],
-                    reorder_maximum=(14, 24, 30, 36, 48, 72)[global_index % 6],
+                    supplier_terms=() if sku == MISSING_SUPPLIER_SKU else tuple(terms),
+                    reorder_minimum=(
+                        None if sku == MISSING_SUPPLIER_SKU
+                        else (3, 5, 8, 10, 12, 18)[global_index % 6]
+                    ),
+                    reorder_maximum=(
+                        None if sku == MISSING_SUPPLIER_SKU
+                        else (14, 24, 30, 36, 48, 72)[global_index % 6]
+                    ),
                     demand_class=demand_class,
                     history_profile_key=(
                         f"history_{sku.lower().replace('-', '_')}"
@@ -283,7 +290,12 @@ def _add_opening_adjustments(
         product = by_sku[sku]
         is_central = location == WAREHOUSES[0][0]
         desired_buffer = 0
-        if is_central:
+        if sku == MISSING_SUPPLIER_SKU:
+            # A visible supplier-gap example with modest, stable opening stock.
+            # It has no configured reorder policy, so the risk service cannot
+            # invent a suggested quantity for a part with no vendor terms.
+            desired_buffer = 8 if is_central else 5
+        elif is_central:
             if product_index % 10 == 0:
                 desired_buffer = 0
             elif product_index % 10 == 1:
@@ -376,6 +388,7 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
         )
 
     focus_orders = []
+    sales_candidates = [product for product in product_by_index if product.sku != MISSING_SUPPLIER_SKU]
     for order_index in range(350):
         order_key = f"SO-MA-{FOCUS_START.year}-{order_index + 1:04d}"
         day = (
@@ -391,12 +404,12 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
             if order_index == 349 and line_index in {0, 1}:
                 product = product_by_index[line_index]
             elif order_index == 349:
-                candidates = product_by_index[2:]
+                candidates = [product for product in sales_candidates if product not in product_by_index[:2]]
                 product = rng.choice(candidates)
             elif order_index < FORECAST_PROFILE_COUNT and line_index == 0:
                 product = history_products[order_index]
             else:
-                product = rng.choice(product_by_index)
+                product = rng.choice(sales_candidates)
             if order_index == 349 and line_index == 0:
                 quantity = 3
             elif order_index == 349 and line_index == 1:
@@ -424,8 +437,9 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
         focus_orders.append(order)
 
     receipts = []
+    receiptable_products = [product for product in product_by_index if product.supplier_terms]
     for index in range(30):
-        product = product_by_index[(index * 11 + 8) % len(product_by_index)]
+        product = receiptable_products[(index * 11 + 8) % len(receiptable_products)]
         day = FOCUS_START + timedelta(days=rng.randrange((END_DATE - FOCUS_START).days + 1))
         warehouse = warehouse_keys[index % len(warehouse_keys)]
         supplier_key = product.supplier_terms[index % len(product.supplier_terms)].supplier_key
@@ -474,8 +488,9 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
     movement_events.extend(returns)
 
     transfers = []
+    transferable_products = [product for product in product_by_index if product.supplier_terms]
     for index in range(18):
-        product = product_by_index[(index * 13 + 4) % len(product_by_index)]
+        product = transferable_products[(index * 13 + 4) % len(transferable_products)]
         day = FOCUS_START + timedelta(days=rng.randrange((END_DATE - FOCUS_START).days + 1))
         from_central = index % 2 == 0
         source, destination = (
@@ -498,8 +513,14 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
     movement_events.extend(transfers)
 
     open_orders = []
+    open_order_products = [
+        product for product in product_by_index[30:]
+        if product.sku != MISSING_SUPPLIER_SKU
+    ][:20]
+    if len(open_order_products) != 20:
+        raise AssertionError("The generated open-order pool must contain twenty supplier-covered products.")
     for index in range(20):
-        product = product_by_index[30 + index]
+        product = open_order_products[index]
         day = END_DATE - timedelta(days=index % 10)
         open_orders.append(
             OpenOrder(
@@ -593,6 +614,10 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
         "companies": 1,
         "warehouses": len(warehouses),
         "products": len(products),
+        "products_without_supplier_terms": sum(not product.supplier_terms for product in products),
+        "reordering_rules": sum(
+            2 for product in products if product.reorder_minimum is not None and product.reorder_maximum is not None
+        ),
         "suppliers": len(supplied),
         "customers": len(customers),
         "focus_completed_orders": focus_completed,

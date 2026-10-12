@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from odoo import fields
+from odoo import Command, fields
 from odoo.exceptions import UserError
 from odoo.tests.common import TransactionCase
 
-from scripts.moroccan_showroom.generator import FOCUS_START, generate_dataset
-from scripts.moroccan_showroom.odoo_importer import OdooMoroccoImporter, run_import
+from ml.inventory_risk import forecast_eligibility
+from scripts.moroccan_showroom.generator import FOCUS_START, MISSING_SUPPLIER_SKU, generate_dataset
+from scripts.moroccan_showroom.odoo_importer import OdooImportError, OdooMoroccoImporter, run_import
 from scripts.moroccan_showroom.safety import SafetyError
 
 
@@ -167,6 +168,271 @@ class TestMoroccanOdooImporter(TransactionCase):
             self.assertEqual(fields.Datetime.to_datetime(record.date_order).date(), order.day)
             self.assertEqual(fields.Datetime.to_datetime(picking.date_done).date(), order.day)
             self.assertGreater(fields.Datetime.to_datetime(record.create_date).date(), order.day)
+
+    def test_missing_supplier_example_is_visible_without_vendor_or_order_claims(self):
+        product = self.env["product.product"].search(
+            [("company_id", "=", self.company.id), ("default_code", "=", MISSING_SUPPLIER_SKU)],
+            limit=1,
+        )
+        self.assertTrue(product)
+        self.assertFalse(product.product_tmpl_id.seller_ids)
+        self.assertFalse(
+            self.env["sale.order.line"].search_count(
+                [("company_id", "=", self.company.id), ("product_id", "=", product.id)]
+            )
+        )
+        moves = self.env["stock.move"].search(
+            [("company_id", "=", self.company.id), ("product_id", "=", product.id), ("state", "=", "done")]
+        )
+        self.assertEqual(len(moves), 2)
+        self.assertTrue(all(move.location_id.usage == "inventory" for move in moves))
+        self.assertFalse(
+            moves.filtered(lambda move: move.location_id.usage == "supplier" or move.origin_returned_move_id)
+        )
+
+        gaps = self.env["autostock.supplier.catalog"].get_supplier_gaps(
+            query=MISSING_SUPPLIER_SKU, page=1, page_size=10
+        )
+        self.assertEqual(gaps["pagination"]["total_count"], 1)
+        row = gaps["items"][0]
+        self.assertEqual(row["sku"], MISSING_SUPPLIER_SKU)
+        self.assertEqual(row["supplier_terms_count"], 0)
+        self.assertFalse(row["lead_time_min_days"])
+        self.assertFalse(row["reorder_parts"])
+        self.assertEqual(row["reorder_locations"], [])
+        self.assertNotIn("price", row)
+
+    def test_completed_reviewed_demo_run_loses_current_evidence_after_its_history_changes(self):
+        run = self.env["autostock.forecast.run"].search(
+            [
+                ("company_id", "=", self.company.id),
+                ("demo_history_profile_id", "!=", False),
+                ("state", "=", "queued"),
+            ],
+            limit=1,
+        )
+        self.assertTrue(run)
+        run._process_queued_run()
+        run.invalidate_recordset()
+        self.assertEqual(run.state, "completed", run.failure_reason)
+        manager = self.env["res.users"].create(
+            {
+                "name": "Moroccan fixture forecast reviewer",
+                "login": f"morocco-forecast-reviewer-{self.cr.dbname}",
+                "company_id": self.company.id,
+                "company_ids": [Command.set([self.company.id])],
+                "group_ids": [
+                    Command.set(
+                        [
+                            self.env.ref("base.group_user").id,
+                            self.env.ref("stock.group_stock_manager").id,
+                            self.env.ref("sales_team.group_sale_manager").id,
+                        ]
+                    )
+                ],
+            }
+        )
+        scoped_run = run.with_user(manager).with_company(self.company).with_context(
+            allowed_company_ids=[self.company.id]
+        )
+        scoped_run.action_mark_reviewed()
+        scoped_run.invalidate_recordset()
+        reviewed_at = scoped_run.reviewed_at
+        self.assertEqual(scoped_run.review_status, "reviewed")
+        self.assertTrue(scoped_run._demo_source_history_is_current())
+
+        def eligible_with_current_source(source_current):
+            today = fields.Date.to_date(scoped_run.history_end_date) + timedelta(days=1)
+            run_snapshot = {
+                "company_id": scoped_run.company_id.id,
+                "product_id": scoped_run.product_id.id,
+                "warehouse_id": 0,
+                "source_type": scoped_run.source_type,
+                "state": scoped_run.state,
+                "evaluation_status": scoped_run.evaluation_status,
+                "review_status": scoped_run.review_status,
+                "horizon_days": int(scoped_run.horizon_days),
+                "evaluation_days": scoped_run.evaluation_days,
+                "history_days": scoped_run.history_days,
+                "nonzero_days": scoped_run.nonzero_days,
+                "history_end_date": scoped_run.history_end_date,
+                "source_cutoff": scoped_run.source_cutoff,
+            }
+            return forecast_eligibility(
+                run_snapshot,
+                company_id=scoped_run.company_id.id,
+                product_id=scoped_run.product_id.id,
+                warehouse_id=0,
+                lead_time_days=0,
+                today=today,
+                now=fields.Datetime.to_datetime(scoped_run.source_cutoff),
+                point_dates=[],
+                source_current=source_current,
+            )
+
+        current_ok, current_reason = eligible_with_current_source(
+            scoped_run._demo_source_history_is_current()
+        )
+        self.assertTrue(current_ok, current_reason)
+
+        unrelated_product = self.env["product.product"].search(
+            [
+                ("company_id", "=", self.company.id),
+                ("autostock_enabled", "=", True),
+                ("id", "!=", scoped_run.product_id.id),
+            ],
+            limit=1,
+        )
+        unrelated_move = self.env["stock.move"].search(
+            [
+                ("company_id", "=", self.company.id),
+                ("product_id", "=", unrelated_product.id),
+                ("state", "=", "done"),
+                ("sale_line_id", "!=", False),
+            ],
+            limit=1,
+        )
+        self.assertTrue(unrelated_move)
+        old_unrelated_date = unrelated_move.date
+        unrelated_move.write(
+            {"date": fields.Datetime.to_string(fields.Datetime.to_datetime(old_unrelated_date) + timedelta(days=1))}
+        )
+        self.assertTrue(scoped_run._demo_source_history_is_current())
+        unrelated_move.write({"date": old_unrelated_date})
+
+        source_move = self.env["stock.move"].search(
+            [
+                ("company_id", "=", self.company.id),
+                ("product_id", "=", scoped_run.product_id.id),
+                ("state", "=", "done"),
+                ("sale_line_id", "!=", False),
+                ("date", ">=", fields.Datetime.to_datetime(scoped_run.history_start_date)),
+            ],
+            order="date, id",
+            limit=1,
+        )
+        self.assertTrue(source_move)
+        source_move.write(
+            {"date": fields.Datetime.to_string(fields.Datetime.to_datetime(source_move.date) + timedelta(days=1))}
+        )
+        current_ok, current_reason = eligible_with_current_source(
+            scoped_run._demo_source_history_is_current()
+        )
+        self.assertFalse(current_ok)
+        self.assertIn("saved history no longer matches", current_reason)
+        self.assertEqual(scoped_run.state, "completed")
+        self.assertEqual(scoped_run.review_status, "reviewed")
+        self.assertEqual(scoped_run.reviewed_at, reviewed_at)
+
+    def test_repeat_import_detects_live_odoo_field_drift(self):
+        importer = OdooMoroccoImporter(self.env)
+        clean_preview = importer.plan(self.dataset)
+
+        product_data = self.dataset.products[0]
+        product = self.env["product.product"].search(
+            [("company_id", "=", self.company.id), ("default_code", "=", product_data.sku)],
+            limit=1,
+        )
+        original_price = product.list_price
+        product.write({"list_price": original_price + 1})
+        with self.assertRaisesRegex(OdooImportError, "Actual Odoo state drift.*sale price"):
+            importer.plan(self.dataset)
+        with self.assertRaisesRegex(OdooImportError, "Actual Odoo state drift.*sale price"):
+            importer._apply_dataset(self.dataset, clean_preview)
+        product.write({"list_price": original_price})
+
+        term = product.product_tmpl_id.seller_ids[:1]
+        original_vendor_price = term.price
+        term.write({"price": original_vendor_price + 1})
+        with self.assertRaisesRegex(OdooImportError, "Actual Odoo state drift.*vendor price"):
+            importer.plan(self.dataset)
+        term.write({"price": original_vendor_price})
+
+        focus_movement = next(
+            item for item in self.dataset.movements
+            if item.kind == "sale_delivery" and item.sku not in {row["sku"] for row in self.dataset.history_profiles}
+        )
+        move = self.env["stock.move"].browse(
+            self.env["autostock.morocco.fixture"].search(
+                [("entity", "=", "sale_delivery_move_plan"), ("fixture_key", "=", f"sale_delivery_move_plan:{focus_movement.key}")],
+                limit=1,
+            ).record_id
+        )
+        original_move_date = move.date
+        move.write({"date": fields.Datetime.to_string(fields.Datetime.to_datetime(original_move_date) + timedelta(days=1))})
+        with self.assertRaisesRegex(OdooImportError, "Actual Odoo state drift.*business movement date"):
+            importer.plan(self.dataset)
+        move.write({"date": original_move_date})
+
+        sale_line = self.env["sale.order.line"].browse(
+            self.env["autostock.morocco.fixture"].search(
+                [("entity", "=", "completed_sale_line")], limit=1
+            ).record_id
+        )
+        original_quantity = sale_line.product_uom_qty
+        sale_line.write({"product_uom_qty": original_quantity + 1})
+        with self.assertRaisesRegex(OdooImportError, "Actual Odoo state drift.*sale product, quantity"):
+            importer.plan(self.dataset)
+        sale_line.write({"product_uom_qty": original_quantity})
+
+        return_move = self.env["stock.move"].browse(
+            self.env["autostock.morocco.fixture"].search(
+                [("entity", "=", "linked_return")], limit=1
+            ).record_id
+        )
+        original_delivery = return_move.origin_returned_move_id
+        return_move.write({"origin_returned_move_id": False})
+        with self.assertRaisesRegex(OdooImportError, "Actual Odoo state drift.*return link"):
+            importer.plan(self.dataset)
+        return_move.write({"origin_returned_move_id": original_delivery.id})
+
+        self.assertEqual(importer.plan(self.dataset).counts["create"], 0)
+
+    def test_repeat_import_detects_current_stock_quant_drift(self):
+        product = self.env["product.product"].search(
+            [("company_id", "=", self.company.id), ("default_code", "=", self.dataset.products[0].sku)],
+            limit=1,
+        )
+        warehouse = self.env["stock.warehouse"].search(
+            [("company_id", "=", self.company.id), ("code", "=", self.dataset.warehouses[0]["code"])],
+            limit=1,
+        )
+        self.env["stock.quant"].with_company(self.company)._update_available_quantity(
+            product, warehouse.lot_stock_id, 1
+        )
+        with self.assertRaisesRegex(OdooImportError, "Actual Odoo state drift.*stock ledger drift"):
+            OdooMoroccoImporter(self.env).plan(self.dataset)
+
+    def test_repeat_import_detects_unregistered_fixture_prefixed_records(self):
+        self.env["product.template"].with_company(self.company).create(
+            {
+                "name": "Unregistered Moroccan fixture conflict",
+                "default_code": "AT-MA-ORPHAN-999",
+                "company_id": self.company.id,
+                "is_storable": True,
+            }
+        )
+        with self.assertRaisesRegex(OdooImportError, "unregistered or missing fixture-prefixed products"):
+            OdooMoroccoImporter(self.env).plan(self.dataset)
+
+        self.env["product.template"].create(
+            {
+                "name": "Unregistered shared fixture conflict",
+                "default_code": "AT-MA-ORPHAN-SHARED-998",
+                "company_id": False,
+                "is_storable": True,
+            }
+        )
+        with self.assertRaisesRegex(OdooImportError, "unregistered or missing fixture-prefixed products"):
+            OdooMoroccoImporter(self.env).plan(self.dataset)
+
+    def test_repeat_import_detects_missing_registered_odoo_record(self):
+        registry = self.env["autostock.morocco.fixture"].search(
+            [("entity", "=", "supplier_term")], limit=1
+        )
+        self.env[registry.record_model].browse(registry.record_id).unlink()
+        with self.assertRaisesRegex(OdooImportError, "Actual Odoo state drift.*registered Odoo record is missing"):
+            OdooMoroccoImporter(self.env).plan(self.dataset)
 
     def test_saved_7_30_60_forecasts_use_verified_delivery_moves_and_stay_unreviewed(self):
         profile = self.profile_model.search(
