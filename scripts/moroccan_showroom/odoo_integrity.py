@@ -85,8 +85,11 @@ class _FixtureAudit:
         self._reference_records()
         self._products_and_terms()
         self._orderpoints()
-        self._sales()
         self._movements()
+        # Inspect source moves and return links before their aggregate sale
+        # relationships; Odoo may update sale picking relations when a return
+        # is edited, so the source cause should be the first reported drift.
+        self._sales()
         self._history_profiles()
         self._forecast_requests()
         self._stock_ledger()
