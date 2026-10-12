@@ -12,8 +12,9 @@ Odoo integration coverage runs in GitHub Actions against a newly created Postgre
 - Reuses the clean database's one bootstrap `res.company`, giving it the fictional Atlas Auto Distribution identity, Morocco country, MAD currency, Marrakech city and Casablanca timezone before commercial records are created. It reuses the untouched main-company `stock.warehouse0` as Atlas Central Warehouse and adds South Service Depot, yielding exactly two warehouses.
 - Creates 150 storable automotive products, category records, 8 fictional suppliers, 18 fictional customers, two warehouses, native supplier price/MOQ/lead-time terms and 300 warehouse orderpoints.
 - Uses native Odoo stock inventory adjustments for opening balances, Sales orders and validated outbound pickings for completed deliveries, incoming pickings for receipts, the Odoo return wizard for linked returns, native internal transfer pickings, and confirmed but unshipped customer orders.
+- Restores each fixture Sales order's business `date_order` after confirmation, which normalizes that field to the current time. Odoo `create_date` and `create_uid` remain untouched.
 - Reconciles physical on-hand per product and warehouse with the deterministic ledger before completing the savepoint. Plan keys and payload hashes must be complete and unchanged for a repeat import to return a no-write result. Partial, conflicting, missing-record or dirty-target states fail closed.
-- Queues 72 forecast requests (7/30/60 days for 24 products), all unreviewed. No accuracy claim is made and no forecast is auto-approved.
+- Queues 72 forecast requests (7/30/60 days for 24 products) under an explicitly checked active Odoo administrator identity, without `sudo`. No accuracy claim is made and no forecast is auto-approved.
 
 ## Historical source integrity
 
@@ -28,7 +29,8 @@ Product and transaction `create_date`/`create_uid` remain Odoo audit values. The
 - `python -m ml.evaluate ml/output/synthetic_daily_sales.csv --days 30`: completed for **6 labeled synthetic products**. This is a pipeline check only, not a Moroccan or customer accuracy claim.
 - Frontend `lint`, `typecheck`, unit tests (**10 passed**) and API contract tests (**16 passed**): passed locally. No frontend behavior changed in this milestone.
 - Local Chromium browser suite: **35 passed**. Local production frontend build: passed. The UI was unchanged in this milestone; PR CI will rerun these checks against the committed branch.
-- GitHub Actions Odoo 19/PostgreSQL 16 transaction tests: **pending PR workflow**.
+- GitHub Actions run [38302690664](https://github.com/MouhssineElBoumshouli/autostock-ai/actions/runs/38302690664): **67 Odoo test cases passed, 0 failed, 0 errors** while loading the isolated test database. Odoo's broader module statistics line reports 83 test activities; the final test-result line reports the actual 67 cases. The test job verified real ORM records, order business dates without audit-date changes, active forecast-request ownership and processing, stock reconciliation, and repeat-import no-op behavior.
+- The same run passed Python tests, Python compilation, labeled synthetic evaluation, frontend lint/typecheck/unit/API contract/browser checks, and the production build.
 - Local Moroccan showroom/import/browser screenshots: **not run** by design. The showroom has not been provisioned or seeded.
 
 ## Remaining limits
