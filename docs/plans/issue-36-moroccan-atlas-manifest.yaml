@@ -1,0 +1,238 @@
+manifest_version: 1
+issue: 36
+phase: A
+status: proposal_only
+executable: false
+database_mutation_authorized: false
+description: >
+  Fictional Atlas Auto Distribution proposal. Records do not exist in Odoo
+  unless a later owner-approved migration creates them in an isolated clone.
+as_of: "2026-10-12"
+
+baseline:
+  database: autostock_showroom_demo
+  seed_version: "2026-10-10.1"
+  addon_version: "19.0.0.1.4"
+  database_size_mb_approx: 61
+  company: {id: 1, name: Atlas Auto Distribution, city: Marrakech, country: MA, currency_now: USD, currency_target: MAD, mad_active: false}
+  active_languages: [en_US]
+  user_timezone: Africa/Casablanca
+  warehouses:
+    - {id: 1, name: Atlas Central Warehouse, code: ATC, receipt: one_step, delivery: ship_only}
+    - {id: 7, name: South Service Depot, code: ASD, receipt: one_step, delivery: ship_only}
+  counts:
+    products: 64
+    distinct_skus: 64
+    suppliers: 4
+    customers: 3
+    supplier_terms: 60
+    reorder_rules: 57
+    sale_orders: 174
+    completed_pickings: 174
+    delivered_move_lines: 454
+    focus_window_delivery_moves: 240
+    focus_window_linked_orders: 96
+    products_with_delivery_history: 4
+    returns: 0
+    receipts: 0
+    internal_transfers: 0
+    open_outbound_moves: 0
+    completed_forecast_runs: 13
+    reviewed_forecast_runs: 12
+    unreviewed_forecast_runs: 1
+    products_not_reconciling_quant_ledger: 64
+  dates:
+    coverage_start: "2026-04-13"
+    move_dates: ["2026-04-13", "2026-10-09"]
+    all_sale_order_date_order: "2026-10-10"
+    all_done_picking_date_done: "2026-10-10"
+    product_create_dates: {"2026-04-13": 4, "2026-10-10": 60}
+  keep:
+    database: autostock_showroom_demo
+    postgres_volume: autostock_ai_showroom_postgres
+    filestore_volume: autostock_ai_showroom_filestore
+
+targets:
+  company: {name: Atlas Auto Distribution, country: MA, timezone: Africa/Casablanca, base_currency: MAD, decision: unresolved_pending_clone_test}
+  warehouses: {total: 2, preserve_existing_ids_names_codes_routes: true}
+  products:
+    total: 150
+    preserve: 64
+    add: 86
+    category_mix: {filtration_engine_service: 35, braking: 30, suspension_steering: 25, electrical_batteries: 25, cooling_belts_drivetrain: 20, ignition_sensors_fluids: 15}
+    languages: [en, fr, ar]
+    translations_need_human_review: true
+    fitment_claims: none
+  suppliers: {total: 8, preserve_ids: 4, add: 4, currencies_kept_separate: true}
+  customers: {total: 18, preserve_ids: 3, add: 15, no_street_phone_email_tax_id_or_login: true}
+  focus_dates: {start_inclusive: "2026-07-01", end_inclusive: "2026-10-10", days: 102, pinned: true}
+  forecast_history: {start: "2026-04-13", end_inclusive: "2026-10-10", calendar_observations: 181}
+  transactions: {new_dated_orders: 350, receipts: 30, linked_returns: 12, transfer_journeys: 18, open_reserved_orders: 20, lines_per_order: "1-5"}
+  forecasting: {minimum_history_days: 90, minimum_training_days: 28, horizons: [7, 30, 60], train_days_for_60_holdout_from_181: 121, source: validated_odoo_pipeline, auto_review_new_runs: false, accuracy_claim: none, stockout_adjustment: none}
+
+category_labels:
+  filtration_engine_service: {en: "Filters and Engine Service", fr: "Filtres et service moteur", ar: "الفلاتر وخدمة المحرك"}
+  braking: {en: "Braking", fr: "Freinage", ar: "الفرامل"}
+  suspension_steering: {en: "Suspension and Steering", fr: "Suspension et direction", ar: "التعليق والتوجيه"}
+  electrical_batteries: {en: "Electrical and Batteries", fr: "Électricité et batteries", ar: "الكهرباء والبطاريات"}
+  cooling_belts_drivetrain: {en: "Cooling, Belts and Drivetrain", fr: "Refroidissement, courroies et transmission", ar: "التبريد والسيور ونظام نقل الحركة"}
+  ignition_sensors_fluids: {en: "Ignition, Sensors and Fluids", fr: "Allumage, capteurs et fluides", ar: "الإشعال والحساسات والسوائل"}
+  translation_status: draft_for_human_review
+
+existing_product_examples:
+  - {key: existing_AT-FLT-001, id: 130, sku: AT-FLT-001, name: "Engine Oil Filter", create_date: "2026-04-13", action: preserve}
+  - {key: existing_AT-BRK-001, id: 131, sku: AT-BRK-001, name: "Front Brake Pad Set", create_date: "2026-04-13", action: preserve}
+  - {key: existing_AT-FLT-002, id: 132, sku: AT-FLT-002, name: "Engine Air Filter Element", create_date: "2026-04-13", action: preserve}
+  - {key: existing_AT-ENG-001, id: 133, sku: AT-ENG-001, name: "Iridium Spark Plug", create_date: "2026-04-13", action: preserve}
+  - {key: existing_remaining_60, count: 60, create_date: "2026-10-10", action: preserve_no_backdated_history}
+
+supplier_records:
+  - {key: legacy_supplier_41, state: retain, id: 41, name: "Atlas Parts Supply", city: unchanged_unset, contacts: none}
+  - {key: legacy_supplier_42, state: retain, id: 42, name: "North Star Components", city: unchanged_unset, contacts: none}
+  - {key: legacy_supplier_43, state: retain, id: 43, name: "Meridian Automotive Wholesale", city: unchanged_unset, contacts: none}
+  - {key: legacy_supplier_44, state: retain, id: 44, name: "Pioneer Motion Parts", city: unchanged_unset, contacts: none}
+  - {key: supplier_rifroute, state: proposed_new, fictional: true, name: "RifRoute Parts House", city: Oujda, country: MA, contacts: none}
+  - {key: supplier_casavolt, state: proposed_new, fictional: true, name: "CasaVolt Parts Desk", city: Casablanca, country: MA, contacts: none}
+  - {key: supplier_meknes_motion, state: proposed_new, fictional: true, name: "Meknes Motion Supply", city: Meknes, country: MA, contacts: none}
+  - {key: supplier_safidrive, state: proposed_new, fictional: true, name: "SafiDrive Wholesale", city: Safi, country: MA, contacts: none}
+
+customer_records:
+  - {key: legacy_customer_45, state: retain, id: 45, name: "Northside Auto Service", city: unchanged_unset, contacts: none}
+  - {key: legacy_customer_46, state: retain, id: 46, name: "Riverside Garage", city: unchanged_unset, contacts: none}
+  - {key: legacy_customer_47, state: retain, id: 47, name: "Atlas Fleet Care", city: unchanged_unset, contacts: none}
+  - {key: customer_marrakech_01, state: new, fictional: true, name: "Atelier Al Amal", city: Marrakech, country: MA}
+  - {key: customer_marrakech_02, state: new, fictional: true, name: "Garage Bab Doukkala", city: Marrakech, country: MA}
+  - {key: customer_casablanca_01, state: new, fictional: true, name: "Casa Ligne Auto Service", city: Casablanca, country: MA}
+  - {key: customer_casablanca_02, state: new, fictional: true, name: "Anfa Fleet Workshop", city: Casablanca, country: MA}
+  - {key: customer_agadir_01, state: new, fictional: true, name: "Garage Souss Motor", city: Agadir, country: MA}
+  - {key: customer_agadir_02, state: new, fictional: true, name: "Atelier Oued Souss", city: Agadir, country: MA}
+  - {key: customer_fes_01, state: new, fictional: true, name: "Atelier Saiss Route", city: Fes, country: MA}
+  - {key: customer_fes_02, state: new, fictional: true, name: "Garage Cedre Mecanique", city: Fes, country: MA}
+  - {key: customer_rabat_01, state: new, fictional: true, name: "Rabat Atelier Urbain", city: Rabat, country: MA}
+  - {key: customer_rabat_02, state: new, fictional: true, name: "Bouregreg Fleet Services", city: Rabat, country: MA}
+  - {key: customer_tangier_01, state: new, fictional: true, name: "Garage Detroit du Nord", city: Tangier, country: MA}
+  - {key: customer_oujda_01, state: new, fictional: true, name: "Atelier Rif Orient", city: Oujda, country: MA}
+  - {key: customer_safi_01, state: new, fictional: true, name: "Garage Safi Horizon", city: Safi, country: MA}
+  - {key: customer_meknes_01, state: new, fictional: true, name: "Depot Meknes Motor", city: Meknes, country: MA}
+  - {key: customer_kenitra_01, state: new, fictional: true, name: "Kenitra Auto Comptoir", city: Kenitra, country: MA}
+
+products:
+  - key: existing_AT-FLT-001
+    state: retain
+    id: 130
+    sku: AT-FLT-001
+    names: {en: "Engine Oil Filter", fr: "Filtre à huile moteur", ar: "فلتر زيت المحرك"}
+    translation_review: pending
+    prices: preserve_until_currency_review
+    fitment: none
+    oem_reference: null
+  - key: new_AT-MA-FLT-101
+    state: proposal_only
+    fictional: true
+    sku: AT-MA-FLT-101
+    category: filtration_engine_service
+    names: {en: "Engine Oil Filter Element", fr: "Élément de filtre à huile moteur", ar: "عنصر فلتر زيت المحرك"}
+    aliases: {en: [oil filter, engine filter], fr: [filtre à huile, filtre moteur], ar: [فلتر زيت, فلتر المحرك]}
+    translation_review: pending
+    inventory_uom: unit
+    simulated_create_date: "2026-04-13"
+    illustrative_sale_price: {amount: 95, currency: MAD, tax_basis: unverified}
+    supplier: {key: supplier_rifroute, code: RR-OIL-101, lead_days: 6, moq: 6, moq_uom: unit, currency: MAD, tiers: [{min_qty: 1, unit_price: 62}, {min_qty: 24, unit_price: 56}]}
+    reorder: {minimum: 10, maximum: 48, uom: unit}
+    fitment: none
+    oem_reference: null
+  - key: new_AT-MA-BRK-101
+    state: proposal_only
+    fictional: true
+    sku: AT-MA-BRK-101
+    category: braking
+    names: {en: "Front Brake Pad Set", fr: "Jeu de plaquettes de frein avant", ar: "طقم بطانات الفرامل الأمامية"}
+    aliases: {en: [brake pads, front pads], fr: [plaquettes de frein, plaquettes avant], ar: [بطانات الفرامل, بطانات أمامية]}
+    translation_review: pending
+    inventory_uom: unit
+    packaging: one pad set sold as one unit
+    simulated_create_date: "2026-04-13"
+    illustrative_sale_price: {amount: 690, currency: MAD, tax_basis: unverified}
+    supplier: {key: supplier_meknes_motion, code: MMS-BP-214, lead_days: 8, moq: 2, moq_uom: unit, currency: MAD, tiers: [{min_qty: 1, unit_price: 425}, {min_qty: 10, unit_price: 398}]}
+    reorder: {minimum: 8, maximum: 36, uom: unit}
+    fitment: none
+    oem_reference: null
+  - key: new_AT-MA-BAT-101
+    state: proposal_only
+    fictional: true
+    sku: AT-MA-BAT-101
+    category: electrical_batteries
+    names: {en: "Starter Battery 12 V 70 Ah", fr: "Batterie de démarrage 12 V 70 Ah", ar: "بطارية تشغيل 12 فولت 70 أمبير ساعة"}
+    aliases: {en: [starter battery, 12 V battery], fr: [batterie de démarrage, batterie 12 V], ar: [بطارية تشغيل, بطارية 12 فولت]}
+    translation_review: pending
+    inventory_uom: unit
+    simulated_create_date: "2026-04-13"
+    illustrative_sale_price: {amount: 1350, currency: MAD, tax_basis: unverified}
+    supplier: {key: supplier_casavolt, code: CV-BAT-070, lead_days: 4, moq: 1, moq_uom: unit, currency: MAD, tiers: [{min_qty: 1, unit_price: 930}, {min_qty: 8, unit_price: 885}]}
+    reorder: {minimum: 3, maximum: 14, uom: unit}
+    fitment: none
+    oem_reference: null
+  - key: new_AT-MA-SUS-101
+    state: proposal_only
+    fictional: true
+    sku: AT-MA-SUS-101
+    category: suspension_steering
+    names: {en: "Front Stabilizer Link", fr: "Biellette de barre stabilisatrice avant", ar: "وصلة قضيب التوازن الأمامي"}
+    aliases: {en: [stabilizer link, sway bar link], fr: [biellette stabilisatrice, barre stabilisatrice], ar: [وصلة التوازن, قضيب التوازن]}
+    translation_review: pending
+    inventory_uom: unit
+    simulated_create_date: "2026-04-13"
+    illustrative_sale_price: {amount: 245, currency: MAD, tax_basis: unverified}
+    supplier: {key: supplier_safidrive, code: SD-SL-02, lead_days: 9, moq: 4, moq_uom: unit, currency: MAD, tiers: [{min_qty: 4, unit_price: 142}, {min_qty: 20, unit_price: 130}]}
+    reorder: {minimum: 8, maximum: 30, uom: unit}
+    fitment: none
+    oem_reference: null
+  - key: new_AT-MA-FLD-101
+    state: proposal_only
+    fictional: true
+    sku: AT-MA-FLD-101
+    category: ignition_sensors_fluids
+    names: {en: "Long-life Coolant, 5 L", fr: "Liquide de refroidissement longue durée, 5 L", ar: "سائل تبريد طويل الأمد، 5 لتر"}
+    aliases: {en: [coolant, 5 litre coolant], fr: [liquide de refroidissement, antigel], ar: [سائل تبريد, مانع التجمد]}
+    translation_review: pending
+    inventory_uom: unit
+    packaging: one 5 L bottle sold as one unit
+    simulated_create_date: "2026-04-13"
+    illustrative_sale_price: {amount: 145, currency: MAD, tax_basis: unverified}
+    supplier_terms: []
+    supplier_price: unavailable
+    reorder: null
+    fitment: none
+    oem_reference: null
+
+transactions:
+  - {key: opening_filter_20260701, date: "2026-07-01", kind: inventory_adjustment, source_model: stock.quant, workflow: native_inventory_apply, resulting_model: stock.move, sku: AT-MA-FLT-101, from: inventory_adjustment, to: ATC, qty: 24, uom: unit, state: done}
+  - {key: sale_filter_20260706, date: "2026-07-06", kind: sale_delivery, order: SO-ATLAS-FIXTURE-20260706-001, customer: legacy_customer_45, order_time_local: "10:00", picking: OUT-ATLAS-FIXTURE-20260706-001, done_local: "14:00", move: MOVE-ATLAS-FIXTURE-20260706-001-01, sale_line: LINE-ATLAS-FIXTURE-20260706-001-01, source: ATC, destination: customer, sku: AT-MA-FLT-101, qty: 5, uom: unit}
+  - {key: receipt_filter_20260712, date: "2026-07-12", kind: vendor_receipt, purchase_order: omitted_purchase_uninstalled, supplier: supplier_rifroute, picking: IN-ATLAS-FIXTURE-20260712-001, done_local: "13:00", move: MOVE-ATLAS-FIXTURE-20260712-001-01, source: supplier, destination: ATC, sku: AT-MA-FLT-101, qty: 12, uom: unit}
+  - {key: sale_filter_20260720, date: "2026-07-20", kind: sale_delivery, order: SO-ATLAS-FIXTURE-20260720-001, customer: customer_marrakech_01, order_time_local: "10:00", picking: OUT-ATLAS-FIXTURE-20260720-001, done_local: "16:00", move: MOVE-ATLAS-FIXTURE-20260720-001-01, sale_line: LINE-ATLAS-FIXTURE-20260720-001-01, source: ATC, destination: customer, sku: AT-MA-FLT-101, qty: 7, uom: unit}
+  - {key: return_filter_20260803, date: "2026-08-03", kind: customer_return, workflow: stock.return.picking, return: RET-ATLAS-FIXTURE-20260803-001, original_move: MOVE-ATLAS-FIXTURE-20260720-001-01, source: customer, destination: ATC, sku: AT-MA-FLT-101, qty: 2, uom: unit, forecast_return_observation: true}
+  - {key: transfer_filter_20260909, date: "2026-09-09", kind: internal_transfer, journey: TRANSFER-ATLAS-FIXTURE-20260909-001, picking_type: internal, route: direct_existing_stock_locations, source: ATC, destination: ASD, sku: AT-MA-FLT-101, qty: 6, uom: unit, forecast_demand: false}
+  - {key: reservation_filter_20261008, date: "2026-10-08", kind: confirmed_unshipped_order, order: SO-ATLAS-FIXTURE-20261008-001, customer: customer_casablanca_01, picking: OUT-ATLAS-FIXTURE-20261008-001, picking_state: assigned, qty_reserved: 3, qty_done: 0, sku: AT-MA-FLT-101, uom: unit, central_on_hand: 20, central_reserved: 3, central_available: 17, south_on_hand: 6}
+  - {key: opening_brake_20260701, date: "2026-07-01", kind: inventory_adjustment, source_model: stock.quant, workflow: native_inventory_apply, resulting_model: stock.move, sku: AT-MA-BRK-101, from: inventory_adjustment, to: ATC, qty: 4, uom: unit}
+  - {key: sale_brake_20260730, date: "2026-07-30", kind: sale_delivery, order: SO-ATLAS-FIXTURE-20260730-001, customer: legacy_customer_46, order_time_local: "10:00", picking: OUT-ATLAS-FIXTURE-20260730-001, done_local: "15:00", source: ATC, destination: customer, sku: AT-MA-BRK-101, qty: 4, uom: unit}
+  - {key: stockout_brake_20260805, date: "2026-08-05", kind: confirmed_unfulfilled_order, order: SO-ATLAS-FIXTURE-20260805-001, customer: customer_agadir_01, order_state: sale, picking_state: waiting_or_confirmed, qty_ordered: 5, qty_done: 0, stock_on_hand: 0, interpretation: not_a_completed_delivery_or_lost_sale}
+  - {key: receipt_brake_20260810, date: "2026-08-10", kind: vendor_receipt, purchase_order: omitted_purchase_uninstalled, supplier: supplier_meknes_motion, picking: IN-ATLAS-FIXTURE-20260810-001, done_local: "12:00", source: supplier, destination: ATC, sku: AT-MA-BRK-101, qty: 24, uom: unit}
+  - {key: sale_brake_20260812, date: "2026-08-12", kind: sale_delivery, order: SO-ATLAS-FIXTURE-20260812-001, customer: customer_agadir_01, order_time_local: "10:00", picking: OUT-ATLAS-FIXTURE-20260812-001, done_local: "15:00", source: ATC, destination: customer, sku: AT-MA-BRK-101, qty: 5, uom: unit}
+
+seed_controls:
+  proposed_version: issue36-phase-a-v1
+  allowed_database_name: autostock_showroom_demo
+  dates_from_manifest: true
+  uses_today: false
+  default_mode: dry_run
+  explicit_apply_required: true
+  startup_seeding: false
+  existing_product_key: company_id_and_default_code
+  existing_partner_key: reviewed_ids_and_external_keys
+  new_record_key: stable_external_id_per_model
+  sale_order_key: client_order_ref
+  picking_key: origin_and_external_id
+  conflict: abort_without_writes
+  completed_event_policy: never_edit_in_place
+  stock_source: inventory_adjustment_and_validated_moves
+  raw_sql_writes: forbidden
