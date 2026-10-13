@@ -31,6 +31,12 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q addons ml scripts tests
 
+      - name: Check Moroccan PowerShell Status without starting Docker services
+        shell: pwsh
+        run: |
+          ./scripts/moroccan_showroom/prepare.ps1 -Action Prepare
+          ./scripts/moroccan_showroom/prepare.ps1 -Action Status
+
       - name: Evaluate the labeled synthetic fixture
         run: |
           python scripts/generate_synthetic_sales.py

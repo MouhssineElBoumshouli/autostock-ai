@@ -102,9 +102,15 @@ function Assert-NewEnvironmentIsolated {
         foreach ($networkProperty in $service.networks.PSObject.Properties) {
             $serviceNetworks[$networkProperty.Name] = $null
         }
-        $ports = @($service.ports | ForEach-Object {
-            @{ host_ip = $_.host_ip; published = $_.published; target = $_.target }
-        })
+        # Compose omits ports for PostgreSQL. Do not pipe $null into
+        # ForEach-Object: PowerShell would create a fake empty port entry.
+        $ports = @()
+        if ($null -ne $service.ports) {
+            $ports = @($service.ports | ForEach-Object {
+                if ($null -eq $_) { throw "Malformed Compose port entry." }
+                @{ host_ip = $_.host_ip; published = $_.published; target = $_.target }
+            })
+        }
         $serviceEvidence[$serviceProperty.Name] = @{
             volumes = $mounts
             networks = $serviceNetworks
