@@ -125,7 +125,7 @@ echo "Creating database and filestore backup artifacts."
 docker compose --project-name "$source_project" exec -T db \
     pg_dump -U "$postgres_user" -Fc "$database" > "$dump_path"
 
-docker run --rm --entrypoint sh \
+docker run --rm --user root --entrypoint sh \
     --volume "${source_odoo_volume}:/data:ro" \
     --volume "${artifact_dir}:/backup" \
     "$image" \
