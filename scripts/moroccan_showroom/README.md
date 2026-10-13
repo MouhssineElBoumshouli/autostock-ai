@@ -40,6 +40,12 @@ The generated movement plan includes native opening adjustments and checks nonne
 
 Odoo audit dates and users are left to Odoo; business-effective dates are pinned fictional event dates. The importer verifies all 30 history profiles against actual Odoo moves before queuing 90 unreviewed runs (30 profiles × 7/30/60-day horizons). CI integration tests exercise the warehouse profiles against completed Odoo delivery and linked return records. No local forecast request or review status has been created for this milestone.
 
+## Backup and restore proof
+
+Issue #46 adds a separate restore-proof layer before any local import. The CI proof performs a real PostgreSQL dump/restore and matching Odoo filestore archive/restore in disposable Docker resources, then checks the Odoo marker/module/table plus attachment and full filestore hashes. See [the QA note](../../docs/qa/issue-46-backup-restore.md).
+
+This is only proof that the mechanism works. It does **not** authorize or perform a backup, restore, initialization, import, or app switch on the owner's local Moroccan target. Public Apply remains disabled until a separately approved local target backup and independent restore are verified.
+
 ## Safety limits
 
 - The source database and volumes are explicit denylist entries. The setup never clones, mounts, starts, stops, or connects to them.

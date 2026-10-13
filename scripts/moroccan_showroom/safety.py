@@ -110,6 +110,13 @@ def backup_manifest_signature(manifest: dict, signing_key: bytes) -> str:
     payload = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hmac.new(signing_key, payload, hashlib.sha256).hexdigest()
 
+def validate_backup_manifest_signature(manifest: dict, signing_key: bytes) -> None:
+    """Require the manifest HMAC to match before trusting its contents."""
+    signature = manifest.get("signature_hmac_sha256", "")
+    expected_signature = backup_manifest_signature(manifest, signing_key)
+    if not isinstance(signature, str) or not hmac.compare_digest(signature, expected_signature):
+        raise SafetyError("Backup manifest signature is invalid.")
+
 
 def validate_backup_manifest_integrity(
     manifest: dict,
@@ -142,10 +149,7 @@ def validate_backup_manifest_integrity(
         value = manifest.get(key, "")
         if not re.fullmatch(r"[a-f0-9]{64}", value):
             raise SafetyError(f"Backup manifest field {key} must be a SHA-256 digest.")
-    signature = manifest.get("signature_hmac_sha256", "")
-    expected_signature = backup_manifest_signature(manifest, signing_key)
-    if not hmac.compare_digest(signature, expected_signature):
-        raise SafetyError("Backup manifest signature is invalid.")
+    validate_backup_manifest_signature(manifest, signing_key)
     for prefix in ("database", "filestore"):
         path = manifest.get(f"{prefix}_path")
         size = manifest.get(f"{prefix}_size_bytes")

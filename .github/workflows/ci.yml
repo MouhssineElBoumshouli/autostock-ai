@@ -128,3 +128,21 @@ jobs:
             --stop-after-init \
             --without-demo=true \
             --log-level=test
+
+  moroccan-restore-proof:
+    name: Moroccan backup restore proof
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Pull Odoo and PostgreSQL from the public Docker image cache
+        run: |
+          docker pull mirror.gcr.io/library/postgres:16
+          docker tag mirror.gcr.io/library/postgres:16 postgres:16
+          docker pull mirror.gcr.io/library/odoo:19.0-20260926
+          docker tag mirror.gcr.io/library/odoo:19.0-20260926 odoo:19.0
+
+      - name: Run real disposable database and filestore restore proof
+        shell: bash
+        run: bash scripts/moroccan_showroom/ci_restore_proof.sh
