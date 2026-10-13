@@ -53,12 +53,16 @@ Commands and results are updated before the draft PR is opened. CI integration t
 | Frontend unit/API contract tests | Passed: 10 unit tests and 16 contract tests. |
 | Playwright | Passed: 36 tests, including responsive Forecasts, warehouse current/stale disclosure, existing Dashboard/Inventory/Warehouses/Suppliers journeys, keyboard and reduced-motion checks. |
 | Frontend production build | Passed: `npm run build`. |
-| Odoo 19/PostgreSQL 16 integration tests | Pending GitHub Actions. Local database intentionally not started. |
+| Odoo 19/PostgreSQL 16 integration tests | Passed in GitHub Actions run #126 at code commit `3f50de92fd62fdd7f50d343fb94e9f8be8c301b5`: 76 actual Odoo test cases passed with 0 failures and 0 errors. The broader Odoo stats line reports 92 test events; that is not the test-case count. The job used only its disposable CI database. |
 | Live Atlas browser check/screenshots | Not run by design; the existing showroom must remain untouched and unswitched. |
+
+The completed CI run also passed the Python and React frontend jobs. A follow-up documentation-only commit records those results and does not change application or test code.
 
 ## Required Odoo integration coverage
 
 The new disposable-database tests cover actual completed outgoing sale moves, linked native returns and their original delivery warehouse; all six independently scoped profiles; all 18 warehouse forecast runs across 7/30/60 horizons; exact source and daily digest checks; manager review; exact-warehouse risk selection; rejection of company-wide/other-warehouse candidates; user/company/warehouse access; current-source invalidation after a completed/reviewed run; preserved points and review audit; and forecast staleness under the unchanged 14-day rule. A separate pure policy assertion checks the example as-of 13 October and verifies that the same evidence is rejected on 27 October; it does not monkeypatch or freeze Odoo's runtime clock.
+
+The final Odoo run verified that the staleness regression selects a company-wide profile explicitly, warehouse history assertions use the same completed-sale and internal-to-customer source criteria as the forecast engine, and the manager/warehouse regression binds its model and performs the source-drift check before creating a foreign-company fixture.
 
 ## Remaining limitations
 
