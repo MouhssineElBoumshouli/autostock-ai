@@ -52,7 +52,7 @@ for path in sorted(p for p in root.rglob("*") if p.is_file()):
     h.update(path.relative_to(root).as_posix().encode()+b"\\0")
     h.update(hashlib.sha256(path.read_bytes()).digest())
 print(h.hexdigest())' \
-        "/data/.local/share/Odoo/filestore/$database"
+        "/data/filestore/$database"
 }
 
 file_hash_in_volume() {
@@ -61,7 +61,7 @@ file_hash_in_volume() {
     docker run --rm --entrypoint sha256sum \
         --volume "${volume}:/data:ro" \
         "$image" \
-        "/data/.local/share/Odoo/filestore/$database/$relative_path" \
+        "/data/filestore/$database/$relative_path" \
         | awk '{print $1}'
 }
 
@@ -134,6 +134,10 @@ docker run --rm --entrypoint sh \
 database_sha256="$(sha256sum "$dump_path" | awk '{print $1}')"
 filestore_sha256="$(sha256sum "$filestore_path" | awk '{print $1}')"
 
+# The artifacts used for restore must still be the exact bytes we just hashed.
+test "$(sha256sum "$dump_path" | awk '{print $1}')" = "$database_sha256"
+test "$(sha256sum "$filestore_path" | awk '{print $1}')" = "$filestore_sha256"
+
 python3 - "$manifest_path" "$database" "$target_uuid" "$database_sha256" "$filestore_sha256" <<'PY'
 import json
 import os
@@ -177,6 +181,9 @@ for _ in $(seq 1 30); do
     sleep 1
 done
 docker exec "$restore_db_container" pg_isready -U "$postgres_user" -d postgres >/dev/null
+
+restore_port_bindings="$(docker inspect --format '{{json .HostConfig.PortBindings}}' "$restore_db_container")"
+test "$restore_port_bindings" = "null" -o "$restore_port_bindings" = "{}"
 
 docker exec "$restore_db_container" createdb -U "$postgres_user" "$database"
 docker exec -i "$restore_db_container" \
