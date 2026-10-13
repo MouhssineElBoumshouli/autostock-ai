@@ -1,4 +1,5 @@
 param(
+    [Parameter(Mandatory = $true)]
     [ValidateSet("Initialize", "BackupRestore")]
     [string]$Action
 )
@@ -342,6 +343,9 @@ function Backup-And-Restore {
         Write-Host "Removing only the disposable restore verifier."
         Remove-RestoreResources $restoreContainer $restorePostgresVolume $restoreFilestoreVolume $restoreNetwork
         Assert-RestoreResourcesRemoved $restoreContainer $restorePostgresVolume $restoreFilestoreVolume $restoreNetwork
+
+        # Re-check the exact artifacts after they were used for restore.
+        Invoke-Python $validateArgs
 
         $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
         $evidence = @{
