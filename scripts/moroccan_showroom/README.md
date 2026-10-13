@@ -46,6 +46,21 @@ Issue #46 adds a separate restore-proof layer before any local import. The CI pr
 
 This is only proof that the mechanism works. It does **not** authorize or perform a backup, restore, initialization, import, or app switch on the owner's local Moroccan target. Public Apply remains disabled until a separately approved local target backup and independent restore are verified.
 
+## Local target verification
+
+After explicit owner approval for the local verification stage, use the separate operator script. Do **not** rerun Prepare; it must reuse the existing ignored `.env.atlas-morocco` and target UUID.
+
+From the repository root in PowerShell:
+
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\moroccan_showroom\local_target.ps1 -Action Initialize
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\moroccan_showroom\local_target.ps1 -Action BackupRestore
+
+`Initialize` starts only the isolated Moroccan Compose project, creates the clean Odoo database if it does not already exist, installs AutoStock, stamps the exact prepared target UUID into the database/company markers, and creates one small technical attachment used only to prove filestore recovery. It refuses a mismatched marker, multiple companies, an existing dataset version, or existing fixture records.
+
+`BackupRestore` stops only the Moroccan Odoo web service while taking a consistent database + filestore backup, signs and validates the backup manifest, restores the exact artifacts into unique no-port verifier resources, compares the restored module/marker/table/attachment/file-tree evidence, removes only those verifier resources, and restarts the Moroccan web service. The private dump, filestore archive, manifest, signing key, and restore evidence stay under the ignored `.showroom/morocco-backups/` directory. Do not share or commit them.
+
+These actions still do **not** import `atlas-ma-2026.4`, enable public Apply, modify the old USD Atlas showroom, or switch the application connection. Dataset import remains a separate approval gate.
+
 ## Safety limits
 
 - The source database and volumes are explicit denylist entries. The setup never clones, mounts, starts, stops, or connects to them.
