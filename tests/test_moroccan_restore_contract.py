@@ -1,22 +1,25 @@
 import pytest
 
 from scripts.moroccan_showroom.restore_contract import validate_restore_evidence
-from scripts.moroccan_showroom.safety import SafetyError
+from scripts.moroccan_showroom.safety import SafetyError, backup_manifest_signature
 
 
 TARGET_UUID = "0f7d8360-4aa6-48dc-9337-6438f704db12"
 DIGEST_A = "a" * 64
 DIGEST_B = "b" * 64
 DIGEST_C = "c" * 64
+SIGNING_KEY = b"restore-contract-test-key-32-bytes!!"
 
 
 def backup_manifest():
-    return {
+    manifest = {
         "database_name": "autostock_atlas_morocco_demo",
         "target_uuid": TARGET_UUID,
         "database_sha256": DIGEST_A,
         "filestore_sha256": DIGEST_B,
     }
+    manifest["signature_hmac_sha256"] = backup_manifest_signature(manifest, SIGNING_KEY)
+    return manifest
 
 
 def restore_evidence():
@@ -49,6 +52,7 @@ def test_restore_evidence_accepts_isolated_matching_restore():
     validate_restore_evidence(
         restore_evidence(),
         backup_manifest=backup_manifest(),
+        backup_signing_key=SIGNING_KEY,
         expected_uuid=TARGET_UUID,
     )
 
@@ -83,6 +87,7 @@ def test_restore_evidence_fails_closed(field, value):
         validate_restore_evidence(
             evidence,
             backup_manifest=backup_manifest(),
+            backup_signing_key=SIGNING_KEY,
             expected_uuid=TARGET_UUID,
         )
 
@@ -94,6 +99,7 @@ def test_restore_evidence_rejects_wrong_or_malformed_backup_binding():
         validate_restore_evidence(
             restore_evidence(),
             backup_manifest=manifest,
+            backup_signing_key=SIGNING_KEY,
             expected_uuid=TARGET_UUID,
         )
 
@@ -103,5 +109,21 @@ def test_restore_evidence_rejects_wrong_or_malformed_backup_binding():
         validate_restore_evidence(
             restore_evidence(),
             backup_manifest=manifest,
+            backup_signing_key=SIGNING_KEY,
+            expected_uuid=TARGET_UUID,
+        )
+
+
+def test_restore_evidence_rejects_manifest_tampered_after_signing():
+    manifest = backup_manifest()
+    manifest["database_sha256"] = "d" * 64
+    evidence = restore_evidence()
+    evidence["backup_database_sha256"] = manifest["database_sha256"]
+
+    with pytest.raises(SafetyError, match="signature"):
+        validate_restore_evidence(
+            evidence,
+            backup_manifest=manifest,
+            backup_signing_key=SIGNING_KEY,
             expected_uuid=TARGET_UUID,
         )
