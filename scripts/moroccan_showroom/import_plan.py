@@ -149,6 +149,7 @@ def fixture_records(dataset: Dataset) -> tuple[FixtureRecord, ...]:
                 {
                     "profile_key": profile["key"],
                     "dataset_version": profile["dataset_version"],
+                    "warehouse_key": profile["warehouse_key"],
                     "history_start": profile["business_effective_start"],
                     "history_end": profile["business_effective_end"],
                     "horizon_days": horizon,

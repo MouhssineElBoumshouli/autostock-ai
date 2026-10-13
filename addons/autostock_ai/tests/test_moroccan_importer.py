@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 
 from odoo import Command, fields
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 from odoo.tests.common import TransactionCase
 
 from ml.inventory_risk import forecast_eligibility
@@ -29,6 +29,34 @@ class TestMoroccanOdooImporter(TransactionCase):
         model = self.env[model_name]
         domain = [("company_id", "=", self.company.id)] if "company_id" in model._fields else []
         return model.search_count(domain)
+
+    def _warehouse(self, key):
+        warehouse_data = next(row for row in self.dataset.warehouses if row["key"] == key)
+        return self.env["stock.warehouse"].search(
+            [("company_id", "=", self.company.id), ("code", "=", warehouse_data["code"])],
+            limit=1,
+        )
+
+    def _review_manager(self):
+        manager = self.env["res.users"].create(
+            {
+                "name": "Moroccan warehouse forecast reviewer",
+                "login": f"morocco-warehouse-reviewer-{self.cr.dbname}",
+                "company_id": self.company.id,
+                "company_ids": [Command.set([self.company.id])],
+                "group_ids": [
+                    Command.set(
+                        [
+                            self.env.ref("base.group_user").id,
+                            self.env.ref("stock.group_stock_manager").id,
+                            self.env.ref("sales_team.group_sale_manager").id,
+                        ]
+                    )
+                ],
+            }
+        )
+        self.assertFalse(manager.with_user(manager).has_group("base.group_system"))
+        return manager
 
     def test_import_uses_native_company_products_partners_and_workflows(self):
         company = self.company
@@ -128,16 +156,57 @@ class TestMoroccanOdooImporter(TransactionCase):
         Warehouse = self.env["stock.warehouse"]
         for profile_data in self.dataset.history_profiles:
             product = Product.search([("default_code", "=", profile_data["sku"])], limit=1)
+            warehouse = (
+                Warehouse.search(
+                    [
+                        ("company_id", "=", self.company.id),
+                        ("code", "=", next(
+                            row["code"] for row in self.dataset.warehouses
+                            if row["key"] == profile_data["warehouse_key"]
+                        )),
+                    ],
+                    limit=1,
+                )
+                if profile_data["warehouse_key"]
+                else self.env["stock.warehouse"]
+            )
             profile = self.profile_model.search(
-                [("company_id", "=", self.company.id), ("product_id", "=", product.id)], limit=1
+                [
+                    ("company_id", "=", self.company.id),
+                    ("product_id", "=", product.id),
+                    ("warehouse_id", "=", warehouse.id if warehouse else False),
+                    ("profile_key", "=", profile_data["key"]),
+                ],
+                limit=1,
             )
             self.assertTrue(profile)
             self.assertEqual(profile.state, "verified")
+            self.assertEqual(profile.warehouse_id, warehouse)
             product_created = fields.Datetime.to_datetime(product.create_date).date()
             self.assertGreater(product_created, profile.history_start_date)
             self.assertEqual(profile.calendar_days, 181)
             self.assertEqual(profile.source_move_count, profile.source_delivery_count + profile.source_return_count)
             self.assertEqual(len(profile.source_move_sha256), 64)
+            summary = self.env["autostock.forecast.run"]._morocco_source_summary(
+                self.company,
+                product,
+                profile.history_start_date,
+                profile.history_end_date,
+                fields.Datetime.now(),
+                warehouse=warehouse,
+                dataset_version=self.dataset.version,
+            )
+            self.assertEqual(summary["scope"]["warehouse_id"], warehouse.id if warehouse else False)
+            self.assertEqual(summary["source_move_count"], profile.source_move_count)
+            self.assertEqual(summary["return_count"], profile.source_return_count)
+            self.assertEqual(summary["delivery_count"], profile.source_delivery_count)
+            self.assertTrue(profile._matches_history(
+                self.company,
+                product,
+                profile.history_start_date,
+                profile.history_end_date,
+                warehouse=warehouse,
+            ))
 
         expected = {
             (row["sku"], row["warehouse_key"]): row["on_hand"]
@@ -518,7 +587,12 @@ class TestMoroccanOdooImporter(TransactionCase):
 
     def test_saved_7_30_60_forecasts_use_verified_delivery_moves_and_stay_unreviewed(self):
         profile = self.profile_model.search(
-            [("company_id", "=", self.company.id)], order="product_id", limit=1
+            [
+                ("company_id", "=", self.company.id),
+                ("warehouse_id", "=", False),
+            ],
+            order="product_id",
+            limit=1,
         )
         self.assertTrue(profile)
         Forecast = self.env["autostock.forecast.run"]
@@ -560,23 +634,422 @@ class TestMoroccanOdooImporter(TransactionCase):
                 history_start=profile.history_start_date,
                 history_end=profile.history_end_date,
             )
-        warehouse = self.env["stock.warehouse"].search(
-            [("company_id", "=", self.company.id)], limit=1
+        scoped_product_ids = self.profile_model.search(
+            [("company_id", "=", self.company.id), ("warehouse_id", "!=", False)]
+        ).mapped("product_id").ids
+        company_only_profile = self.profile_model.search(
+            [
+                ("company_id", "=", self.company.id),
+                ("warehouse_id", "=", False),
+                ("product_id", "not in", scoped_product_ids),
+            ],
+            limit=1,
         )
+        self.assertTrue(company_only_profile)
+        warehouse = self._warehouse("warehouse_atlas_central")
         with self.assertRaisesRegex(UserError, "before this product existed in Odoo"):
             Forecast.request_forecast(
-                profile.product_id.id,
+                company_only_profile.product_id.id,
                 horizon_days=7,
-                history_start=profile.history_start_date,
-                history_end=profile.history_end_date,
+                history_start=company_only_profile.history_start_date,
+                history_end=company_only_profile.history_end_date,
                 warehouse_id=warehouse.id,
             )
+
+    def test_warehouse_profiles_are_verified_against_exact_native_deliveries_and_returns(self):
+        profiles = self.profile_model.search(
+            [("company_id", "=", self.company.id), ("warehouse_id", "!=", False)],
+            order="product_id, warehouse_id",
+        )
+        self.assertEqual(len(profiles), self.dataset.counts["warehouse_history_profiles"])
+        expected_profiles = {row["key"]: row for row in self.dataset.history_profiles}
+        expected_warehouses = {
+            self._warehouse("warehouse_atlas_central").id,
+            self._warehouse("warehouse_south_depot").id,
+        }
+        self.assertEqual(set(profiles.mapped("warehouse_id").ids), expected_warehouses)
+
+        Forecast = self.env["autostock.forecast.run"]
+        StockMove = self.env["stock.move"]
+        observations_by_scope = {}
+        for profile in profiles:
+            planned = expected_profiles[profile.profile_key]
+            warehouse = profile.warehouse_id
+            product = profile.product_id
+            self.assertEqual(profile.company_id, self.company)
+            self.assertEqual(profile.dataset_version, self.dataset.version)
+            self.assertEqual(profile.history_start_date, date(2026, 4, 13))
+            self.assertEqual(profile.history_end_date, date(2026, 10, 10))
+            self.assertEqual(profile.calendar_days, 181)
+
+            summary = Forecast._morocco_source_summary(
+                self.company,
+                product,
+                profile.history_start_date,
+                profile.history_end_date,
+                fields.Datetime.now(),
+                warehouse=warehouse,
+                dataset_version=self.dataset.version,
+            )
+            self.assertEqual(summary["scope"]["company_id"], self.company.id)
+            self.assertEqual(summary["scope"]["product_id"], product.id)
+            self.assertEqual(summary["scope"]["warehouse_id"], warehouse.id)
+            self.assertEqual(summary["scope"]["dataset_version"], self.dataset.version)
+            self.assertEqual(summary["source_move_count"], planned["planned_qualifying_move_count"])
+            self.assertEqual(summary["delivery_count"], planned["planned_delivery_move_count"])
+            self.assertEqual(summary["return_count"], planned["planned_return_move_count"])
+            self.assertTrue(
+                profile._matches_history(
+                    self.company,
+                    product,
+                    profile.history_start_date,
+                    profile.history_end_date,
+                    warehouse=warehouse,
+                )
+            )
+
+            start_utc = fields.Datetime.to_datetime(profile.history_start_date)
+            end_utc = start_utc + timedelta(days=profile.calendar_days)
+            deliveries = StockMove.search(
+                [
+                    ("company_id", "=", self.company.id),
+                    ("product_id", "=", product.id),
+                    ("state", "=", "done"),
+                    ("sale_line_id", "!=", False),
+                    ("picking_id.picking_type_id.warehouse_id", "=", warehouse.id),
+                    ("date", ">=", start_utc),
+                    ("date", "<", end_utc),
+                ],
+                order="date, id",
+            )
+            self.assertEqual(len(deliveries), profile.source_delivery_count)
+            self.assertTrue(
+                all(
+                    move.picking_id.picking_type_id.warehouse_id == warehouse
+                    and move.location_id.usage == "internal"
+                    and move.location_dest_id.usage == "customer"
+                    for move in deliveries
+                )
+            )
+            returns = StockMove.search(
+                [
+                    ("company_id", "=", self.company.id),
+                    ("product_id", "=", product.id),
+                    ("state", "=", "done"),
+                    ("origin_returned_move_id", "in", deliveries.ids),
+                    ("date", ">=", start_utc),
+                    ("date", "<", end_utc),
+                ],
+                order="date, id",
+            )
+            self.assertEqual(len(returns), profile.source_return_count)
+            for returned in returns:
+                original = returned.origin_returned_move_id
+                self.assertIn(original, deliveries)
+                self.assertEqual(original.picking_id.picking_type_id.warehouse_id, warehouse)
+                self.assertEqual(returned.location_id.usage, "customer")
+                self.assertEqual(returned.location_dest_id, original.location_id)
+                self.assertEqual(returned.picking_id.state, "done")
+
+            runs = Forecast.search(
+                [
+                    ("company_id", "=", self.company.id),
+                    ("product_id", "=", product.id),
+                    ("warehouse_id", "=", warehouse.id),
+                    ("demo_history_profile_id", "=", profile.id),
+                ],
+                order="horizon_days, id",
+            )
+            self.assertEqual({int(run.horizon_days) for run in runs}, {7, 30, 60})
+            self.assertEqual(len(runs), 3)
+            for run in runs:
+                self.assertEqual(run.company_id, self.company)
+                self.assertEqual(run.product_id, product)
+                self.assertEqual(run.warehouse_id, warehouse)
+                self.assertEqual(run.demo_dataset_version, self.dataset.version)
+                self.assertEqual(run.review_status, "unreviewed")
+                run._process_queued_run()
+                run.invalidate_recordset()
+                self.assertEqual(run.state, "completed", run.failure_reason)
+                self.assertIn(
+                    run.evaluation_status,
+                    {"evaluated", "baseline_only", "intermittent_baseline"},
+                )
+                self.assertEqual(run.history_days, 181)
+                self.assertEqual(run.nonzero_days, planned["planned_nonzero_delivery_days"])
+                self.assertEqual(len(run.observation_ids), 181)
+                self.assertEqual(len(run.point_ids), int(run.horizon_days))
+                self.assertEqual(run.point_ids[0].day, date(2026, 10, 11))
+                self.assertEqual(
+                    run.point_ids[-1].day,
+                    date(2026, 10, 10) + timedelta(days=int(run.horizon_days)),
+                )
+                self.assertEqual(run.review_status, "unreviewed")
+                self.assertIn("Fictional Moroccan showroom fixture", run.data_provenance)
+                if int(run.horizon_days) == 30:
+                    observations_by_scope[(product.default_code, warehouse.id)] = run.source_snapshot_sha256
+
+        for sku in {row["sku"] for row in expected_profiles.values() if row["warehouse_key"]}:
+            atc = self._warehouse("warehouse_atlas_central")
+            asd = self._warehouse("warehouse_south_depot")
+            self.assertNotEqual(
+                observations_by_scope[(sku, atc.id)],
+                observations_by_scope[(sku, asd.id)],
+            )
+
+    def test_manager_review_and_risk_evidence_remain_warehouse_exact_and_freshness_bounded(self):
+        sku = "AT-MA-FLT-101"
+        product = self.env["product.product"].search(
+            [("company_id", "=", self.company.id), ("default_code", "=", sku)], limit=1
+        )
+        atc = self._warehouse("warehouse_atlas_central")
+        asd = self._warehouse("warehouse_south_depot")
+        company_profile = self.profile_model.search(
+            [
+                ("company_id", "=", self.company.id),
+                ("product_id", "=", product.id),
+                ("warehouse_id", "=", False),
+            ],
+            limit=1,
+        )
+        profiles = {
+            False: company_profile,
+            atc.id: self.profile_model.search(
+                [("company_id", "=", self.company.id), ("product_id", "=", product.id), ("warehouse_id", "=", atc.id)],
+                limit=1,
+            ),
+            asd.id: self.profile_model.search(
+                [("company_id", "=", self.company.id), ("product_id", "=", product.id), ("warehouse_id", "=", asd.id)],
+                limit=1,
+            ),
+        }
+        self.assertTrue(all(profiles.values()))
+
+        Forecast = self.env["autostock.forecast.run"]
+        runs = {}
+        for warehouse_id, profile in profiles.items():
+            run = Forecast.search(
+                [
+                    ("company_id", "=", self.company.id),
+                    ("product_id", "=", product.id),
+                    ("warehouse_id", "=", warehouse_id or False),
+                    ("demo_history_profile_id", "=", profile.id),
+                    ("horizon_days", "=", "30"),
+                ],
+                limit=1,
+            )
+            self.assertTrue(run)
+            if run.state == "queued":
+                run._process_queued_run()
+                run.invalidate_recordset()
+            self.assertEqual(run.state, "completed", run.failure_reason)
+            runs[warehouse_id] = run
+
+        manager = self._review_manager()
+        for run in runs.values():
+            run.with_user(manager).with_company(self.company).with_context(
+                allowed_company_ids=[self.company.id]
+            ).action_mark_reviewed()
+            run.invalidate_recordset()
+            self.assertEqual(run.review_status, "reviewed")
+            self.assertEqual(run.reviewed_by_id, manager)
+            self.assertTrue(run.reviewed_at)
+            self.assertTrue(run._demo_source_history_is_current())
+
+        manager_forecast_service = Forecast.with_user(manager).with_company(self.company).with_context(
+            allowed_company_ids=[self.company.id]
+        )
+        current_detail = manager_forecast_service.get_forecast_detail(runs[atc.id].id)
+        self.assertEqual(current_detail["run"]["warehouse_id"], atc.id)
+        self.assertTrue(current_detail["history_coverage"]["verified_demo_profile_scoped"])
+        self.assertTrue(current_detail["history_coverage"]["verified_demo_profile_current"])
+
+        Risk = self.env["autostock.inventory.risk"].with_user(manager).with_company(self.company).with_context(
+            allowed_company_ids=[self.company.id]
+        )
+        today = fields.Date.today()
+        now = fields.Datetime.to_datetime(fields.Datetime.now())
+        for warehouse in (atc, asd):
+            exact_run = runs[warehouse.id].with_user(manager).with_company(self.company).with_context(
+                allowed_company_ids=[self.company.id]
+            )
+            selected, points, usable, reason = Risk._forecast_for_pair(
+                exact_run,
+                company=self.company,
+                product=product,
+                warehouse=warehouse,
+                lead_days=7,
+                today=today,
+                now=now,
+            )
+            history_age = (today - exact_run.history_end_date).days
+            history_fresh = 0 <= history_age <= 14
+            cutoff_age = now - fields.Datetime.to_datetime(exact_run.source_cutoff)
+            point_days = set(points.mapped("day"))
+            required_days = {
+                today + timedelta(days=offset)
+                for offset in range(1, 8)
+            }
+            result_window_covered = required_days <= point_days
+            should_be_usable = (
+                history_fresh
+                and timedelta(0) <= cutoff_age <= timedelta(days=14)
+                and result_window_covered
+            )
+            self.assertEqual(usable, should_be_usable, reason)
+            self.assertEqual(selected, exact_run)
+            if usable:
+                self.assertEqual(selected.warehouse_id, warehouse)
+                self.assertEqual(len(points), 30)
+            else:
+                self.assertFalse(usable)
+
+            risk_snapshot = Risk.get_risk_data(
+                warehouse_id=warehouse.id,
+                product_id=product.id,
+            )
+            risk_row = next(
+                row for row in risk_snapshot["rows"]
+                if row["product_id"] == product.id and row["warehouse_id"] == warehouse.id
+            )
+            self.assertEqual(risk_row["forecast"]["run_id"], exact_run.id)
+            self.assertEqual(risk_row["forecast"]["used"], should_be_usable)
+
+            wrong_runs = Forecast.browse(
+                [runs[False].id, runs[asd.id if warehouse == atc else atc.id].id]
+            ).with_user(manager).with_company(self.company).with_context(
+                allowed_company_ids=[self.company.id]
+            )
+            wrong, _wrong_points, wrong_usable, mismatch_reason = Risk._forecast_for_pair(
+                wrong_runs,
+                company=self.company,
+                product=product,
+                warehouse=warehouse,
+                lead_days=7,
+                today=today,
+                now=now,
+            )
+            self.assertFalse(wrong_usable)
+            self.assertIn("does not match the selected company, product, and warehouse", mismatch_reason)
+            self.assertIn(wrong, wrong_runs)
+
+        # The freshness gate is evaluated as of the signed dataset's stated
+        # 13 October 2026 review point. It uses the real policy function and
+        # explicit example instants; it does not freeze or patch Odoo's clock.
+        reviewed_run = runs[atc.id]
+        example_as_of = {
+            "company_id": self.company.id,
+            "product_id": product.id,
+            "warehouse_id": atc.id,
+            "source_type": reviewed_run.source_type,
+            "state": "completed",
+            "evaluation_status": reviewed_run.evaluation_status,
+            "review_status": "reviewed",
+            "horizon_days": 30,
+            "evaluation_days": 30,
+            "history_days": 181,
+            "nonzero_days": 7,
+            "history_end_date": date(2026, 10, 10),
+            "source_cutoff": datetime(2026, 10, 13, 12, 0),
+        }
+        example_points = [date(2026, 10, 10) + timedelta(days=offset) for offset in range(1, 31)]
+        eligible_at_as_of, reason_at_as_of = forecast_eligibility(
+            example_as_of,
+            company_id=self.company.id,
+            product_id=product.id,
+            warehouse_id=atc.id,
+            lead_time_days=7,
+            today=date(2026, 10, 13),
+            now=datetime(2026, 10, 13, 12, 1),
+            point_dates=example_points,
+            source_current=True,
+        )
+        self.assertTrue(eligible_at_as_of, reason_at_as_of)
+        stale_example, stale_reason = forecast_eligibility(
+            example_as_of,
+            company_id=self.company.id,
+            product_id=product.id,
+            warehouse_id=atc.id,
+            lead_time_days=7,
+            today=date(2026, 10, 27),
+            now=datetime(2026, 10, 27, 12, 1),
+            point_dates=example_points,
+            source_current=True,
+        )
+        self.assertFalse(stale_example)
+        self.assertIn("older than 14 days", stale_reason)
+
+        foreign_company = self.env["res.company"].create(
+            {"name": "Separate company for warehouse scope test"}
+        )
+        foreign_warehouse = self.env["stock.warehouse"].create(
+            {
+                "name": "Foreign warehouse scope test",
+                "code": f"X{foreign_company.id:04d}"[-5:],
+                "company_id": foreign_company.id,
+            }
+        )
+        scoped_forecast = Forecast.with_user(manager).with_company(self.company).with_context(
+            allowed_company_ids=[self.company.id]
+        )
+        with self.assertRaises(AccessError):
+            scoped_forecast._scoped_warehouse(foreign_warehouse.id, self.company)
+        visible_profiles = self.profile_model.with_user(manager).with_context(
+            allowed_company_ids=[self.company.id]
+        ).search([])
+        self.assertTrue(visible_profiles)
+        self.assertTrue(all(profile.company_id == self.company for profile in visible_profiles))
+
+        points_before_change = [(point.day, point.units) for point in runs[asd.id].point_ids]
+        review_time_before_change = runs[asd.id].reviewed_at
+        source_move = StockMove.search(
+            [
+                ("company_id", "=", self.company.id),
+                ("product_id", "=", product.id),
+                ("state", "=", "done"),
+                ("sale_line_id", "!=", False),
+                ("picking_id.picking_type_id.warehouse_id", "=", asd.id),
+                ("date", ">=", fields.Datetime.to_datetime(runs[asd.id].history_start_date)),
+            ],
+            order="date, id",
+            limit=1,
+        )
+        self.assertTrue(source_move)
+        source_move.write(
+            {"date": fields.Datetime.to_string(fields.Datetime.to_datetime(source_move.date) + timedelta(days=1))}
+        )
+        self.assertFalse(runs[asd.id]._demo_source_history_is_current())
+        stale_selected, _stale_points, stale_usable, stale_reason = Risk._forecast_for_pair(
+            runs[asd.id].with_user(manager).with_company(self.company).with_context(
+                allowed_company_ids=[self.company.id]
+            ),
+            company=self.company,
+            product=product,
+            warehouse=asd,
+            lead_days=7,
+            today=today,
+            now=now,
+        )
+        self.assertEqual(stale_selected, runs[asd.id])
+        self.assertFalse(stale_usable)
+        self.assertIn("saved history no longer matches", stale_reason)
+        self.assertEqual([(point.day, point.units) for point in runs[asd.id].point_ids], points_before_change)
+        self.assertEqual(runs[asd.id].review_status, "reviewed")
+        self.assertEqual(runs[asd.id].reviewed_by_id, manager)
+        self.assertEqual(runs[asd.id].reviewed_at, review_time_before_change)
+        stale_detail = manager_forecast_service.get_forecast_detail(runs[asd.id].id)
+        self.assertTrue(stale_detail["history_coverage"]["verified_demo_profile_scoped"])
+        self.assertFalse(stale_detail["history_coverage"]["verified_demo_profile_current"])
+        self.assertFalse(stale_detail["restock_guidance"]["usable"])
+        with self.assertRaisesRegex(OdooImportError, "Actual Odoo state drift"):
+            OdooMoroccoImporter(self.env).plan(self.dataset)
 
     def test_history_revision_invalidates_a_queued_profile_snapshot(self):
         run = self.env["autostock.forecast.run"].search(
             [
                 ("company_id", "=", self.company.id),
                 ("demo_history_profile_id", "!=", False),
+                ("warehouse_id", "=", False),
                 ("state", "=", "queued"),
             ],
             limit=1,

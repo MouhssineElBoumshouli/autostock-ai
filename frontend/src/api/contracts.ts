@@ -365,6 +365,8 @@ export const forecastDetailSchema = z.object({
     configured: z.boolean(),
     complete_from: z.union([z.string(), z.literal(false)]),
     run_starts_within_coverage: z.boolean(),
+    verified_demo_profile_scoped: z.boolean(),
+    verified_demo_profile_current: z.boolean(),
   }),
   restock_guidance: z.object({
     status: z.enum(['eligible', 'not_eligible', 'not_applicable', 'restricted', 'unavailable']),

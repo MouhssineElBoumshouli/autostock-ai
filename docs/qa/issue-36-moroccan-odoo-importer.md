@@ -4,6 +4,8 @@
 
 This review update hardens repeat-import integrity, closes stale forecast evidence, and adds an honest missing-supplier example. It does not provision or seed the local Moroccan showroom, change the app connection, or modify the existing USD Atlas showroom, its database, files, credentials, containers, or volumes. The public Apply path remains disabled behind the existing signed-backup and independent-restore evidence gate.
 
+This report records the Issue #36/PR #41 dataset and checks as they ran on that implementation. Issue #42 proposes deterministic warehouse-specific histories as dataset version `atlas-ma-2026.4`; its current branch evidence is tracked separately in [the Issue #42 QA report](issue-42-warehouse-forecasts.md). The historic PR #41 counts and digest below are intentionally retained as that run's record.
+
 Odoo integration tests run only in GitHub Actions, against a newly created Odoo 19/PostgreSQL 16 database in a unique CI Compose project. The test transaction rolls back; the workflow removes only that CI project's containers and volumes.
 
 ## Dataset and importer integrity
@@ -27,9 +29,9 @@ Odoo integration tests run only in GitHub Actions, against a newly created Odoo 
 
 ## Forecast source validity and warehouse cutover blocker
 
-The 72 imported requests remain company-wide (24 products × 7/30/60 days); they are not evidence for either warehouse. Existing restock eligibility requires an exact company/product/warehouse match, so these company-wide runs cannot support warehouse-level restock guidance. No warehouse-level history or forecasts are claimed in this milestone.
+At this report's PR #41 baseline, the 72 imported requests were company-wide (24 products × 7/30/60 days); they were not evidence for either warehouse. Existing restock eligibility requires an exact company/product/warehouse match, so those company-wide runs could not support warehouse-level restock guidance. No warehouse-level history or forecasts were claimed in that milestone.
 
-**Mandatory before Moroccan showroom cutover:** implement and independently review a follow-up that creates only evidence-backed, product-and-warehouse-scoped histories and forecast runs. Cutover acceptance requires all of the following:
+**Still mandatory before Moroccan showroom cutover:** implement and independently review evidence-backed, product-and-warehouse-scoped histories and forecast runs. Issue #42 is the active implementation for that gate; its code and test claims are not complete until its Odoo 19 CI run passes and the PR is independently reviewed. Cutover acceptance requires all of the following:
 
 1. Atlas Central Warehouse and South Service Depot each have at least one forecast example whose source deliveries and linked returns are independently verified for that exact product and warehouse over the declared training and holdout windows.
 2. Risk/restock results accept only a matching company, product, and warehouse. A company-wide run must never satisfy either warehouse's evidence lookup; a run for one warehouse must never appear as evidence for the other.

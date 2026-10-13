@@ -133,7 +133,13 @@ function detailData(id: number, reviewStatus: 'reviewed' | 'unreviewed' = 'revie
         return { day: date, units: 2 + (index % 3), lower_heuristic: 1, upper_heuristic: 4 + index / 10 }
       }) : [{ day: '2026-09-27', units: 2, lower_heuristic: 1, upper_heuristic: 3 }],
     },
-    history_coverage: { configured: true, complete_from: '2026-02-01', run_starts_within_coverage: true },
+    history_coverage: {
+      configured: false,
+      complete_from: false,
+      run_starts_within_coverage: false,
+      verified_demo_profile_scoped: id === 19 || id === 20,
+      verified_demo_profile_current: id === 20,
+    },
     restock_guidance: { status: 'not_eligible', usable: false, reason: 'Current guidance selected a different saved run.' },
     read_only: true,
   }
@@ -263,6 +269,20 @@ test('forecast detail leads with an approximate saved estimate and keeps evidenc
   await expect(page).toHaveURL(/\/forecasts\?view=history/)
   expect(writes).toEqual([])
   expect(browserErrors).toEqual([])
+})
+
+test('warehouse-scoped demo evidence explains current and stale source provenance', async ({ page }) => {
+  await installForecastRoutes(page)
+  await page.goto('/forecasts/20')
+  const current = page.locator('.forecast-evaluation-disclosure')
+  await current.locator('summary').click()
+  await expect(current).toContainText('This fictional source profile is verified for Atlas Central Warehouse')
+
+  await page.goto('/forecasts/19')
+  const stale = page.locator('.forecast-evaluation-disclosure')
+  await stale.locator('summary').click()
+  await expect(stale).toContainText('current Odoo delivery and return history no longer matches')
+  await expect(stale).toContainText('Restock guidance is unavailable.')
 })
 
 test('detail never invents a total or future wording for a one-day partial run', async ({ page }) => {

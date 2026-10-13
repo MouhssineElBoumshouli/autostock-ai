@@ -284,7 +284,7 @@ class OdooMoroccoImporter:
             products = self._create_products(dataset, references)
             self._apply_opening_inventory(dataset, products, references)
             self._apply_business_activity(dataset, products, references)
-            profiles = self._create_history_profiles(dataset, products)
+            profiles = self._create_history_profiles(dataset, products, references)
             self._create_forecast_requests(dataset, profiles)
             self._create_reordering_rules(dataset, products, references)
             self._reconcile_stock(dataset, products, references)
@@ -804,7 +804,7 @@ class OdooMoroccoImporter:
             if move.picking_id and move.picking_id.state == "done":
                 move.picking_id.write({"date_done": effective})
 
-    def _create_history_profiles(self, dataset: Dataset, products: dict) -> dict:
+    def _create_history_profiles(self, dataset: Dataset, products: dict, references: dict) -> dict:
         profiles = {}
         forecast_model = self.env["autostock.forecast.run"].with_company(self.company).with_context(
             allowed_company_ids=[self.company.id]
@@ -817,15 +817,30 @@ class OdooMoroccoImporter:
             daily_by_profile[row["profile_key"]].append(row)
         for planned in dataset.history_profiles:
             product = products[planned["sku"]]
+            warehouse = (
+                references["warehouses"][planned["warehouse_key"]]
+                if planned["warehouse_key"]
+                else False
+            )
             summary = forecast_model._morocco_source_summary(
                 self.company,
                 product,
                 planned["business_effective_start"],
                 planned["business_effective_end"],
                 datetime.now(timezone.utc).replace(tzinfo=None),
+                warehouse=warehouse,
+                dataset_version=dataset.version,
             )
             if (
-                summary["source_move_count"] != planned["planned_qualifying_move_count"]
+                summary["scope"] != {
+                    "company_id": self.company.id,
+                    "product_id": product.id,
+                    "warehouse_id": warehouse.id if warehouse else False,
+                    "dataset_version": dataset.version,
+                    "history_start_date": planned["business_effective_start"].isoformat(),
+                    "history_end_date": planned["business_effective_end"].isoformat(),
+                }
+                or summary["source_move_count"] != planned["planned_qualifying_move_count"]
                 or summary["delivery_count"] != planned["planned_delivery_move_count"]
                 or summary["return_count"] != planned["planned_return_move_count"]
                 or abs(summary["delivery_units"] - planned["planned_delivery_units"]) > product.uom_id.rounding / 2
@@ -836,6 +851,7 @@ class OdooMoroccoImporter:
                 {
                     "profile_key": planned["key"],
                     "sku": planned["sku"],
+                    "warehouse_key": planned["warehouse_key"],
                     "day": row["day"],
                     "delivered_units": _stable_number(row["delivered_units"]),
                     "returned_units": _stable_number(row["returned_units"]),
@@ -849,11 +865,16 @@ class OdooMoroccoImporter:
                 raise OdooImportError(f"Odoo's full daily history for {planned['sku']} does not match the pinned plan.")
             profile = Profile.create(
                 {
-                    "name": f"{planned['sku']} · {dataset.version}",
+                    "name": (
+                        f"{planned['sku']} · {warehouse.display_name} · {dataset.version}"
+                        if warehouse
+                        else f"{planned['sku']} · {dataset.version}"
+                    ),
                     "profile_key": planned["key"],
                     "dataset_version": dataset.version,
                     "company_id": self.company.id,
                     "product_id": product.id,
+                    "warehouse_id": warehouse.id if warehouse else False,
                     "history_start_date": planned["business_effective_start"],
                     "history_end_date": planned["business_effective_end"],
                     "calendar_days": planned["calendar_days"],
@@ -888,6 +909,7 @@ class OdooMoroccoImporter:
                     horizon_days=horizon,
                     history_start=profile.history_start_date,
                     history_end=profile.history_end_date,
+                    warehouse_id=profile.warehouse_id.id if profile.warehouse_id else False,
                 )
                 run = Forecast.browse(result["id"])
                 if run.demo_history_profile_id != profile or run.review_status == "reviewed":

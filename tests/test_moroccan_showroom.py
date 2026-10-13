@@ -6,11 +6,13 @@ from pathlib import Path
 import pytest
 
 from scripts.moroccan_showroom.generator import (
+    DATASET_VERSION,
     END_DATE,
     FOCUS_START,
     HISTORY_START,
     FORECAST_PROFILE_COUNT,
     MISSING_SUPPLIER_SKU,
+    WAREHOUSE_HISTORY_PROFILE_SKUS,
     _event_time_utc,
     canonical_json,
     generate_dataset,
@@ -143,10 +145,14 @@ def test_dataset_is_deterministic_and_hits_approved_counts():
         "linked_customer_returns": 12,
         "internal_transfer_journeys": 18,
         "open_customer_orders": 20,
-        "history_profiles": 24,
+        "history_profiles": 30,
+        "companywide_history_profiles": 24,
+        "warehouse_history_profiles": 6,
+        "history_daily_observation_rows": 5430,
         "history_calendar_days_per_profile": 181,
     }
     assert {key: first.counts[key] for key in expected_counts} == expected_counts
+    assert first.version == DATASET_VERSION == "atlas-ma-2026.4"
     assert first.counts["history_orders_before_focus"] > 0
     assert first.counts["history_profile_move_count"] > 0
     assert first.digest == generate_dataset(seed=36036).digest
@@ -213,13 +219,13 @@ def test_reserved_slow_product_has_no_vendor_terms_history_or_order_recommendati
 
 def test_history_coverage_is_contiguous_and_scoped_to_profiles():
     data = generate_dataset()
-    rows_by_sku = defaultdict(list)
+    rows_by_profile = defaultdict(list)
     for row in data.daily_observations:
-        rows_by_sku[row["sku"]].append(row)
+        rows_by_profile[row["profile_key"]].append(row)
 
-    assert len(rows_by_sku) == FORECAST_PROFILE_COUNT
+    assert len(rows_by_profile) == len(data.history_profiles) == 30
     expected_days = (END_DATE - HISTORY_START).days + 1
-    for rows in rows_by_sku.values():
+    for rows in rows_by_profile.values():
         rows.sort(key=lambda row: row["day"])
         assert len(rows) == expected_days == 181
         assert rows[0]["day"] == HISTORY_START
@@ -228,8 +234,11 @@ def test_history_coverage_is_contiguous_and_scoped_to_profiles():
         assert all(row["delivered_units"] >= 0 for row in rows)
         assert all(row["returned_units"] >= 0 for row in rows)
     assert all(row["day"] <= END_DATE for row in data.daily_observations)
-    assert len(data.history_profiles) == FORECAST_PROFILE_COUNT
-    assert Counter(profile["category"] for profile in data.history_profiles) == {
+    company_profiles = [profile for profile in data.history_profiles if not profile["warehouse_key"]]
+    warehouse_profiles = [profile for profile in data.history_profiles if profile["warehouse_key"]]
+    assert len(company_profiles) == FORECAST_PROFILE_COUNT == 24
+    assert len(warehouse_profiles) == 6
+    assert Counter(profile["category"] for profile in company_profiles) == {
         "filtration_engine_service": 4,
         "braking": 4,
         "suspension_steering": 4,
@@ -237,13 +246,14 @@ def test_history_coverage_is_contiguous_and_scoped_to_profiles():
         "cooling_belts_drivetrain": 4,
         "ignition_sensors_fluids": 4,
     }
-    assert Counter(profile["demand_class"] for profile in data.history_profiles) == {
+    assert Counter(profile["demand_class"] for profile in company_profiles) == {
         "fast": 6,
         "steady": 6,
         "intermittent": 6,
         "slow": 6,
     }
     assert all(profile["planned_delivery_move_count"] > 0 for profile in data.history_profiles)
+    assert all(profile["planned_nonzero_delivery_days"] >= 7 for profile in data.history_profiles)
     assert all(
         profile["status"] == "fixture_plan_only_not_verified_in_odoo"
         and profile["calendar_days"] == 181
@@ -255,10 +265,52 @@ def test_history_coverage_is_contiguous_and_scoped_to_profiles():
             movement.kind == "sale_delivery"
             and movement.sku == profile["sku"]
             and movement.day < FOCUS_START
+            and (
+                profile["warehouse_key"] is None
+                or (
+                    movement.source == profile["warehouse_key"]
+                    and profile["warehouse_key"] == "warehouse_south_depot"
+                )
+                or (
+                    movement.source == profile["warehouse_key"]
+                    and profile["warehouse_key"] == "warehouse_atlas_central"
+                )
+            )
             for movement in data.movements
         )
         for profile in data.history_profiles
     )
+
+    for warehouse_key, skus in WAREHOUSE_HISTORY_PROFILE_SKUS.items():
+        scoped = [profile for profile in warehouse_profiles if profile["warehouse_key"] == warehouse_key]
+        assert {profile["sku"] for profile in scoped} == set(skus)
+        assert all(profile["planned_delivery_move_count"] > 0 for profile in scoped)
+        assert all(
+            row["warehouse_key"] == warehouse_key
+            for profile in scoped
+            for row in rows_by_profile[profile["key"]]
+        )
+        assert Counter(profile["category"] for profile in scoped) == {
+            "filtration_engine_service": 1,
+            "braking": 1,
+            "suspension_steering": 1,
+        }
+    for sku in WAREHOUSE_HISTORY_PROFILE_SKUS["warehouse_atlas_central"]:
+        atc = next(profile for profile in warehouse_profiles if profile["sku"] == sku and profile["warehouse_key"] == "warehouse_atlas_central")
+        asd = next(profile for profile in warehouse_profiles if profile["sku"] == sku and profile["warehouse_key"] == "warehouse_south_depot")
+        company = next(profile for profile in company_profiles if profile["sku"] == sku)
+        atc_rows = rows_by_profile[atc["key"]]
+        asd_rows = rows_by_profile[asd["key"]]
+        company_rows = rows_by_profile[company["key"]]
+        assert atc_rows != asd_rows
+        assert company_rows != atc_rows
+        assert company_rows != asd_rows
+    for warehouse_key in WAREHOUSE_HISTORY_PROFILE_SKUS:
+        return_profile = next(
+            profile for profile in warehouse_profiles
+            if profile["warehouse_key"] == warehouse_key and profile["sku"] == "AT-MA-FLT-101"
+        )
+        assert return_profile["planned_return_move_count"] >= 1
 
 
 def test_order_delivery_return_and_transfer_links_are_coherent():

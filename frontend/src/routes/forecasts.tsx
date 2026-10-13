@@ -375,7 +375,17 @@ function EvidenceRow({ label, children }: { label: string; children: ReactNode }
 
 function EvaluationDisclosure({ detail, timezone }: { detail: ForecastDetailData; timezone: string }) {
   const run = detail.run
+  const coverage = detail.history_coverage
   const canCompare = run.evaluation_status === 'evaluated' || run.evaluation_status === 'baseline_only' || run.evaluation_status === 'intermittent_baseline'
+  const coverageMessage = coverage.verified_demo_profile_scoped
+    ? coverage.verified_demo_profile_current
+      ? `This fictional source profile is verified for ${run.warehouse_name || 'company-wide history'} over the saved dates. It is a fixture-specific exception; normal history coverage settings still apply to other parts.`
+      : `The saved profile is scoped to ${run.warehouse_name || 'company-wide history'}, but its current Odoo delivery and return history no longer matches. Restock guidance is unavailable.`
+    : coverage.configured
+      ? coverage.run_starts_within_coverage
+        ? `Run starts on or after the configured complete-history date (${coverage.complete_from}); this is an administrator assertion.`
+        : `Run starts before the configured complete-history date (${coverage.complete_from}).`
+      : 'A complete-history start date is not configured for this scope.'
   return <details className="forecast-evaluation-disclosure">
     <summary>How was this estimated?</summary>
     <div className="forecast-evaluation-body">
@@ -396,7 +406,7 @@ function EvaluationDisclosure({ detail, timezone }: { detail: ForecastDetailData
         {run.reviewed_by && <EvidenceRow label="Reviewed by">{run.reviewed_by}</EvidenceRow>}
         {run.reviewed_at && <EvidenceRow label="Review date">{formatForecastDateTime(run.reviewed_at, timezone)}</EvidenceRow>}
         <EvidenceRow label="Restock guidance">{detail.restock_guidance.reason}</EvidenceRow>
-        <EvidenceRow label="History coverage">{detail.history_coverage.configured ? detail.history_coverage.run_starts_within_coverage ? `Run starts on or after the configured complete-history date (${detail.history_coverage.complete_from}); this is an administrator assertion.` : `Run starts before the configured complete-history date (${detail.history_coverage.complete_from}).` : 'A complete-history start date is not configured for this scope.'}</EvidenceRow>
+        <EvidenceRow label="History coverage">{coverageMessage}</EvidenceRow>
       </dl>
       {canCompare ? <dl className="forecast-evaluation-grid">
         <div><dt>Selected method</dt><dd>{methodLabel(run.selected_method)}</dd></div>
