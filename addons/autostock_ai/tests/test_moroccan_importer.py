@@ -993,27 +993,6 @@ class TestMoroccanOdooImporter(TransactionCase):
         self.assertFalse(stale_example)
         self.assertIn("older than 14 days", stale_reason)
 
-        foreign_company = self.env["res.company"].create(
-            {"name": "Separate company for warehouse scope test"}
-        )
-        foreign_warehouse = self.env["stock.warehouse"].create(
-            {
-                "name": "Foreign warehouse scope test",
-                "code": f"X{foreign_company.id:04d}"[-5:],
-                "company_id": foreign_company.id,
-            }
-        )
-        scoped_forecast = Forecast.with_user(manager).with_company(self.company).with_context(
-            allowed_company_ids=[self.company.id]
-        )
-        with self.assertRaises(AccessError):
-            scoped_forecast._scoped_warehouse(foreign_warehouse.id, self.company)
-        visible_profiles = self.profile_model.with_user(manager).with_context(
-            allowed_company_ids=[self.company.id]
-        ).search([])
-        self.assertTrue(visible_profiles)
-        self.assertTrue(all(profile.company_id == self.company for profile in visible_profiles))
-
         points_before_change = [(point.day, point.units) for point in runs[asd.id].point_ids]
         review_time_before_change = runs[asd.id].reviewed_at
         source_move = StockMove.search(
@@ -1022,8 +1001,17 @@ class TestMoroccanOdooImporter(TransactionCase):
                 ("product_id", "=", product.id),
                 ("state", "=", "done"),
                 ("sale_line_id", "!=", False),
+                ("sale_line_id.order_id.state", "in", ["sale", "done"]),
                 ("picking_id.picking_type_id.warehouse_id", "=", asd.id),
+                ("location_id.usage", "=", "internal"),
+                ("location_dest_id.usage", "=", "customer"),
                 ("date", ">=", fields.Datetime.to_datetime(runs[asd.id].history_start_date)),
+                (
+                    "date",
+                    "<",
+                    fields.Datetime.to_datetime(runs[asd.id].history_end_date) + timedelta(days=1),
+                ),
+                ("date", "<=", fields.Datetime.to_datetime(runs[asd.id].source_cutoff)),
             ],
             order="date, id",
             limit=1,
@@ -1057,6 +1045,27 @@ class TestMoroccanOdooImporter(TransactionCase):
         self.assertFalse(stale_detail["restock_guidance"]["usable"])
         with self.assertRaisesRegex(OdooImportError, "Actual Odoo state drift"):
             OdooMoroccoImporter(self.env).plan(self.dataset)
+
+        foreign_company = self.env["res.company"].create(
+            {"name": "Separate company for warehouse scope test"}
+        )
+        foreign_warehouse = self.env["stock.warehouse"].create(
+            {
+                "name": "Foreign warehouse scope test",
+                "code": f"X{foreign_company.id:04d}"[-5:],
+                "company_id": foreign_company.id,
+            }
+        )
+        scoped_forecast = Forecast.with_user(manager).with_company(self.company).with_context(
+            allowed_company_ids=[self.company.id]
+        )
+        with self.assertRaises(AccessError):
+            scoped_forecast._scoped_warehouse(foreign_warehouse.id, self.company)
+        visible_profiles = self.profile_model.with_user(manager).with_context(
+            allowed_company_ids=[self.company.id]
+        ).search([])
+        self.assertTrue(visible_profiles)
+        self.assertTrue(all(profile.company_id == self.company for profile in visible_profiles))
 
     def test_history_revision_invalidates_a_queued_profile_snapshot(self):
         run = self.env["autostock.forecast.run"].search(
