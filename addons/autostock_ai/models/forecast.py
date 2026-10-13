@@ -168,8 +168,8 @@ class AutoStockForecastRun(models.Model):
             self.source_type != REAL_SOURCE
             or self.company_id != profile.company_id
             or self.product_id != profile.product_id
+            or self.warehouse_id != profile.warehouse_id
             or self.demo_dataset_version != profile.dataset_version
-            or self.warehouse_id
         ):
             return False
         try:
@@ -178,6 +178,7 @@ class AutoStockForecastRun(models.Model):
                 self.product_id,
                 self.history_start_date,
                 self.history_end_date,
+                warehouse=self.warehouse_id,
             )
         except (AccessError, UserError, ValidationError):
             # Evidence is not eligible unless its current source can be read
@@ -741,20 +742,20 @@ class AutoStockForecastRun(models.Model):
             not coverage_start or start < coverage_start or start < product_created
         )
         if needs_verified_demo_history:
-            if not warehouse:
-                demo_profile = demo_profile.search(
-                    [
-                        ("company_id", "=", company.id),
-                        ("product_id", "=", product.id),
-                        ("history_start_date", "=", start),
-                        ("history_end_date", "=", end),
-                        ("dataset_version", "=", company.autostock_demo_dataset_version),
-                        ("state", "=", "verified"),
-                    ],
-                    limit=2,
-                )
+            demo_profile = demo_profile.search(
+                [
+                    ("company_id", "=", company.id),
+                    ("product_id", "=", product.id),
+                    ("warehouse_id", "=", warehouse.id if warehouse else False),
+                    ("history_start_date", "=", start),
+                    ("history_end_date", "=", end),
+                    ("dataset_version", "=", company.autostock_demo_dataset_version),
+                    ("state", "=", "verified"),
+                ],
+                limit=2,
+            )
             if len(demo_profile) != 1 or not demo_profile._matches_history(
-                company, product, start, end
+                company, product, start, end, warehouse=warehouse
             ):
                 if start < product_created:
                     raise UserError(
@@ -1125,6 +1126,8 @@ class AutoStockForecastRun(models.Model):
         if not run_data:
             raise AccessError(_("That forecast is not available in the active company."))
 
+        demo_profile_scoped = False
+        demo_profile_current = False
         if run.source_type == SYNTHETIC_SOURCE:
             guidance = {
                 "status": "not_applicable",
@@ -1146,6 +1149,21 @@ class AutoStockForecastRun(models.Model):
             covered_from_start = bool(
                 coverage_start and run.history_start_date >= coverage_start
             )
+            profile = run.demo_history_profile_id
+            demo_profile_scoped = bool(
+                profile
+                and run.demo_dataset_version == profile.dataset_version
+                and profile._matches_scope(
+                    run.company_id,
+                    run.product_id,
+                    run.history_start_date,
+                    run.history_end_date,
+                    warehouse=run.warehouse_id,
+                )
+            )
+            demo_profile_current = bool(
+                demo_profile_scoped and run._demo_source_history_is_current()
+            )
             if not run.warehouse_id:
                 guidance = {
                     "status": "not_eligible",
@@ -1154,7 +1172,7 @@ class AutoStockForecastRun(models.Model):
                         "This run covers the whole company, while restock guidance checks one warehouse at a time. A warehouse-specific forecast is needed."
                     ),
                 }
-            elif not coverage_configured:
+            elif not coverage_configured and not demo_profile_scoped:
                 guidance = {
                     "status": "not_eligible",
                     "usable": False,
@@ -1162,7 +1180,7 @@ class AutoStockForecastRun(models.Model):
                         "A verified start date for complete delivery history is not currently configured for this warehouse."
                     ),
                 }
-            elif not covered_from_start:
+            elif not covered_from_start and not demo_profile_scoped:
                 guidance = {
                     "status": "not_eligible",
                     "usable": False,
@@ -1242,6 +1260,8 @@ class AutoStockForecastRun(models.Model):
                 "configured": coverage_configured,
                 "complete_from": coverage_start.isoformat() if coverage_start else False,
                 "run_starts_within_coverage": covered_from_start,
+                "verified_demo_profile_scoped": demo_profile_scoped,
+                "verified_demo_profile_current": demo_profile_current,
             },
             "restock_guidance": guidance,
             "read_only": True,
@@ -1516,11 +1536,18 @@ class AutoStockForecastRun(models.Model):
             self.history_end_date,
             self.source_cutoff,
             warehouse=self.warehouse_id,
+            dataset_version=(
+                self.demo_history_profile_id.dataset_version
+                if self.demo_history_profile_id
+                else False
+            ),
         )
         return summary["snapshot"], summary["source_move_count"]
 
     @api.model
-    def _morocco_source_summary(self, company, product, start, end, cutoff, warehouse=False):
+    def _morocco_source_summary(
+        self, company, product, start, end, cutoff, warehouse=False, dataset_version=False
+    ):
         """Read qualifying Odoo deliveries/linked returns and digest their exact scope."""
         start_utc = datetime.combine(fields.Date.to_date(start), time.min)
         end_date = fields.Date.to_date(end)
@@ -1566,7 +1593,6 @@ class AutoStockForecastRun(models.Model):
                 ("location_id.usage", "=", "customer"),
                 ("location_dest_id.usage", "=", "internal"),
                 ("origin_returned_move_id", "in", deliveries.ids),
-                *warehouse_domain,
             ],
             order="date, id",
             limit=MAX_SOURCE_MOVES + 1,
@@ -1612,6 +1638,14 @@ class AutoStockForecastRun(models.Model):
             )
             current += timedelta(days=1)
 
+        scope = {
+            "company_id": company.id,
+            "product_id": product.id,
+            "warehouse_id": warehouse.id if warehouse else False,
+            "dataset_version": dataset_version or False,
+            "history_start_date": fields.Date.to_string(start),
+            "history_end_date": fields.Date.to_string(end),
+        }
         move_payload = [
             [
                 move.id,
@@ -1639,16 +1673,25 @@ class AutoStockForecastRun(models.Model):
         ]
         return {
             "snapshot": snapshot,
+            "scope": scope,
             "source_move_count": len(deliveries) + len(returned_moves),
             "delivery_count": len(deliveries),
             "return_count": len(returned_moves),
             "delivery_units": delivery_units,
             "return_units": return_units,
             "move_sha256": sha256(
-                json.dumps(move_payload, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+                json.dumps(
+                    {"scope": scope, "moves": move_payload},
+                    separators=(",", ":"),
+                    ensure_ascii=True,
+                ).encode("utf-8")
             ).hexdigest(),
             "daily_sha256": sha256(
-                json.dumps(daily_payload, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+                json.dumps(
+                    {"scope": scope, "daily": daily_payload},
+                    separators=(",", ":"),
+                    ensure_ascii=True,
+                ).encode("utf-8")
             ).hexdigest(),
         }
 

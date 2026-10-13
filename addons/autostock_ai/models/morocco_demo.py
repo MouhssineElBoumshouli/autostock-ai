@@ -46,6 +46,7 @@ class AutoStockMoroccoHistoryProfile(models.Model):
     dataset_version = fields.Char(required=True, readonly=True, index=True)
     company_id = fields.Many2one("res.company", required=True, readonly=True, index=True)
     product_id = fields.Many2one("product.product", required=True, readonly=True, index=True)
+    warehouse_id = fields.Many2one("stock.warehouse", index=True, readonly=True, ondelete="restrict")
     history_start_date = fields.Date(required=True, readonly=True)
     history_end_date = fields.Date(required=True, readonly=True)
     calendar_days = fields.Integer(required=True, readonly=True)
@@ -71,9 +72,16 @@ class AutoStockMoroccoHistoryProfile(models.Model):
         "A dataset history profile can be recorded only once per company.",
     )
 
-    @api.constrains("history_start_date", "history_end_date", "calendar_days", "source_move_sha256", "source_daily_sha256")
+    @api.constrains(
+        "company_id", "product_id", "warehouse_id", "history_start_date",
+        "history_end_date", "calendar_days", "source_move_sha256", "source_daily_sha256",
+    )
     def _check_profile_shape(self):
         for profile in self:
+            if profile.product_id.company_id not in (False, profile.company_id):
+                raise ValidationError(_("A verified history profile must use a product available to its company."))
+            if profile.warehouse_id and profile.warehouse_id.company_id != profile.company_id:
+                raise ValidationError(_("A verified history profile must use a warehouse belonging to its company."))
             expected_days = (profile.history_end_date - profile.history_start_date).days + 1
             if profile.calendar_days != expected_days or profile.calendar_days < 90:
                 raise ValidationError(_("A verified history profile must cover at least 90 complete days."))
@@ -93,27 +101,49 @@ class AutoStockMoroccoHistoryProfile(models.Model):
             and company.autostock_demo_dataset_version == self.dataset_version
         )
 
-    def _matches_history(self, company, product, start, end):
-        """Check exact scope and recompute the source digest using ordinary ORM access."""
+    def _matches_scope(self, company, product, start, end, warehouse=False):
+        """Check the immutable company/product/warehouse/date/dataset binding."""
         self.ensure_one()
         if (
             self.state != "verified"
             or not self._target_is_marked()
             or self.company_id != company
             or self.product_id != product
+            or self.warehouse_id != warehouse
             or self.history_start_date != start
             or self.history_end_date != end
         ):
             return False
+        return True
+
+    def _matches_history(self, company, product, start, end, warehouse=False):
+        """Check exact scope and recompute the source digest using ordinary ORM access."""
+        self.ensure_one()
+        if not self._matches_scope(company, product, start, end, warehouse=warehouse):
+            return False
         summary = self.env["autostock.forecast.run"]._morocco_source_summary(
-            company, product, start, end, fields.Datetime.now()
+            company,
+            product,
+            start,
+            end,
+            fields.Datetime.now(),
+            warehouse=warehouse,
+            dataset_version=self.dataset_version,
         )
         return self._summary_matches(summary)
 
     def _summary_matches(self, summary):
         self.ensure_one()
         return bool(
-            summary["source_move_count"] == self.source_move_count
+            summary.get("scope") == {
+                "company_id": self.company_id.id,
+                "product_id": self.product_id.id,
+                "warehouse_id": self.warehouse_id.id if self.warehouse_id else False,
+                "dataset_version": self.dataset_version,
+                "history_start_date": fields.Date.to_string(self.history_start_date),
+                "history_end_date": fields.Date.to_string(self.history_end_date),
+            }
+            and summary["source_move_count"] == self.source_move_count
             and summary["delivery_count"] == self.source_delivery_count
             and summary["return_count"] == self.source_return_count
             and abs(summary["delivery_units"] - self.source_delivery_units) <= self.product_id.uom_id.rounding / 2
@@ -128,6 +158,7 @@ class AutoStockMoroccoHistoryProfile(models.Model):
             run.demo_history_profile_id != self
             or run.company_id != self.company_id
             or run.product_id != self.product_id
+            or run.warehouse_id != self.warehouse_id
             or run.demo_dataset_version != self.dataset_version
             or run.history_start_date != self.history_start_date
             or run.history_end_date != self.history_end_date
@@ -140,6 +171,8 @@ class AutoStockMoroccoHistoryProfile(models.Model):
             self.history_start_date,
             self.history_end_date,
             run.source_cutoff,
+            warehouse=self.warehouse_id,
+            dataset_version=self.dataset_version,
         )
         if not self._summary_matches(summary):
             raise UserError(

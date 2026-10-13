@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 from .catalog import CATEGORIES, CUSTOMERS, DEMAND_CLASSES, SUPPLIERS, WAREHOUSES
 
-DATASET_VERSION = "atlas-ma-2026.3"
+DATASET_VERSION = "atlas-ma-2026.4"
 DEFAULT_SEED = 36036
 MISSING_SUPPLIER_SKU = "AT-MA-FLT-132"
 FOCUS_START = date(2026, 7, 1)
@@ -29,6 +29,21 @@ HISTORY_PROFILE_SKUS = frozenset(
     for number in range(101, 105)
 )
 FORECAST_PROFILE_COUNT = len(HISTORY_PROFILE_SKUS)
+WAREHOUSE_HISTORY_PROFILE_SKUS = {
+    "warehouse_atlas_central": (
+        "AT-MA-FLT-101",
+        "AT-MA-BRK-102",
+        "AT-MA-SUS-103",
+    ),
+    "warehouse_south_depot": (
+        "AT-MA-FLT-101",
+        "AT-MA-BRK-102",
+        "AT-MA-SUS-103",
+    ),
+}
+WAREHOUSE_FORECAST_PROFILE_COUNT = sum(
+    len(skus) for skus in WAREHOUSE_HISTORY_PROFILE_SKUS.values()
+)
 with files("tzdata.zoneinfo").joinpath("Africa", "Casablanca").open("rb") as _zonefile:
     # Read the pinned IANA rules from the dependency instead of the host OS.
     # This keeps Windows and container builds byte-identical after Morocco's
@@ -244,6 +259,52 @@ def _history_sales(products: tuple[Product, ...], rng: random.Random) -> list[tu
     return results
 
 
+def _warehouse_history_sales(
+    products: tuple[Product, ...], seed: int
+) -> list[tuple[date, str, int, str, str, str]]:
+    """Create independent ASD sales for the small, explicitly scoped sample.
+
+    Per-day seeds keep this series independent from the ATC history and from
+    the focus-window generator. These are separate fictional orders, not a
+    second label for company-wide or ATC demand.
+    """
+    probabilities = {"fast": 0.62, "steady": 0.38, "intermittent": 0.18, "slow": 0.09}
+    quantities = {"fast": (2, 3, 4, 6), "steady": (1, 2, 3), "intermittent": (1, 2), "slow": (1,)}
+    product_by_sku = {product.sku: product for product in products}
+    customer_keys = [item[0] for item in CUSTOMERS]
+    selected = WAREHOUSE_HISTORY_PROFILE_SKUS["warehouse_south_depot"]
+    results = []
+    day = HISTORY_START
+    while day < FOCUS_START:
+        for product_index, sku in enumerate(selected):
+            product = product_by_sku[sku]
+            seed_material = f"{seed}:ASD:{sku}:{day.isoformat()}".encode("ascii")
+            day_seed = int.from_bytes(hashlib.sha256(seed_material).digest()[:8], "big")
+            product_rng = random.Random(day_seed)
+            if product_rng.random() < probabilities[product.demand_class]:
+                customer = customer_keys[(product_index + day.toordinal()) % len(customer_keys)]
+                quantity = product_rng.choice(quantities[product.demand_class])
+                key = f"SO-MA-H-ASD-{day:%Y%m%d}-{product_index + 1:02d}"
+                results.append(
+                    (day, sku, quantity, customer, key, "warehouse_south_depot")
+                )
+        day += timedelta(days=1)
+    return results
+
+
+def _warehouse_profile_key(sku: str, warehouse_key: str) -> str:
+    return f"warehouse_history_{warehouse_key.removeprefix('warehouse_')}_{sku.lower().replace('-', '_')}"
+
+
+def _movement_warehouse(movement: Movement) -> str | None:
+    """Attribute demand and returns to the warehouse of the original delivery."""
+    if movement.kind == "sale_delivery":
+        return movement.source
+    if movement.kind == "customer_return":
+        return movement.destination
+    return None
+
+
 def _movement_priority(movement: Movement) -> tuple[date, int, str]:
     priority = {
         "opening_adjustment": 0,
@@ -365,10 +426,28 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
     orders: list[Order] = []
     movement_events: list[Movement] = []
 
-    # Extra April-June business-effective history is limited to the 24 series
-    # that carry an explicit coverage profile.
+    # The original April-June series is scoped to ATC. A separate, seeded
+    # stream adds real ASD sales only for the small, explicitly scoped sample.
     for day, sku, quantity, customer_key, order_key in _history_sales(products, rng):
         warehouse_key = warehouse_keys[0]
+        movement_key = f"DEL-{order_key}-01"
+        line = SaleLine(f"LINE-{order_key}-01", sku, quantity, movement_key)
+        orders.append(Order(order_key, day, customer_key, "delivered", (line,), warehouse_key))
+        movement_events.append(
+            Movement(
+                movement_key,
+                day,
+                "sale_delivery",
+                sku,
+                quantity,
+                warehouse_key,
+                "customer_location",
+                order_key=order_key,
+                partner_key=customer_key,
+                effective_at_utc=_event_time_utc(day),
+            )
+        )
+    for day, sku, quantity, customer_key, order_key, warehouse_key in _warehouse_history_sales(products, seed):
         movement_key = f"DEL-{order_key}-01"
         line = SaleLine(f"LINE-{order_key}-01", sku, quantity, movement_key)
         orders.append(Order(order_key, day, customer_key, "delivered", (line,), warehouse_key))
@@ -464,10 +543,30 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
         for line in order.lines
         if line.quantity >= 1 and order.day < END_DATE
     ]
-    return_pool = list(completed_lines)
+    # Retain at least one genuinely linked return in each warehouse-specific
+    # sample. The remaining returns are selected from the same deterministic
+    # completed-order pool and keep the dataset's existing total of twelve.
+    return_targets = []
+    target_sku = WAREHOUSE_HISTORY_PROFILE_SKUS["warehouse_atlas_central"][0]
+    for warehouse_key in warehouse_keys:
+        target = next(
+            (
+                (order, line)
+                for order, line in completed_lines
+                if order.day < FOCUS_START
+                and order.warehouse_key == warehouse_key
+                and line.sku == target_sku
+            ),
+            None,
+        )
+        if not target:
+            raise AssertionError(f"The deterministic history has no return candidate for {warehouse_key}.")
+        return_targets.append(target)
+    target_line_keys = {line.key for _order, line in return_targets}
+    return_pool = [pair for pair in completed_lines if pair[1].key not in target_line_keys]
     rng.shuffle(return_pool)
     returns = []
-    for index, (original_order, original_line) in enumerate(return_pool[:12]):
+    for index, (original_order, original_line) in enumerate(return_targets + return_pool[:10]):
         return_day = min(END_DATE, original_order.day + timedelta(days=2 + index % 19))
         if return_day <= original_order.day:
             return_day = END_DATE
@@ -539,48 +638,95 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
     delivered_by_day_sku = Counter()
     returned_by_day_sku = Counter()
     event_count_by_day_sku = Counter()
-    profiled_skus = {product.sku for product in history_products}
+    warehouse_delivered = Counter()
+    warehouse_returned = Counter()
+    warehouse_event_count = Counter()
     for movement in movements:
-        if movement.kind == "sale_delivery" and movement.sku in profiled_skus:
-            delivered_by_day_sku[(movement.sku, movement.day)] += movement.quantity
-            event_count_by_day_sku[(movement.sku, movement.day)] += 1
-        elif movement.kind == "customer_return" and movement.sku in profiled_skus:
-            returned_by_day_sku[(movement.sku, movement.day)] += movement.quantity
-            event_count_by_day_sku[(movement.sku, movement.day)] += 1
+        if movement.kind not in {"sale_delivery", "customer_return"}:
+            continue
+        key = (movement.sku, movement.day)
+        warehouse_key = _movement_warehouse(movement)
+        if movement.kind == "sale_delivery":
+            delivered_by_day_sku[key] += movement.quantity
+            event_count_by_day_sku[key] += 1
+            warehouse_delivered[(movement.sku, warehouse_key, movement.day)] += movement.quantity
+            warehouse_event_count[(movement.sku, warehouse_key, movement.day)] += 1
+        else:
+            returned_by_day_sku[key] += movement.quantity
+            event_count_by_day_sku[key] += 1
+            warehouse_returned[(movement.sku, warehouse_key, movement.day)] += movement.quantity
+            warehouse_event_count[(movement.sku, warehouse_key, movement.day)] += 1
+
     daily_observations = []
     history_days = (END_DATE - HISTORY_START).days + 1
-    for product in history_products:
+    product_by_sku = {product.sku: product for product in history_products}
+    profile_specs = [
+        (product, None, product.history_profile_key)
+        for product in history_products
+    ]
+    profile_specs.extend(
+        (
+            product_by_sku[sku],
+            warehouse_key,
+            _warehouse_profile_key(sku, warehouse_key),
+        )
+        for warehouse_key, skus in WAREHOUSE_HISTORY_PROFILE_SKUS.items()
+        for sku in skus
+    )
+    for product, warehouse_key, profile_key in profile_specs:
         day = HISTORY_START
         while day <= END_DATE:
+            if warehouse_key:
+                day_key = (product.sku, warehouse_key, day)
+                delivered_units = warehouse_delivered[day_key]
+                returned_units = warehouse_returned[day_key]
+                source_event_count = warehouse_event_count[day_key]
+            else:
+                day_key = (product.sku, day)
+                delivered_units = delivered_by_day_sku[day_key]
+                returned_units = returned_by_day_sku[day_key]
+                source_event_count = event_count_by_day_sku[day_key]
             daily_observations.append(
                 {
-                    "profile_key": product.history_profile_key,
+                    "profile_key": profile_key,
                     "sku": product.sku,
+                    "warehouse_key": warehouse_key,
                     "day": day,
-                    "delivered_units": delivered_by_day_sku[(product.sku, day)],
-                    "returned_units": returned_by_day_sku[(product.sku, day)],
-                    "source_event_count": event_count_by_day_sku[(product.sku, day)],
+                    "delivered_units": delivered_units,
+                    "returned_units": returned_units,
+                    "source_event_count": source_event_count,
                     "coverage_complete": True,
                 }
             )
             day += timedelta(days=1)
-    if len(daily_observations) != FORECAST_PROFILE_COUNT * history_days:
+    expected_observation_rows = (
+        FORECAST_PROFILE_COUNT + WAREHOUSE_FORECAST_PROFILE_COUNT
+    ) * history_days
+    if len(daily_observations) != expected_observation_rows:
         raise AssertionError("The generated forecast coverage has a missing calendar day.")
     history_profiles = []
-    for product in history_products:
+    for product, warehouse_key, profile_key in profile_specs:
         source_events = [
             item
             for item in movements
             if item.sku == product.sku and item.kind in {"sale_delivery", "customer_return"}
+            and (warehouse_key is None or _movement_warehouse(item) == warehouse_key)
         ]
-        profile_rows = [item for item in daily_observations if item["sku"] == product.sku]
+        profile_rows = [item for item in daily_observations if item["profile_key"] == profile_key]
+        nonzero_delivery_days = sum(row["delivered_units"] > 0 for row in profile_rows)
+        if nonzero_delivery_days < 7:
+            raise AssertionError(
+                f"The planned {warehouse_key or 'company-wide'} history for {product.sku} "
+                "has fewer than seven nonzero delivery days."
+            )
         profile_digest = hashlib.sha256(canonical_json(_jsonable(profile_rows))).hexdigest()
         history_profiles.append(
             {
-                "key": product.history_profile_key,
+                "key": profile_key,
                 "sku": product.sku,
                 "category": product.category,
                 "demand_class": product.demand_class,
+                "warehouse_key": warehouse_key,
                 "dataset_version": DATASET_VERSION,
                 "business_effective_start": HISTORY_START,
                 "business_effective_end": END_DATE,
@@ -590,6 +736,7 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
                 "planned_return_move_count": sum(item.kind == "customer_return" for item in source_events),
                 "planned_delivery_units": sum(item.quantity for item in source_events if item.kind == "sale_delivery"),
                 "planned_returned_units": sum(item.quantity for item in source_events if item.kind == "customer_return"),
+                "planned_nonzero_delivery_days": nonzero_delivery_days,
                 "planned_daily_rows_sha256": profile_digest,
                 "status": "fixture_plan_only_not_verified_in_odoo",
             }
@@ -632,12 +779,31 @@ def generate_dataset(seed: int = DEFAULT_SEED) -> Dataset:
         "linked_customer_returns": sum(item.kind == "customer_return" for item in movements),
         "internal_transfer_journeys": sum(item.kind == "internal_transfer" for item in movements),
         "open_customer_orders": len(open_orders),
-        "history_profiles": FORECAST_PROFILE_COUNT,
+        "history_profiles": len(history_profiles),
+        "companywide_history_profiles": FORECAST_PROFILE_COUNT,
+        "warehouse_history_profiles": WAREHOUSE_FORECAST_PROFILE_COUNT,
+        "history_daily_observation_rows": len(daily_observations),
         "history_profile_category_mix": dict(
             sorted(Counter(product.category for product in history_products).items())
         ),
         "history_profile_demand_class_mix": dict(
             sorted(Counter(product.demand_class for product in history_products).items())
+        ),
+        "warehouse_history_profile_category_mix": dict(
+            sorted(
+                Counter(
+                    item[0].category
+                    for item in profile_specs
+                    if item[1] is not None
+                ).items()
+            )
+        ),
+        "warehouse_history_profile_scope_mix": dict(
+            sorted(Counter(item[1] for item in profile_specs if item[1] is not None).items())
+        ),
+        "warehouse_history_orders_before_focus": sum(
+            order.day < FOCUS_START and order.warehouse_key == "warehouse_south_depot"
+            for order in orders
         ),
         "history_calendar_days_per_profile": history_days,
         "history_profile_move_count": sum(item["planned_qualifying_move_count"] for item in history_profiles),

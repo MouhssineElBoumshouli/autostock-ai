@@ -56,7 +56,7 @@ describe('Odoo v1 API contracts', () => {
         observations: [{ day: '2026-06-29', delivered_units: 2, returned_units: 1, units: 2, source_event_count: 3 }],
         predictions: [{ day: '2026-06-30', units: 2.5, lower_heuristic: 1, upper_heuristic: 4 }],
       },
-      history_coverage: { configured: true, complete_from: '2026-01-01', run_starts_within_coverage: true },
+      history_coverage: { configured: true, complete_from: '2026-01-01', run_starts_within_coverage: true, verified_demo_profile_scoped: false, verified_demo_profile_current: false },
       restock_guidance: { status: 'not_eligible', usable: false, reason: 'This forecast has not been reviewed.' },
       read_only: true,
     })

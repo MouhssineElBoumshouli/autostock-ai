@@ -473,12 +473,23 @@ class _FixtureAudit:
             identity = ("history_profile_plan", planned["key"])
             profile = self.record(*identity)
             product = self.products[planned["sku"]]
+            warehouse = (
+                self.warehouses[planned["warehouse_key"]]
+                if planned["warehouse_key"]
+                else self.env["stock.warehouse"]
+            )
+            expected_name = (
+                f"{planned['sku']} · {warehouse.display_name} · {self.dataset.version}"
+                if warehouse
+                else f"{planned['sku']} · {self.dataset.version}"
+            )
             if (
-                profile.name != f"{planned['sku']} · {self.dataset.version}"
+                profile.name != expected_name
                 or profile.profile_key != planned["key"]
                 or profile.dataset_version != self.dataset.version
                 or profile.company_id != self.company
                 or profile.product_id != product
+                or profile.warehouse_id != warehouse
                 or profile.state != "verified"
                 or profile.calendar_days != planned["calendar_days"]
                 or profile.planned_daily_sha256 != planned["planned_daily_rows_sha256"]
@@ -505,6 +516,7 @@ class _FixtureAudit:
                 product,
                 profile.history_start_date,
                 profile.history_end_date,
+                warehouse=warehouse,
             ):
                 self.fail(identity, "current qualifying Odoo delivery/return history no longer matches its digest")
 
@@ -518,10 +530,10 @@ class _FixtureAudit:
                 if (
                     run.company_id != self.company
                     or run.product_id != profile.product_id
+                    or run.warehouse_id != profile.warehouse_id
                     or run.demo_history_profile_id != profile
                     or run.demo_dataset_version != self.dataset.version
                     or run.source_type != "completed_deliveries"
-                    or run.warehouse_id
                     or int(run.horizon_days) != horizon
                     or run.state not in {"queued", "completed"}
                 ):
