@@ -146,3 +146,33 @@ jobs:
       - name: Run real disposable database and filestore restore proof
         shell: bash
         run: bash scripts/moroccan_showroom/ci_restore_proof.sh
+
+
+  moroccan-local-operator:
+    name: Moroccan local operator rehearsal
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Pull Odoo and PostgreSQL from the public Docker image cache
+        run: |
+          docker pull mirror.gcr.io/library/postgres:16
+          docker tag mirror.gcr.io/library/postgres:16 postgres:16
+          docker pull mirror.gcr.io/library/odoo:19.0-20260926
+          docker tag mirror.gcr.io/library/odoo:19.0-20260926 odoo:19.0
+
+      - name: Rehearse clean initialization and real target backup restore
+        shell: pwsh
+        run: |
+          ./scripts/moroccan_showroom/prepare.ps1 -Action Prepare
+          try {
+            ./scripts/moroccan_showroom/local_target.ps1 -Action Initialize
+            ./scripts/moroccan_showroom/local_target.ps1 -Action BackupRestore
+          }
+          finally {
+            # CI-only cleanup: this runner is disposable and contains no owner showroom.
+            docker compose --project-name autostock-atlas-morocco --file compose.morocco.yml --env-file .env.atlas-morocco down --volumes --remove-orphans
+            Remove-Item -Recurse -Force .showroom -ErrorAction SilentlyContinue
+            Remove-Item -Force .env.atlas-morocco -ErrorAction SilentlyContinue
+          }
