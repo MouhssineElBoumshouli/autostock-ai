@@ -292,7 +292,7 @@ class TestMoroccanOdooImporter(TransactionCase):
             OdooImportError, "reviewed forecast is missing its manager audit metadata"
         ):
             with self.cr.savepoint():
-                scoped_run._write_worker({"reviewed_by_id": False, "reviewed_at": False})
+                run._write_worker({"reviewed_by_id": False, "reviewed_at": False})
                 OdooMoroccoImporter(self.env).plan(self.dataset)
         self.env.invalidate_all()
         scoped_run = run.with_user(manager).with_company(self.company).with_context(
@@ -300,7 +300,7 @@ class TestMoroccanOdooImporter(TransactionCase):
         )
         with self.assertRaisesRegex(OdooImportError, "only a completed forecast can be reviewed"):
             with self.cr.savepoint():
-                scoped_run._write_worker({"state": "queued"})
+                run._write_worker({"state": "queued"})
                 OdooMoroccoImporter(self.env).plan(self.dataset)
         self.env.invalidate_all()
         scoped_run = run.with_user(manager).with_company(self.company).with_context(
@@ -310,7 +310,7 @@ class TestMoroccanOdooImporter(TransactionCase):
             OdooImportError, "completed forecast result points are missing or incomplete"
         ):
             with self.cr.savepoint():
-                scoped_run.point_ids[:1].unlink()
+                run.point_ids[:1].unlink()
                 OdooMoroccoImporter(self.env).plan(self.dataset)
         self.env.invalidate_all()
         scoped_run = run.with_user(manager).with_company(self.company).with_context(
