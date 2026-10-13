@@ -2,6 +2,8 @@
 
 The Moroccan showroom is designed as a separate local Odoo/PostgreSQL environment. It does not use the existing USD showroom's database, containers, credentials, volumes, or launch command.
 
+For a short, beginner-friendly Windows checklist, start with [the safe first steps](../../docs/MOROCCAN_SHOWROOM_FIRST_STEPS.md). Do not use Start or import until the separate approvals and restore checks are complete.
+
 ## Commands
 
 From the repository root in PowerShell, run:
