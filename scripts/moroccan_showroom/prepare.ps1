@@ -152,7 +152,8 @@ function Assert-NewEnvironmentIsolated {
     $existingNetworks = & docker network ls --format "{{.Name}}" --filter "name=$expectedNetwork"
     if ($LASTEXITCODE -ne 0) { throw "Could not inspect Docker networks." }
     $networkExists = $expectedNetwork -in @($existingNetworks)
-    $targetContainers = & docker ps -aq --filter "label=com.docker.compose.project=$project"
+    # Network inspect reports full container IDs, so collect full IDs here too.
+    $targetContainers = & docker ps -aq --no-trunc --filter "label=com.docker.compose.project=$project"
     if ($LASTEXITCODE -ne 0) { throw "Could not verify existing target containers." }
     $targetContainerIds = @($targetContainers | Where-Object { $_ } | ForEach-Object { $_.Trim() })
     foreach ($containerId in $targetContainerIds) {
