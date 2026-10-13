@@ -170,6 +170,9 @@ function Initialize-Target {
             throw "Could not determine whether the Moroccan target database exists."
         }
 
+        # Refuse a dirty or foreign database before writing target markers.
+        Assert-ImporterPreviewClean
+
         $markerScript = @"
 import base64
 import os
