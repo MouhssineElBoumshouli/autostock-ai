@@ -325,12 +325,16 @@ function Backup-And-Restore {
         Invoke-Docker @("run", "--detach", "--name", $restoreContainer, "--network", $restoreNetwork, "--env", "POSTGRES_USER=$postgresUser", "--env", "POSTGRES_PASSWORD=$restorePassword", "--env", "POSTGRES_DB=postgres", "--mount", "type=volume,source=$restorePostgresVolume,target=/var/lib/postgresql/data", "postgres:16")
 
         $ready = $false
-        for ($attempt = 0; $attempt -lt 30; $attempt++) {
-            & docker exec $restoreContainer pg_isready -U $postgresUser -d postgres *> $null
-            if ($LASTEXITCODE -eq 0) { $ready = $true; break }
+        for ($attempt = 0; $attempt -lt 60; $attempt++) {
+            $pidOne = & docker exec $restoreContainer cat /proc/1/comm 2>$null
+            $pidOneOk = $LASTEXITCODE -eq 0 -and (($pidOne -join "").Trim() -eq "postgres")
+            if ($pidOneOk) {
+                & docker exec $restoreContainer pg_isready -U $postgresUser -d postgres *> $null
+                if ($LASTEXITCODE -eq 0) { $ready = $true; break }
+            }
             Start-Sleep -Seconds 1
         }
-        if (-not $ready) { throw "Disposable restore PostgreSQL did not become ready." }
+        if (-not $ready) { throw "Disposable restore PostgreSQL did not reach its final ready process." }
 
         $portBindings = Get-DockerOutput @("inspect", "--format", "{{json .HostConfig.PortBindings}}", $restoreContainer)
         if ($portBindings -notin @("null", "{}")) { throw "Disposable restore PostgreSQL unexpectedly publishes a host port." }
