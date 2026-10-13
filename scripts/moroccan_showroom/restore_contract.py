@@ -15,6 +15,7 @@ from .safety import (
     TARGET_FILESTORE_VOLUME,
     TARGET_POSTGRES_VOLUME,
     TARGET_PROJECT,
+    validate_backup_manifest_signature,
     validate_uuid,
 )
 
@@ -38,10 +39,12 @@ def validate_restore_evidence(
     evidence: dict,
     *,
     backup_manifest: dict,
+    backup_signing_key: bytes,
     expected_uuid: str,
 ) -> None:
     """Require a real restore result isolated from both showroom environments."""
     expected_uuid = validate_uuid(expected_uuid, "Expected target UUID")
+    validate_backup_manifest_signature(backup_manifest, backup_signing_key)
 
     _require(
         backup_manifest.get("database_name") == TARGET_DATABASE,
@@ -177,6 +180,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--evidence-json", type=Path, required=True)
     parser.add_argument("--backup-manifest-json", type=Path, required=True)
+    parser.add_argument("--signing-key-file", type=Path, required=True)
     parser.add_argument("--expected-target-uuid", required=True)
     args = parser.parse_args(argv)
 
@@ -185,9 +189,11 @@ def main(argv: list[str] | None = None) -> int:
         manifest = json.loads(
             args.backup_manifest_json.read_text(encoding="utf-8")
         )
+        signing_key = args.signing_key_file.read_bytes()
         validate_restore_evidence(
             evidence,
             backup_manifest=manifest,
+            backup_signing_key=signing_key,
             expected_uuid=args.expected_target_uuid,
         )
     except (OSError, json.JSONDecodeError, TypeError, ValueError) as error:
