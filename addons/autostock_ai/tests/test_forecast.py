@@ -126,6 +126,12 @@ class TestAutoStockForecast(TransactionCase):
         return_day = delivery_day + timedelta(days=2)
         warehouse.write({"autostock_history_complete_from": delivery_day})
         product = self._product(company, "AS-DOZEN-RETURN", self.unit)
+        # This test creates historical stock moves for an existing product.
+        # Set the test fixture's audit date to that pre-existing state; the
+        # production importer never edits Odoo create_date values.
+        product.write(
+            {"create_date": fields.Datetime.to_string(datetime.combine(delivery_day, time.min))}
+        )
         order, delivery = self._sale_order(
             company, warehouse, product, quantity=2, uom=self.dozen, state="done"
         )

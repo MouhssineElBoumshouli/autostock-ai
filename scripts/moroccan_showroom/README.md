@@ -1,4 +1,4 @@
-# Moroccan Atlas showroom preparation
+# Moroccan Atlas showroom preparation and importer
 
 The Moroccan showroom is designed as a separate local Odoo/PostgreSQL environment. It does not use the existing USD showroom's database, containers, credentials, volumes, or launch command.
 
@@ -12,15 +12,23 @@ From the repository root in PowerShell, run:
 
 Prepare writes newly generated local credentials and a target UUID to the ignored .env.atlas-morocco file. It refuses to overwrite an existing file. It does not run Docker or connect to either database.
 
-DryRun generates the pinned dataset and checks target counts, stable keys, date windows, event links, import-plan idempotency, and product/location stock arithmetic. It is an offline preview: it does not inspect an Odoo database, create records, or prove that future Odoo operations succeeded. Identity policy is covered by isolated unit tests; no live target identity has been collected.
+DryRun generates the pinned dataset and checks target counts, stable keys, date windows, event links, import-plan idempotency, and product/location stock arithmetic. It is an offline preview and does not inspect or write an Odoo database. The `odoo_importer` module adds a read-only Odoo preview and an ORM writer exercised only against the ephemeral database in Odoo CI. The public Apply gate remains closed pending independent restore evidence.
 
-The requirements include IANA timezone data so Windows uses the date-correct `Africa/Casablanca` offset for each planned event timestamp.
+The requirements pin IANA timezone data so Windows and the Odoo container use the date-correct `Africa/Casablanca` offset for each planned event timestamp.
 
 After independent review and separate owner authorization, Start can launch only the new Compose project:
 
     pwsh scripts/moroccan_showroom/prepare.ps1 -Action Start
 
-Start validates the Compose project, bind address, private database service, volume names, and existing target-resource labels before starting the separate Odoo and PostgreSQL services. It does not initialize the database, import fixture records, or change the main app connection. This PR does not provide a record-writing Apply command.
+Start validates the Compose project, bind address, private database service, volume names, and existing target-resource labels before starting the separate Odoo and PostgreSQL services. It does not initialize the database, import fixture records, or change the main app connection. The Odoo preview script is read-only. No local Moroccan service or database has been started for this importer milestone.
+
+## Odoo importer boundary
+
+The Odoo adapter first verifies the exact target database name, administrator session, environment UUID, single clean company, required installed modules, and consistent target markers. It renames the fresh database's bootstrap company to Atlas Auto Distribution and sets its country, currency, and time zone; it does not add another company. It reuses Odoo's untouched main-company bootstrap warehouse as Atlas Central Warehouse and creates the South Service Depot, so the finished database has exactly the two planned warehouses. It then writes versioned fixture identities and uses Odoo ORM operations for catalog records, inventory adjustments, confirmed sales and validated deliveries, receipts, linked customer returns, internal transfers, open orders, orderpoints, and forecast requests. Final stock is reconciled per product and warehouse against the generated ledger before the transaction completes. A conflict, incomplete registry, broken record reference, history mismatch, or stock variance fails the entire savepoint.
+
+Odoo `create_date` and `create_uid` remain actual import audit values. The importer pins only Odoo business-effective dates for fictional movements. Company-wide complete history begins on 1 July 2026, when the full catalog's showroom activity starts. The 24 declared product profiles also have explicit earlier history from 13 April; their forecasts are eligible only after completed Odoo delivery moves and linked returns match the deterministic per-day plan, counts, units, move digest, and daily digest. This exception is company-scope only and cannot be reused to claim warehouse-level pre-focus history. The existing before-product-creation guard stays in place for every other product and warehouse scope. Forecast requests are queued as unreviewed and retain fictional-source provenance; nothing in this setup marks them as reviewed or claims business accuracy.
+
+The public `run_import(..., mode="apply")` path still fails closed under the existing signed-backup and independent-restore policy. The private ORM writer rejects direct calls outside Odoo test mode and is called by transactional integration tests to prove actual record workflows. CI uses a random Compose project and removes only that project's ephemeral database volume afterward. There is no supported local Apply command in this milestone.
 
 ## Dataset contract
 
@@ -28,14 +36,14 @@ The generator uses a fixed seed and explicit dates. Its canonical digest is stab
 
 The generated movement plan includes native opening adjustments and checks nonnegative intermediate stock and final ledger arithmetic per product/location. Sale deliveries, supplier receipts, customer returns, transfers, and unshipped orders remain distinct event types. Reservations do not change physical on-hand.
 
-All Odoo rows created by a later importer must keep their actual create_date and create_uid. Business-effective dates are pinned fictional event dates. Existing forecast requests reject history earlier than a product's Odoo creation date; this PR preserves that guard. The 24 planned history profiles are not yet verified Odoo sources and cannot currently support saved forecasts. No forecast run or review status is generated by the preview.
+Odoo audit dates and users are left to Odoo; business-effective dates are pinned fictional event dates. The importer verifies its 24 history profiles against actual Odoo moves before queuing unreviewed runs. No local forecast request or review status has been created for this milestone.
 
 ## Safety limits
 
 - The source database and volumes are explicit denylist entries. The setup never clones, mounts, starts, stops, or connects to them.
 - The new target requires its own database name, Compose project, target UUID, PostgreSQL cluster identity, volume mounts, local endpoint, and matching database marker before any future Apply path can be considered.
-- The default preview has zero database mutations. Duplicate fixture keys and content drift fail closed; isolated identity and signed-backup validation helpers are unit-tested for a later authorized Apply path.
+- Both offline and live Odoo previews report zero mutations. Duplicate fixture keys, incomplete registries, missing registered records, content drift, and dirty first-import targets fail closed.
 - The backup-manifest integrity check verifies an HMAC-SHA256 signature using a private key kept outside Git. It binds the database/project/target UUID, PostgreSQL system identifier, both named volumes, localhost endpoint, and actual dump and filestore sizes/hashes. This only checks signed metadata and artifact bytes; it does not verify an actual restore. Apply remains disabled until a later reviewed stage implements independent restore evidence checks and an authorized write path. No backup or signing key has been created for this PR.
 - Compose preflight checks the exact PostgreSQL and filestore named-volume mounts, the two expected read-only addon/script bind mounts, target UUID network labeling, and exclusive attachment to the private network. On a later authorized Start/Status, existing containers and network endpoints are re-inspected against the same boundary.
-- There is no Apply option in this PR. A complete Odoo writer, real dry-run comparison against a provisioned target, historical forecast eligibility, and browser QA need independent review and separately authorized follow-up work.
+- No local Apply command or Moroccan showroom import was run. Independent restore evidence is still required before any supported local write path can be enabled.
 - No secrets, backup archives, target database, or generated data file belongs in Git.

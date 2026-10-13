@@ -6,3 +6,4 @@ from . import forecast
 from . import inventory_risk
 from . import inventory_catalog
 from . import supplier_catalog
+from . import morocco_demo

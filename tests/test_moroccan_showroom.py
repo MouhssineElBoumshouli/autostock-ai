@@ -10,6 +10,7 @@ from scripts.moroccan_showroom.generator import (
     FOCUS_START,
     HISTORY_START,
     FORECAST_PROFILE_COUNT,
+    MISSING_SUPPLIER_SKU,
     _event_time_utc,
     canonical_json,
     generate_dataset,
@@ -132,6 +133,8 @@ def test_dataset_is_deterministic_and_hits_approved_counts():
         "companies": 1,
         "warehouses": 2,
         "products": 150,
+        "products_without_supplier_terms": 1,
+        "reordering_rules": 298,
         "suppliers": 8,
         "customers": 18,
         "focus_completed_orders": 350,
@@ -179,6 +182,33 @@ def test_product_and_partner_keys_are_new_and_currency_is_explicit():
         "ignition_sensors_fluids": 4,
     }
     assert all(product.history_profile_key is None for product in data.products if product not in profiled)
+
+
+def test_reserved_slow_product_has_no_vendor_terms_history_or_order_recommendation_inputs():
+    data = generate_dataset()
+    product = next(item for item in data.products if item.sku == MISSING_SUPPLIER_SKU)
+    events = [item for item in data.movements if item.sku == MISSING_SUPPLIER_SKU]
+
+    assert product.name == "Fuel Filter Element (Series 3)"
+    assert product.demand_class == "slow"
+    assert product.supplier_terms == ()
+    assert product.history_profile_key is None
+    assert product.reorder_minimum is None
+    assert product.reorder_maximum is None
+    assert not any(order.sku == MISSING_SUPPLIER_SKU for order in data.open_orders)
+    assert not any(
+        line.sku == MISSING_SUPPLIER_SKU
+        for order in data.orders
+        for line in order.lines
+    )
+    assert all(item.kind == "opening_adjustment" for item in events)
+    assert not any(item.kind == "vendor_receipt" for item in events)
+    balances = {
+        row["warehouse_key"]: row["on_hand"]
+        for row in data.ending_on_hand
+        if row["sku"] == MISSING_SUPPLIER_SKU
+    }
+    assert balances == {"warehouse_atlas_central": 8, "warehouse_south_depot": 5}
 
 
 def test_history_coverage_is_contiguous_and_scoped_to_profiles():

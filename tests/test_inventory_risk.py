@@ -50,6 +50,22 @@ def test_reviewed_forecast_requires_exact_scope_freshness_and_lead_coverage():
     assert not valid and "not been reviewed" in reason
 
 
+def test_reviewed_forecast_requires_its_source_history_to_remain_current():
+    today = date(2026, 10, 9)
+    now = datetime(2026, 10, 9, 12, tzinfo=timezone.utc)
+    run = eligible_run(today, now)
+    dates = [(today + timedelta(days=day)).isoformat() for day in range(1, 31)]
+
+    valid, reason = forecast_eligibility(
+        run, company_id=2, product_id=5, warehouse_id=8,
+        lead_time_days=21, today=today, now=now, point_dates=dates,
+        source_current=False,
+    )
+
+    assert not valid
+    assert "saved history no longer matches" in reason
+
+
 @pytest.mark.parametrize(
     ("changes", "expected_fragment"),
     [

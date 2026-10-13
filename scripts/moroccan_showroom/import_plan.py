@@ -1,8 +1,8 @@
-"""Read-only, idempotent import planning for the clean Moroccan target.
+"""Stable Odoo record identities and idempotent preview for the Morocco fixture.
 
-There is intentionally no record-writing adapter in this milestone. This module
-turns the deterministic fixture into stable model/key/digest entries, compares
-them with a read-only snapshot, and refuses conflicting prior fixture records.
+This module stays side-effect free. The Odoo adapter owns record creation and
+workflow validation; this plan compares its versioned natural keys and payload
+digests before any writer is allowed to run.
 """
 
 from __future__ import annotations
@@ -10,7 +10,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import hashlib
 
-from .generator import Dataset, canonical_json
+from .catalog import CATEGORIES
+from .generator import Dataset, FOCUS_START, canonical_json
 from .safety import SafetyError
 
 
@@ -60,8 +61,15 @@ def fixture_records(dataset: Dataset) -> tuple[FixtureRecord, ...]:
             "city": "Marrakech",
             "timezone": "Africa/Casablanca",
             "currency": "MAD",
+            "complete_history_start": FOCUS_START,
         },
     )
+    for category in CATEGORIES:
+        add(
+            "product_category",
+            f"category_{category['key']}",
+            {"key": category["key"], "name": category["label"] if "label" in category else category["key"]},
+        )
     for row in dataset.warehouses:
         add("warehouse", row["key"], row)
     for row in dataset.suppliers:
@@ -70,14 +78,38 @@ def fixture_records(dataset: Dataset) -> tuple[FixtureRecord, ...]:
         add("customer", row["key"], row)
     for product in dataset.products:
         add("product", product.key, asdict(product))
+        if product.reorder_minimum is not None and product.reorder_maximum is not None:
+            for warehouse in dataset.warehouses:
+                add(
+                    "reordering_rule",
+                    f"orderpoint_{product.key}_{warehouse['key']}",
+                    {
+                        "product_key": product.key,
+                        "warehouse_key": warehouse["key"],
+                        "minimum": product.reorder_minimum,
+                        "maximum": product.reorder_maximum,
+                    },
+                )
         for index, term in enumerate(product.supplier_terms, start=1):
-            add(
-                "supplier_term",
-                f"{product.key}_supplier_term_{index:02d}",
-                {"product_key": product.key, **asdict(term)},
-            )
+            for tier_index, (minimum, price) in enumerate(term.price_tiers, start=1):
+                add(
+                    "supplier_term",
+                    f"{product.key}_supplier_term_{index:02d}_{tier_index:02d}",
+                    {
+                        "product_key": product.key,
+                        "term": asdict(term),
+                        "tier_index": tier_index,
+                        "minimum": minimum,
+                        "price": price,
+                    },
+                )
     for order in dataset.orders:
         add("completed_sale_order", order.key, asdict(order))
+        add(
+            "completed_sale_picking",
+            f"out_{order.key}",
+            {"order_key": order.key, "day": order.day, "warehouse_key": order.warehouse_key},
+        )
         for line in order.lines:
             add("completed_sale_line", line.key, asdict(line))
     for movement in dataset.movements:
@@ -89,10 +121,39 @@ def fixture_records(dataset: Dataset) -> tuple[FixtureRecord, ...]:
             "sale_delivery": "sale_delivery_move_plan",
         }[movement.kind]
         add(entity, movement.key, asdict(movement))
+        if movement.kind in {"vendor_receipt", "customer_return"}:
+            add(
+                "stock_picking",
+                f"picking_{movement.key.lower()}",
+                {"movement_key": movement.key, "kind": movement.kind, "day": movement.day},
+            )
+        elif movement.kind == "internal_transfer":
+            add(
+                "stock_picking",
+                f"picking_{movement.journey_key.lower()}",
+                {"movement_key": movement.key, "kind": movement.kind, "day": movement.day},
+            )
     for order in dataset.open_orders:
         add("open_sale_order", order.key, asdict(order))
+        add(
+            "open_sale_picking",
+            f"out_{order.key}",
+            {"order_key": order.key, "day": order.day, "warehouse_key": order.warehouse_key},
+        )
     for profile in dataset.history_profiles:
         add("history_profile_plan", profile["key"], profile)
+        for horizon in (7, 30, 60):
+            add(
+                "forecast_request",
+                f"{profile['key']}_{horizon}d",
+                {
+                    "profile_key": profile["key"],
+                    "dataset_version": profile["dataset_version"],
+                    "history_start": profile["business_effective_start"],
+                    "history_end": profile["business_effective_end"],
+                    "horizon_days": horizon,
+                },
+            )
 
     ordered = tuple(sorted(records, key=lambda item: (item.entity, item.key)))
     keys = [(item.entity, item.key) for item in ordered]

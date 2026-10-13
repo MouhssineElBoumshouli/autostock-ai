@@ -41,6 +41,15 @@ WAREHOUSES = (
     ("warehouse_south_depot", "South Service Depot", "ASD", "Agadir"),
 )
 
+CATEGORY_LABELS = {
+    "filtration_engine_service": "Filters and service parts",
+    "braking": "Brakes",
+    "suspension_steering": "Suspension and steering",
+    "electrical_batteries": "Electrical and batteries",
+    "cooling_belts_drivetrain": "Cooling, belts and drivetrain",
+    "ignition_sensors_fluids": "Ignition, sensors and fluids",
+}
+
 CATEGORIES = (
     {
         "key": "filtration_engine_service",

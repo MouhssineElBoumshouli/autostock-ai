@@ -120,8 +120,15 @@ class AutoStockInventoryRisk(models.AbstractModel):
     @api.model
     def _forecast_for_pair(self, candidates, *, company, product, warehouse, lead_days, today, now):
         inspected = []
+        demo_source_current = {}
         for run in candidates:
             points = run.point_ids.sorted(key=lambda point: point.day)
+            source_current = True
+            if run.demo_history_profile_id:
+                profile_id = run.demo_history_profile_id.id
+                if profile_id not in demo_source_current:
+                    demo_source_current[profile_id] = run._demo_source_history_is_current()
+                source_current = demo_source_current[profile_id]
             eligible, reason = forecast_eligibility(
                 {
                     "company_id": run.company_id.id,
@@ -145,6 +152,7 @@ class AutoStockInventoryRisk(models.AbstractModel):
                 today=today,
                 now=now,
                 point_dates=[point.day for point in points],
+                source_current=source_current,
             )
             inspected.append((run, points, eligible, reason))
         usable = [item for item in inspected if item[2]]

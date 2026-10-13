@@ -5,3 +5,4 @@ from . import test_api
 from . import test_inventory_api
 from . import test_supplier_api
 from . import test_forecast_api
+from . import test_moroccan_importer
