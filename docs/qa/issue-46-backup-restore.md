@@ -19,7 +19,7 @@ The CI job:
 1. Creates a temporary PostgreSQL 16 database and installs the real AutoStock Odoo 19 addon.
 2. Adds a temporary target marker and a real Odoo attachment so both database and filestore have data to verify.
 3. Creates a PostgreSQL custom-format dump and an archive of the Odoo data volume.
-4. Hashes both backup artifacts and creates a signed temporary manifest.
+4. Hashes both backup artifacts, creates a signed temporary manifest, and keeps its temporary signing key only inside the disposable CI directory.
 5. Starts a completely separate restore PostgreSQL container with no published host ports and new volume/network names.
 6. Runs `pg_restore`, restores the filestore bytes, and verifies:
    - the AutoStock module is installed;
@@ -29,13 +29,13 @@ The CI job:
    - the proof attachment bytes match;
    - the complete filestore file-tree digest matches.
 7. Removes only the temporary restore container, volumes and network.
-8. Runs the fail-closed restore-evidence contract.
+8. Verifies the manifest HMAC again before trusting its hashes, then runs the fail-closed restore-evidence contract.
 
 The temporary CI source and restore environments are not the owner's showroom and are deleted after the job.
 
 ## What this does not prove yet
 
-A successful CI restore proves that the mechanism works. It is **not** yet evidence that the owner's local Moroccan target has been backed up and restored.
+A successful CI restore proves that the mechanism works and that the restore evidence is bound to the same signed manifest used for the backup hashes. It is **not** yet evidence that the owner's local Moroccan target has been backed up and restored.
 
 Before a local import can be considered, a later explicitly approved operator step must:
 
