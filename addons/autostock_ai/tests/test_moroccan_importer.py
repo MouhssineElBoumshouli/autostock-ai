@@ -202,7 +202,7 @@ class TestMoroccanOdooImporter(TransactionCase):
         self.assertEqual(row["reorder_locations"], [])
         self.assertNotIn("price", row)
 
-    def test_completed_reviewed_demo_run_loses_current_evidence_after_its_history_changes(self):
+    def test_reviewed_forecast_allows_repeat_preview_but_stales_after_source_change(self):
         run = self.env["autostock.forecast.run"].search(
             [
                 ("company_id", "=", self.company.id),
@@ -221,6 +221,7 @@ class TestMoroccanOdooImporter(TransactionCase):
                 "login": f"morocco-forecast-reviewer-{self.cr.dbname}",
                 "company_id": self.company.id,
                 "company_ids": [Command.set([self.company.id])],
+                "tz": "Europe/Paris",
                 "group_ids": [
                     Command.set(
                         [
@@ -232,6 +233,7 @@ class TestMoroccanOdooImporter(TransactionCase):
                 ],
             }
         )
+        self.assertFalse(manager.with_user(manager).has_group("base.group_system"))
         scoped_run = run.with_user(manager).with_company(self.company).with_context(
             allowed_company_ids=[self.company.id]
         )
@@ -240,6 +242,83 @@ class TestMoroccanOdooImporter(TransactionCase):
         reviewed_at = scoped_run.reviewed_at
         self.assertEqual(scoped_run.review_status, "reviewed")
         self.assertTrue(scoped_run._demo_source_history_is_current())
+        self.assertEqual(scoped_run.reviewed_by_id, manager)
+        manager.write({"tz": "America/New_York"})
+
+        # A manager review and normal user timezone preferences are legitimate
+        # lifecycle changes, not mutations of the pinned showroom fixture.
+        administrator = self.env.ref("base.user_admin")
+        administrator.write({"tz": "America/Toronto"})
+        counts_before = {
+            model: self._model_count(model)
+            for model in (
+                "sale.order",
+                "stock.picking",
+                "stock.move",
+                "autostock.morocco.history.profile",
+                "autostock.forecast.run",
+                "autostock.morocco.fixture",
+            )
+        }
+        preview_report = run_import(self.env, self.dataset, mode="dry-run")
+        registry_count = self.env["autostock.morocco.fixture"].search_count([])
+        self.assertEqual(preview_report["database_mutations"], 0)
+        self.assertEqual(preview_report["forecast_runs_created"], 0)
+        self.assertEqual(preview_report["entry_actions"]["create"], 0)
+        self.assertEqual(preview_report["planned_entries"], registry_count)
+        self.assertEqual(preview_report["entry_actions"]["unchanged"], registry_count)
+
+        importer = OdooMoroccoImporter(self.env)
+        repeat_preview = importer.plan(self.dataset)
+        no_op = importer._apply_dataset(self.dataset, repeat_preview)
+        self.assertEqual(no_op["mode"], "apply-noop")
+        self.assertEqual(no_op["database_mutations"], 0)
+        self.assertEqual(no_op["unchanged"], registry_count)
+        self.assertEqual(
+            {
+                model: self._model_count(model)
+                for model in counts_before
+            },
+            counts_before,
+        )
+        self.assertEqual(administrator.tz, "America/Toronto")
+        scoped_run.invalidate_recordset()
+        self.assertEqual(scoped_run.review_status, "reviewed")
+        self.assertEqual(scoped_run.reviewed_at, reviewed_at)
+        self.assertEqual(scoped_run.reviewed_by_id, manager)
+
+        # The audit still rejects forged or incomplete review/result state.
+        with self.assertRaisesRegex(
+            OdooImportError, "reviewed forecast is missing its manager audit metadata"
+        ):
+            with self.cr.savepoint():
+                scoped_run._write_worker({"reviewed_by_id": False, "reviewed_at": False})
+                OdooMoroccoImporter(self.env).plan(self.dataset)
+        self.env.invalidate_all()
+        scoped_run = run.with_user(manager).with_company(self.company).with_context(
+            allowed_company_ids=[self.company.id]
+        )
+        with self.assertRaisesRegex(OdooImportError, "only a completed forecast can be reviewed"):
+            with self.cr.savepoint():
+                scoped_run._write_worker({"state": "queued"})
+                OdooMoroccoImporter(self.env).plan(self.dataset)
+        self.env.invalidate_all()
+        scoped_run = run.with_user(manager).with_company(self.company).with_context(
+            allowed_company_ids=[self.company.id]
+        )
+        with self.assertRaisesRegex(
+            OdooImportError, "completed forecast result points are missing or incomplete"
+        ):
+            with self.cr.savepoint():
+                scoped_run.point_ids[:1].unlink()
+                OdooMoroccoImporter(self.env).plan(self.dataset)
+        self.env.invalidate_all()
+        scoped_run = run.with_user(manager).with_company(self.company).with_context(
+            allowed_company_ids=[self.company.id]
+        )
+        self.assertEqual(scoped_run.review_status, "reviewed")
+        self.assertEqual(scoped_run.reviewed_at, reviewed_at)
+        self.assertEqual(manager.tz, "America/New_York")
 
         def eligible_with_current_source(source_current):
             today = fields.Date.to_date(scoped_run.history_end_date) + timedelta(days=1)
@@ -320,6 +399,8 @@ class TestMoroccanOdooImporter(TransactionCase):
         )
         self.assertFalse(current_ok)
         self.assertIn("saved history no longer matches", current_reason)
+        with self.assertRaisesRegex(OdooImportError, "Actual Odoo state drift"):
+            OdooMoroccoImporter(self.env).plan(self.dataset)
         self.assertEqual(scoped_run.state, "completed")
         self.assertEqual(scoped_run.review_status, "reviewed")
         self.assertEqual(scoped_run.reviewed_at, reviewed_at)

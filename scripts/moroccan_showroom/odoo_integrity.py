@@ -8,7 +8,7 @@ preview is treated as unchanged.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 
 from odoo import fields
 
@@ -159,10 +159,6 @@ class _FixtureAudit:
             or record.autostock_demo_dataset_version != self.dataset.version
         ):
             self.fail(identity, "company identity, currency, or history coverage changed")
-        admin = self.env.ref("base.user_admin")
-        if admin.tz != "Africa/Casablanca":
-            self.fail(identity, "fixture administrator timezone changed")
-
     def _reference_records(self):
         country = self.env["res.country"].search([("code", "=", "MA")], limit=1)
         for category in CATEGORIES:
@@ -528,13 +524,41 @@ class _FixtureAudit:
                     or run.warehouse_id
                     or int(run.horizon_days) != horizon
                     or run.state not in {"queued", "completed"}
-                    or run.review_status != "unreviewed"
                 ):
-                    self.fail(identity, "forecast source, scope, horizon, state, or review status changed")
+                    self.fail(identity, "forecast source, scope, horizon, or state changed")
                 self._expect_date(identity, run.history_start_date,
                                   planned["business_effective_start"], "forecast history start")
                 self._expect_date(identity, run.history_end_date,
                                   planned["business_effective_end"], "forecast history end")
+                self._forecast_review_state(identity, run)
+                self._forecast_result(identity, run, horizon)
+
+    def _forecast_review_state(self, identity, run):
+        has_reviewer = bool(run.reviewed_by_id)
+        has_reviewed_at = bool(run.reviewed_at)
+        if run.review_status == "unreviewed":
+            if has_reviewer or has_reviewed_at:
+                self.fail(identity, "unreviewed forecast has review audit metadata")
+            return
+        if run.review_status != "reviewed":
+            self.fail(identity, "forecast review status is invalid")
+        if run.state != "completed":
+            self.fail(identity, "only a completed forecast can be reviewed")
+        if not has_reviewer or not has_reviewed_at:
+            self.fail(identity, "reviewed forecast is missing its manager audit metadata")
+
+    def _forecast_result(self, identity, run, horizon):
+        points = run.point_ids.sorted("day")
+        if run.state == "queued":
+            if points:
+                self.fail(identity, "queued forecast unexpectedly contains result points")
+            return
+        expected_days = [
+            fields.Date.to_date(run.history_end_date) + timedelta(days=offset)
+            for offset in range(1, horizon + 1)
+        ]
+        if [fields.Date.to_date(point.day) for point in points] != expected_days:
+            self.fail(identity, "completed forecast result points are missing or incomplete")
 
     def _stock_ledger(self):
         expected = {

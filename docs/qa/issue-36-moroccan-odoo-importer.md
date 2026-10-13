@@ -14,6 +14,13 @@ Odoo integration tests run only in GitHub Actions, against a newly created Odoo 
 - Missing, canceled, changed, and unregistered fixture records fail the preview. Any ledger variance also fails closed. An unchanged repeat import remains a no-write operation and repeats the live audit immediately before returning no-op, including when given a previously generated preview.
 - Focused Odoo regressions mutate live product and supplier prices, a dated delivery move, a completed sale line, a return link, and current stock; each must fail as actual-state drift. Other regressions cover an untouched repeat/no-duplicate transaction path, a deleted registered record, and an unregistered fixture-prefixed product. Preview remains read-only.
 
+## Forecast review and timezone preferences
+
+- The live integrity audit treats forecast review as a supported lifecycle change. It accepts a reviewed status only on a completed forecast with both reviewer and review timestamp recorded; an unreviewed forecast must not have review audit fields. A queued forecast with a review, or a completed forecast with missing review metadata, fails closed.
+- A completed forecast must retain one result point for every day in its requested horizon, while queued runs must not have result points. This catches missing or incomplete saved results without comparing mutable model output to a fixture hash.
+- User timezone preferences are not fixture data. Changing administrator/operator or manager/reviewer timezone after import no longer fails the audit; a dry-run/no-op repeat leaves those preferences unchanged. Fresh-target preparation still sets the bootstrap Odoo administrator timezone to `Africa/Casablanca`.
+- Odoo regression coverage completes a forecast, reviews it as a non-admin inventory manager, then verifies dry-run and no-op repeat import succeed with zero mutations or duplicate transactions. The same test confirms forged/incomplete review metadata, an invalid reviewed/queued state, and missing forecast points still fail. A subsequent source-movement change makes the reviewed run ineligible and causes the integrity audit to report drift; its review audit remains intact.
+
 ## Missing supplier example
 
 `AT-MA-FLT-132` — Fuel Filter Element (Series 3) — is a slow-moving product with no supplier terms, no supplier price, no reorder policy, no historical sales, no receipts, and no customer deliveries or transfers. It has only opening inventory: 8 units at Atlas Central Warehouse and 5 at South Service Depot. The supplier-gap API test verifies zero supplier terms and no lead time, price, or suggested order. This is a supplier-information gap, not a generated purchasing recommendation.
