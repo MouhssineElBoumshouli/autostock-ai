@@ -63,3 +63,16 @@ No backup or restore should ever target `autostock_showroom_demo`, `autostock-sh
 - No destructive Docker prune/reset/down-with-volumes command is allowed.
 - No application connection switch is authorized.
 - Dataset `atlas-ma-2026.4` still ends 10 October 2026 and the normal 14-day freshness rule remains unchanged.
+
+
+## Local operator stage
+
+After the CI mechanism proof was merged, the owner explicitly authorized preparation of the first real local Moroccan target initialization + backup/restore stage. The local operator is deliberately separate from the importer:
+
+- `local_target.ps1 -Action Initialize` can create only the prepared Moroccan database, install AutoStock, set the exact prepared target markers, and create one technical filestore proof attachment. It refuses fixture data, a dataset version, multiple companies, or mismatched markers.
+- `local_target.ps1 -Action BackupRestore` requires that clean initialized state, stops only Moroccan Odoo during the snapshot, creates private artifacts under ignored `.showroom/`, signs and re-validates the manifest, restores into unique no-port resources, checks database and filestore evidence, removes only verifier resources, and restarts Moroccan Odoo.
+- `local_backup.py` owns only signed manifest creation/revalidation so PowerShell does not duplicate the HMAC or artifact-hash policy.
+
+The operator still exposes **no dataset import path** and does not change public `run_import(..., mode="apply")`. The old USD Atlas project/database/volumes remain denied.
+
+This local operator must be rehearsed in disposable CI and independently reviewed before the owner runs it on Windows. A CI rehearsal proves the commands work in a clean disposable environment; it is not evidence that the owner's real local backup/restore has happened.
