@@ -95,7 +95,10 @@ function Get-ContainerName([string]$ContainerId) {
 
 function Assert-ImporterPreviewClean {
     $previewPath = Join-Path $PSScriptRoot "odoo_preview.py"
-    $previewCode = Get-Content -LiteralPath $previewPath -Raw
+    $previewBody = Get-Content -LiteralPath $previewPath -Raw
+    # Odoo shell executes stdin without defining __file__; give the existing
+    # preview loader its real read-only mounted path.
+    $previewCode = "__file__ = '/mnt/atlas-morocco/odoo_preview.py'" + [Environment]::NewLine + $previewBody
     Write-Host "Running the existing read-only Moroccan importer preflight."
     Invoke-OdooShell $previewCode
 }
