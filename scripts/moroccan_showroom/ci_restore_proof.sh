@@ -13,6 +13,7 @@ artifact_dir="$(mktemp -d)"
 dump_path="$artifact_dir/database.dump"
 filestore_path="$artifact_dir/filestore.tar"
 manifest_path="$artifact_dir/backup-manifest.json"
+signing_key_path="$artifact_dir/backup-manifest.key"
 evidence_path="$artifact_dir/restore-evidence.json"
 restore_network="${restore_project}-private"
 restore_db_container="${restore_project}-db"
@@ -138,15 +139,17 @@ filestore_sha256="$(sha256sum "$filestore_path" | awk '{print $1}')"
 test "$(sha256sum "$dump_path" | awk '{print $1}')" = "$database_sha256"
 test "$(sha256sum "$filestore_path" | awk '{print $1}')" = "$filestore_sha256"
 
-python3 - "$manifest_path" "$database" "$target_uuid" "$database_sha256" "$filestore_sha256" <<'PY'
+python3 - "$manifest_path" "$signing_key_path" "$database" "$target_uuid" "$database_sha256" "$filestore_sha256" <<'PY'
 import json
 import os
 import sys
 
 from scripts.moroccan_showroom.safety import backup_manifest_signature
 
-path, database, target_uuid, database_hash, filestore_hash = sys.argv[1:]
+path, key_path, database, target_uuid, database_hash, filestore_hash = sys.argv[1:]
 key = os.urandom(32)
+with open(key_path, "wb") as stream:
+    stream.write(key)
 manifest = {
     "database_name": database,
     "target_uuid": target_uuid,
@@ -289,6 +292,7 @@ PY
 python3 -m scripts.moroccan_showroom.restore_contract \
     --evidence-json "$evidence_path" \
     --backup-manifest-json "$manifest_path" \
+    --signing-key-file "$signing_key_path" \
     --expected-target-uuid "$target_uuid"
 
 echo "PASS: disposable PostgreSQL + Odoo filestore backup restored and verified."
