@@ -66,6 +66,7 @@ file_hash_in_volume() {
 }
 
 echo "Creating disposable Odoo/PostgreSQL source environment."
+docker compose --project-name "$source_project" build odoo
 docker compose --project-name "$source_project" up --detach --wait db
 docker compose --project-name "$source_project" run --rm --no-deps \
     --env "AUTOSTOCK_DEMO_TARGET_UUID=$target_uuid" \
