@@ -276,6 +276,7 @@ class TestMoroccanOdooImporter(TransactionCase):
             [
                 ("company_id", "=", self.company.id),
                 ("demo_history_profile_id", "!=", False),
+                ("warehouse_id", "=", False),
                 ("state", "=", "queued"),
             ],
             limit=1,
@@ -454,7 +455,16 @@ class TestMoroccanOdooImporter(TransactionCase):
                 ("product_id", "=", scoped_run.product_id.id),
                 ("state", "=", "done"),
                 ("sale_line_id", "!=", False),
+                ("sale_line_id.order_id.state", "in", ["sale", "done"]),
+                ("location_id.usage", "=", "internal"),
+                ("location_dest_id.usage", "=", "customer"),
                 ("date", ">=", fields.Datetime.to_datetime(scoped_run.history_start_date)),
+                (
+                    "date",
+                    "<",
+                    fields.Datetime.to_datetime(scoped_run.history_end_date) + timedelta(days=1),
+                ),
+                ("date", "<=", fields.Datetime.to_datetime(scoped_run.source_cutoff)),
             ],
             order="date, id",
             limit=1,
@@ -717,6 +727,9 @@ class TestMoroccanOdooImporter(TransactionCase):
                     ("state", "=", "done"),
                     ("sale_line_id", "!=", False),
                     ("picking_id.picking_type_id.warehouse_id", "=", warehouse.id),
+                    ("sale_line_id.order_id.state", "in", ["sale", "done"]),
+                    ("location_id.usage", "=", "internal"),
+                    ("location_dest_id.usage", "=", "customer"),
                     ("date", ">=", start_utc),
                     ("date", "<", end_utc),
                 ],
@@ -856,6 +869,7 @@ class TestMoroccanOdooImporter(TransactionCase):
             self.assertTrue(run.reviewed_at)
             self.assertTrue(run._demo_source_history_is_current())
 
+        StockMove = self.env["stock.move"]
         manager_forecast_service = Forecast.with_user(manager).with_company(self.company).with_context(
             allowed_company_ids=[self.company.id]
         )
