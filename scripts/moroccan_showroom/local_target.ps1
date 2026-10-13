@@ -93,6 +93,13 @@ function Get-ContainerName([string]$ContainerId) {
     return (Get-DockerOutput @("inspect", "--format", "{{.Name}}", $ContainerId)).TrimStart("/")
 }
 
+function Assert-ImporterPreviewClean {
+    $previewPath = Join-Path $PSScriptRoot "odoo_preview.py"
+    $previewCode = Get-Content -LiteralPath $previewPath -Raw
+    Write-Host "Running the existing read-only Moroccan importer preflight."
+    Invoke-OdooShell $previewCode
+}
+
 function Get-VolumeFileHash([string]$Volume, [string]$RelativePath) {
     $mount = "type=volume,source=$Volume,target=/data,readonly"
     $output = Get-DockerOutput @("run", "--rm", "--entrypoint", "sha256sum", "--mount", $mount, $image, "/data/filestore/$database/$RelativePath")
@@ -212,6 +219,7 @@ env.cr.commit()
 "@
         Invoke-OdooShell $markerScript
         $null = Assert-CleanInitializedTarget
+        Assert-ImporterPreviewClean
         $success = $true
     }
     finally {
@@ -279,6 +287,7 @@ function Backup-And-Restore {
         Invoke-Compose @("stop", "web")
         $webStopped = $true
         $source = Assert-CleanInitializedTarget
+        Assert-ImporterPreviewClean
 
         Write-Host "Creating private database and filestore backup artifacts under ignored .showroom/."
         $containerDumpPath = "/tmp/autostock-morocco-$restoreSuffix.dump"
