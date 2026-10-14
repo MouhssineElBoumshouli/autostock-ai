@@ -192,6 +192,10 @@ function Assert-MarkedTargetIdentity {
     if ($identityParts.Count -ne 2 -or $identityParts[0] -ne $targetUuid -or $identityParts[1] -ne "true") {
         throw "Company target marker does not match the prepared Moroccan environment."
     }
+    $proofStore = Invoke-Psql "SELECT COALESCE(store_fname, '') FROM ir_attachment WHERE name='$proofAttachmentName' ORDER BY id DESC LIMIT 1"
+    if (-not $proofStore) {
+        throw "The local restore-proof attachment is missing from the Moroccan target."
+    }
 }
 
 function Resolve-ApprovedBackupDirectory([string]$Stamp) {
@@ -200,7 +204,8 @@ function Resolve-ApprovedBackupDirectory([string]$Stamp) {
     }
     $root = [System.IO.Path]::GetFullPath((Join-Path $repoRoot ".showroom/morocco-backups"))
     $candidate = [System.IO.Path]::GetFullPath((Join-Path $root $Stamp))
-    $prefix = $root.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    $separators = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    $prefix = $root.TrimEnd($separators) + [System.IO.Path]::DirectorySeparatorChar
     if (-not $candidate.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "Backup directory escaped the private Moroccan backup root."
     }
