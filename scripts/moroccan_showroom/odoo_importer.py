@@ -70,9 +70,19 @@ class OdooImportError(SafetyError):
 _APPROVED_APPLY = object()
 
 
-def run_import(env, dataset: Dataset, *, mode: str, typed_target_uuid: str | None = None,
-               target_identity=None, backup_manifest=None, backup_signing_key=None) -> dict:
-    """Safe entrypoint used by an Odoo shell runner; preview never writes."""
+def run_import(
+    env,
+    dataset: Dataset,
+    *,
+    mode: str,
+    typed_target_uuid: str | None = None,
+    target_identity=None,
+    backup_manifest=None,
+    backup_signing_key=None,
+    backup_artifact_paths=None,
+    restore_evidence=None,
+) -> dict:
+    """Safe entrypoint used by Odoo shell runners; preview never writes."""
     importer = OdooMoroccoImporter(env)
     preview = importer.plan(dataset)
     if mode in {"dry-run", "preview"}:
@@ -84,6 +94,8 @@ def run_import(env, dataset: Dataset, *, mode: str, typed_target_uuid: str | Non
         target_identity=target_identity,
         backup_manifest=backup_manifest,
         backup_signing_key=backup_signing_key,
+        backup_artifact_paths=backup_artifact_paths,
+        restore_evidence=restore_evidence,
     )
     return importer._apply_dataset(dataset, preview, _approval=_APPROVED_APPLY)
 
