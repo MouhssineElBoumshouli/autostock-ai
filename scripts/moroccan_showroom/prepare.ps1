@@ -43,7 +43,13 @@ function Invoke-Compose([string[]]$Arguments) {
     }
 }
 
-function Invoke-IsolationContract([string]$Mode, [object]$Evidence, [string]$TargetUuid, [string[]]$TargetContainerIds = @()) {
+function Invoke-IsolationContract(
+    [string]$Mode,
+    [object]$Evidence,
+    [string]$TargetUuid,
+    [string[]]$TargetContainerIds = @(),
+    [switch]$AllowSharedWebImage
+) {
     $evidencePath = Join-Path ([System.IO.Path]::GetTempPath()) ("autostock-morocco-" + [guid]::NewGuid().ToString("N") + ".json")
     try {
         $json = ConvertTo-Json -InputObject $Evidence -Depth 30
@@ -57,6 +63,9 @@ function Invoke-IsolationContract([string]$Mode, [object]$Evidence, [string]$Tar
         )
         foreach ($containerId in $TargetContainerIds) {
             $pythonArgs += @("--target-container-id", $containerId)
+        }
+        if ($AllowSharedWebImage) {
+            $pythonArgs += "--allow-shared-web-image"
         }
         Push-Location $repoRoot
         try {
@@ -74,7 +83,7 @@ function Invoke-IsolationContract([string]$Mode, [object]$Evidence, [string]$Tar
     }
 }
 
-function Assert-NewEnvironmentIsolated {
+function Assert-NewEnvironmentIsolated([switch]$AllowSharedWebImage) {
     $configJson = & docker @((Get-ComposeArgs) + @("config", "--format", "json"))
     if ($LASTEXITCODE -ne 0) { throw "Unable to validate the Moroccan Compose configuration." }
     $config = ($configJson -join [Environment]::NewLine) | ConvertFrom-Json
@@ -170,7 +179,7 @@ function Assert-NewEnvironmentIsolated {
             })
             networks = @($container.NetworkSettings.Networks.PSObject.Properties.Name)
         }
-        Invoke-IsolationContract -Mode "container" -Evidence $containerEvidence -TargetUuid $targetUuid
+        Invoke-IsolationContract -Mode "container" -Evidence $containerEvidence -TargetUuid $targetUuid -AllowSharedWebImage:$AllowSharedWebImage
     }
 
     if ($networkExists) {
@@ -220,10 +229,11 @@ switch ($Action) {
         if (-not (Test-Path -LiteralPath $envPath)) {
             throw "Run Prepare first to create the ignored Moroccan environment file."
         }
-        Assert-NewEnvironmentIsolated
+        # Permit only the exact previous shared web-image tag during this
+        # pre-build migration check. Mounts, UUIDs, volumes and network remain strict.
+        Assert-NewEnvironmentIsolated -AllowSharedWebImage
         Invoke-Compose @("up", "--detach", "--wait", "--build", "db", "web")
-        # Verify the actual newly running mounts/network as well as the rendered
-        # Compose contract. A repeat Start follows the same fail-closed path.
+        # After the rebuild/recreate, require the dedicated Moroccan image strictly.
         Assert-NewEnvironmentIsolated
         Write-Host "The separate Moroccan Odoo/PostgreSQL services are running at http://127.0.0.1:8070."
         Write-Host "No database was initialized and no dataset was imported."
