@@ -183,12 +183,24 @@ function Assert-NewEnvironmentIsolated([switch]$AllowSharedWebImage) {
     }
 
     if ($networkExists) {
-        $networkJson = & docker network inspect $expectedNetwork
-        if ($LASTEXITCODE -ne 0) { throw "Could not inspect the existing Moroccan network." }
-        $network = (($networkJson -join [Environment]::NewLine) | ConvertFrom-Json)[0]
         $attachedContainerIds = @()
-        if ($network.Containers) {
-            $attachedContainerIds = @($network.Containers.PSObject.Properties.Name)
+        # Compose run --rm disconnects its short-lived Odoo helper containers
+        # as it exits. Docker can briefly retain an endpoint in network inspect
+        # while that removal is completing. Wait a bounded time for that stale
+        # observation to settle; do not add unvalidated containers to the
+        # allow-list, and still fail closed if any unmatched endpoint remains.
+        for ($attempt = 0; $attempt -lt 6; $attempt++) {
+            $networkJson = & docker network inspect $expectedNetwork
+            if ($LASTEXITCODE -ne 0) { throw "Could not inspect the existing Moroccan network." }
+            $network = (($networkJson -join [Environment]::NewLine) | ConvertFrom-Json)[0]
+            $attachedContainerIds = @()
+            if ($network.Containers) {
+                $attachedContainerIds = @($network.Containers.PSObject.Properties.Name)
+            }
+            $unmatched = @($attachedContainerIds | Where-Object { $_ -notin $targetContainerIds })
+            if ($unmatched.Count -eq 0 -or $attempt -eq 5) { break }
+            Write-Host "Waiting for Docker to finish detaching a temporary Compose endpoint ($($unmatched.Count) unmatched)."
+            Start-Sleep -Seconds 1
         }
         $networkEvidence = @{
             name = $network.Name
