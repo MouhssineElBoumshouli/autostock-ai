@@ -219,7 +219,7 @@ switch ($Action) {
             throw "Run Prepare first to create the ignored Moroccan environment file."
         }
         Assert-NewEnvironmentIsolated
-        Invoke-Compose @("up", "--detach", "--wait", "db", "web")
+        Invoke-Compose @("up", "--detach", "--wait", "--build", "db", "web")
         # Verify the actual newly running mounts/network as well as the rendered
         # Compose contract. A repeat Start follows the same fail-closed path.
         Assert-NewEnvironmentIsolated
