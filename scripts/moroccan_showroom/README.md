@@ -20,7 +20,7 @@ After independent review and separate owner authorization, Start can launch only
 
     pwsh scripts/moroccan_showroom/prepare.ps1 -Action Start
 
-Start validates the Compose project, bind address, private database service, volume names, and existing target-resource labels before starting the separate Odoo and PostgreSQL services. It does not initialize the database, import fixture records, or change the main app connection. The Odoo preview script is read-only. No local Moroccan service or database has been started for this importer milestone.
+Start validates the Compose project, bind address, private database service, volume names, dedicated Moroccan Odoo image identity, and existing target-resource labels before starting the separate Odoo and PostgreSQL services. It rebuilds only the dedicated `autostock-ai-odoo-morocco:19.0` web image from the current Dockerfile so stale/shared Atlas images cannot be reused. It does not initialize the database, import fixture records, or change the main app connection. The Odoo preview script is read-only.
 
 ## Odoo importer boundary
 
