@@ -652,6 +652,23 @@ def test_live_container_mounts_and_network_must_match_compose_contract(tmp_path)
     with pytest.raises(SafetyError, match="image"):
         validate_container_inspect(wrong_image, repo_root=tmp_path, expected_uuid=TARGET_UUID)
 
+    validate_container_inspect(
+        wrong_image,
+        repo_root=tmp_path,
+        expected_uuid=TARGET_UUID,
+        allow_shared_web_image=True,
+    )
+
+    unrelated_image = deepcopy(expected)
+    unrelated_image["image"] = "autostock-unrelated:19.0"
+    with pytest.raises(SafetyError, match="image"):
+        validate_container_inspect(
+            unrelated_image,
+            repo_root=tmp_path,
+            expected_uuid=TARGET_UUID,
+            allow_shared_web_image=True,
+        )
+
 
 def test_live_database_mount_cannot_use_another_volume_or_target(tmp_path):
     expected = container_inspect(tmp_path, service="db")
