@@ -12,7 +12,7 @@ From the repository root in PowerShell, run:
 
 Prepare writes newly generated local credentials and a target UUID to the ignored .env.atlas-morocco file. It refuses to overwrite an existing file. It does not run Docker or connect to either database.
 
-DryRun generates the pinned dataset and checks target counts, stable keys, date windows, event links, import-plan idempotency, and product/location stock arithmetic. It is an offline preview and does not inspect or write an Odoo database. The `odoo_importer` module adds a read-only Odoo preview and an ORM writer exercised only against the ephemeral database in Odoo CI. The public Apply gate remains closed pending independent restore evidence.
+DryRun generates the pinned dataset and checks target counts, stable keys, date windows, event links, import-plan idempotency, and product/location stock arithmetic. It is an offline preview and does not inspect or write an Odoo database. The `odoo_importer` module adds a read-only Odoo preview and the ORM writer. Apply remains fail-closed unless the exact typed target UUID, live target identity, signed backup bytes, and successful independent restore evidence all validate.
 
 The requirements pin IANA timezone data so Windows and the Odoo container use the date-correct `Africa/Casablanca` offset for each planned event timestamp.
 
@@ -30,7 +30,7 @@ Odoo `create_date` and `create_uid` remain actual import audit values. The impor
 
 History and forecast freshness rules remain the ordinary 14-day rules. With the fixture's last historical date of 10 October 2026, its results are potentially current only around the explicitly documented 13 October review point; they become stale as time advances. Do not freeze the production clock or relax freshness to keep this old demo populated. Before a later showroom cutover, either present the results as clearly historical examples with no current forecast-based replenishment guidance, or prepare and review a new dataset version with genuine, correctly dated Odoo movements for a current training window. Never change Odoo creation dates to manufacture history.
 
-The public `run_import(..., mode="apply")` path still fails closed under the existing signed-backup and independent-restore policy. The private ORM writer rejects direct calls outside Odoo test mode and is called by transactional integration tests to prove actual record workflows. CI uses a random Compose project and removes only that project's ephemeral database volume afterward. There is no supported local Apply command in this milestone.
+The guarded `run_import(..., mode="apply")` path requires the exact typed target UUID, cross-checked target identity, signed database + filestore bytes, and successful independent restore evidence before it can reach the ORM writer. Direct writer calls remain restricted outside Odoo test mode. The supported owner-local write path is only `local_target.ps1 -Action Apply`; it stops Moroccan web during the transaction, verifies the complete registry before commit, verifies it again in a separate read-only Odoo process, and restarts Moroccan web only after success.
 
 ## Dataset contract
 
@@ -44,7 +44,7 @@ Odoo audit dates and users are left to Odoo; business-effective dates are pinned
 
 Issue #46 adds a separate restore-proof layer before any local import. The CI proof performs a real PostgreSQL dump/restore and matching Odoo filestore archive/restore in disposable Docker resources, then checks the Odoo marker/module/table plus attachment and full filestore hashes. See [the QA note](../../docs/qa/issue-46-backup-restore.md).
 
-This is only proof that the mechanism works. It does **not** authorize or perform a backup, restore, initialization, import, or app switch on the owner's local Moroccan target. Public Apply remains disabled until a separately approved local target backup and independent restore are verified.
+The CI proof alone is not owner evidence. The owner's real Windows target backup and independent restore were completed separately before the Apply stage was authorized. The Apply command must point to that exact private backup directory and re-validates both its signed artifacts and restore evidence before any write.
 
 ## Local target verification
 
@@ -54,19 +54,22 @@ From the repository root in PowerShell:
 
     powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\moroccan_showroom\local_target.ps1 -Action Initialize
     powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\moroccan_showroom\local_target.ps1 -Action BackupRestore
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\moroccan_showroom\local_target.ps1 -Action Apply -BackupStamp <yyyyMMdd-HHmmss> -TypedTargetUuid <prepared-uuid>
 
 `Initialize` starts only the isolated Moroccan Compose project, creates the clean Odoo database if it does not already exist, installs AutoStock, stamps the exact prepared target UUID into the database/company markers, and creates one small technical attachment used only to prove filestore recovery. It refuses a mismatched marker, multiple companies, an existing dataset version, or existing fixture records.
 
 `BackupRestore` stops only the Moroccan Odoo web service while taking a consistent database + filestore backup, signs and validates the backup manifest, restores the exact artifacts into unique no-port verifier resources, compares the restored module/marker/table/attachment/file-tree evidence, removes only those verifier resources, and restarts the Moroccan web service. The private dump, filestore archive, manifest, signing key, and restore evidence stay under the ignored `.showroom/morocco-backups/` directory. Do not share or commit them.
 
-These actions still do **not** import `atlas-ma-2026.4`, enable public Apply, modify the old USD Atlas showroom, or switch the application connection. Dataset import remains a separate approval gate.
+`Apply` requires the exact successful backup stamp and the prepared target UUID typed explicitly. It re-validates the live target identity, signed backup bytes, and restore evidence before and immediately after stopping Moroccan web. It mounts the approved backup read-only, runs the existing Odoo ORM importer, verifies all planned fixture identities and 90 forecast requests before committing, then verifies the committed registry again in a separate read-only Odoo process. On failure, it leaves Moroccan web stopped for inspection/recovery instead of continuing.
+
+`Initialize` and `BackupRestore` still do **not** import `atlas-ma-2026.4`, modify the old USD Atlas showroom, or switch the application connection. After separate owner approval, `Apply` is a third action and remains isolated from application cutover.
 
 ## Safety limits
 
 - The source database and volumes are explicit denylist entries. The setup never clones, mounts, starts, stops, or connects to them.
 - The new target requires its own database name, Compose project, target UUID, PostgreSQL cluster identity, volume mounts, local endpoint, and matching database marker before any future Apply path can be considered.
 - Both offline and live Odoo previews report zero mutations. Duplicate fixture keys, incomplete registries, missing registered records, content drift, and dirty first-import targets fail closed.
-- The backup-manifest integrity check verifies an HMAC-SHA256 signature using a private key kept outside Git. It binds the database/project/target UUID, PostgreSQL system identifier, both named volumes, localhost endpoint, and actual dump and filestore sizes/hashes. This only checks signed metadata and artifact bytes; it does not verify an actual restore. Apply remains disabled until a later reviewed stage implements independent restore evidence checks and an authorized write path. No backup or signing key has been created for this PR.
+- The backup-manifest integrity check verifies an HMAC-SHA256 signature using a private key kept outside Git. It binds the database/project/target UUID, PostgreSQL system identifier, both named volumes, localhost endpoint, and actual dump and filestore sizes/hashes. Apply additionally requires the successful independent restore evidence and re-checks the mounted backup bytes before the ORM transaction begins.
 - Compose preflight checks the exact PostgreSQL and filestore named-volume mounts, the two expected read-only addon/script bind mounts, target UUID network labeling, and exclusive attachment to the private network. On a later authorized Start/Status, existing containers and network endpoints are re-inspected against the same boundary.
-- No local Apply command or Moroccan showroom import was run. Independent restore evidence is still required before any supported local write path can be enabled.
+- Application cutover remains a separate gate. A successful dataset Apply does not change the frontend/backend connection and does not affect the independently runnable legacy USD Atlas showroom.
 - No secrets, backup archives, target database, or generated data file belongs in Git.
