@@ -658,6 +658,34 @@ def test_live_database_mount_cannot_use_another_volume_or_target(tmp_path):
             validate_container_inspect(tampered, repo_root=tmp_path, expected_uuid=TARGET_UUID)
 
 
+@pytest.mark.parametrize(
+    "docker_prefix",
+    [
+        "/run/desktop/mnt/host/c",
+        "/host_mnt/c",
+    ],
+)
+def test_live_windows_docker_desktop_bind_aliases_match_exact_repo_path(docker_prefix):
+    repo_root = Path(r"C:\Users\Mouhssine\Documents\autostock ai\autostock-ai")
+    expected = container_inspect(repo_root)
+    expected["mounts"][1]["Source"] = (
+        f"{docker_prefix}/Users/Mouhssine/Documents/autostock ai/autostock-ai/addons"
+    )
+    expected["mounts"][2]["Source"] = (
+        f"{docker_prefix}/Users/Mouhssine/Documents/autostock ai/autostock-ai/"
+        "scripts/moroccan_showroom"
+    )
+
+    validate_container_inspect(expected, repo_root=repo_root, expected_uuid=TARGET_UUID)
+
+    wrong = deepcopy(expected)
+    wrong["mounts"][1]["Source"] = (
+        f"{docker_prefix}/Users/Mouhssine/Documents/another-repo/addons"
+    )
+    with pytest.raises(SafetyError, match="Live web mounts differ"):
+        validate_container_inspect(wrong, repo_root=repo_root, expected_uuid=TARGET_UUID)
+
+
 def test_existing_network_rejects_foreign_endpoints_and_uuid(tmp_path):
     evidence = {
         "name": TARGET_NETWORK,
