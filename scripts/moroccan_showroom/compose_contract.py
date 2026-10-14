@@ -26,6 +26,7 @@ ADDONS_TARGET = "/mnt/extra-addons"
 SCRIPTS_TARGET = "/mnt/atlas-morocco"
 POSTGRES_IMAGE = "postgres:16"
 MOROCCAN_WEB_IMAGE = "autostock-ai-odoo-morocco:19.0"
+SHARED_WEB_IMAGE = "autostock-ai-odoo:19.0"
 
 
 def _require(condition: bool, message: str) -> None:
@@ -160,7 +161,11 @@ def validate_compose_config(config: dict, *, repo_root: Path, expected_uuid: str
 
 
 def validate_container_inspect(
-    evidence: dict, *, repo_root: Path, expected_uuid: str
+    evidence: dict,
+    *,
+    repo_root: Path,
+    expected_uuid: str,
+    allow_shared_web_image: bool = False,
 ) -> None:
     """Validate an existing target container's identity, mounts, and network."""
     expected_uuid = validate_uuid(expected_uuid, "Expected target UUID")
@@ -172,8 +177,13 @@ def validate_container_inspect(
     _require(labels.get("com.autostock.target-uuid") == expected_uuid, "Container target UUID does not match.")
     name = str(evidence.get("name", "")).lstrip("/")
     _require(TARGET_PROJECT in name, "Container name does not identify the Moroccan project.")
-    expected_image = POSTGRES_IMAGE if service == "db" else MOROCCAN_WEB_IMAGE
-    _require(evidence.get("image") == expected_image, f"Live {service} image does not match the isolated contract.")
+    expected_images = {POSTGRES_IMAGE} if service == "db" else {MOROCCAN_WEB_IMAGE}
+    if service == "web" and allow_shared_web_image:
+        expected_images.add(SHARED_WEB_IMAGE)
+    _require(
+        evidence.get("image") in expected_images,
+        f"Live {service} image does not match the isolated contract.",
+    )
 
     mounts = evidence.get("mounts")
     _require(isinstance(mounts, list), "Container mount evidence is missing.")
@@ -244,13 +254,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo-root", type=Path, required=True)
     parser.add_argument("--target-uuid", required=True)
     parser.add_argument("--target-container-id", action="append", default=[])
+    parser.add_argument("--allow-shared-web-image", action="store_true")
     args = parser.parse_args(argv)
     try:
         evidence = json.loads(args.evidence_json.read_text(encoding="utf-8"))
         if args.mode == "config":
             validate_compose_config(evidence, repo_root=args.repo_root, expected_uuid=args.target_uuid)
         elif args.mode == "container":
-            validate_container_inspect(evidence, repo_root=args.repo_root, expected_uuid=args.target_uuid)
+            validate_container_inspect(
+                evidence,
+                repo_root=args.repo_root,
+                expected_uuid=args.target_uuid,
+                allow_shared_web_image=args.allow_shared_web_image,
+            )
         else:
             validate_network_inspect(
                 evidence,
