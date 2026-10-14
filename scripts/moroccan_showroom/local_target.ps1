@@ -13,7 +13,7 @@ $preparePath = Join-Path $PSScriptRoot "prepare.ps1"
 $project = "autostock-atlas-morocco"
 $database = "autostock_atlas_morocco_demo"
 $filestoreVolume = "autostock_atlas_morocco_filestore"
-$image = "autostock-ai-odoo:19.0"
+$image = "autostock-ai-odoo-morocco:19.0"
 $proofAttachmentName = "AutoStock local restore proof"
 $proofAttachmentBytes = "autostock-local-independent-restore-proof-v1"
 
