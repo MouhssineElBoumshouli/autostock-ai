@@ -13,7 +13,7 @@ $preparePath = Join-Path $PSScriptRoot "prepare.ps1"
 $project = "autostock-atlas-morocco"
 $database = "autostock_atlas_morocco_demo"
 $filestoreVolume = "autostock_atlas_morocco_filestore"
-$image = "autostock-ai-odoo:19.0"
+$image = "autostock-ai-odoo-morocco:19.0"
 $proofAttachmentName = "AutoStock local restore proof"
 $proofAttachmentBytes = "autostock-local-independent-restore-proof-v1"
 
@@ -93,6 +93,14 @@ function Get-ContainerName([string]$ContainerId) {
     return (Get-DockerOutput @("inspect", "--format", "{{.Name}}", $ContainerId)).TrimStart("/")
 }
 
+function Assert-WebRuntimeReady {
+    Write-Host "Verifying the dedicated Moroccan Odoo runtime dependencies."
+    Invoke-Compose @(
+        "run", "--rm", "--no-deps", "--entrypoint", "python3", "web",
+        "-c", "import tzdata; import numpy; import sklearn"
+    )
+}
+
 function Assert-ImporterPreviewClean {
     $previewPath = Join-Path $PSScriptRoot "odoo_preview.py"
     $previewBody = Get-Content -LiteralPath $previewPath -Raw
@@ -168,6 +176,7 @@ function Initialize-Target {
     try {
         Write-Host "Stopping only Moroccan Odoo while the clean database is initialized."
         Invoke-Compose @("stop", "web")
+        Assert-WebRuntimeReady
         $exists = Invoke-Psql "SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_database WHERE datname='$database') THEN 'true' ELSE 'false' END" "postgres"
 
         if ($exists -eq "false") {

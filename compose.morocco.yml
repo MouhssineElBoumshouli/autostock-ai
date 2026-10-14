@@ -22,7 +22,7 @@ services:
       retries: 10
 
   web:
-    image: autostock-ai-odoo:19.0
+    image: autostock-ai-odoo-morocco:19.0
     build:
       context: .
       dockerfile: Dockerfile

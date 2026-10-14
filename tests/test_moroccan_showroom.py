@@ -48,6 +48,7 @@ def compose_config(repo_root: Path):
         "name": "autostock-atlas-morocco",
         "services": {
             "db": {
+                "image": "postgres:16",
                 "volumes": [
                     {"type": "volume", "source": "morocco_postgres", "target": DATABASE_TARGET, "read_only": False}
                 ],
@@ -55,6 +56,7 @@ def compose_config(repo_root: Path):
                 "ports": [],
             },
             "web": {
+                "image": "autostock-ai-odoo-morocco:19.0",
                 "volumes": [
                     {"type": "volume", "source": "morocco_filestore", "target": FILESTORE_TARGET, "read_only": False},
                     {"type": "bind", "source": str(repo_root / "addons"), "target": ADDONS_TARGET, "read_only": True},
@@ -94,6 +96,7 @@ def container_inspect(repo_root: Path, service: str = "web"):
         ]
     return {
         "name": f"/autostock-atlas-morocco-{service}-1",
+        "image": "postgres:16" if service == "db" else "autostock-ai-odoo-morocco:19.0",
         "labels": {
             "com.docker.compose.project": "autostock-atlas-morocco",
             "com.docker.compose.service": service,
@@ -613,6 +616,7 @@ def test_mocked_first_start_repeat_start_and_status_preflights_are_repeatable(tm
         lambda config: config["services"]["web"]["volumes"].append({"type": "bind", "source": ".showroom", "target": "/leak", "read_only": False}),
         lambda config: config["services"]["web"]["volumes"][1].update(read_only=False),
         lambda config: config["services"]["web"].update(networks={NETWORK_KEY: None, "default": None}),
+        lambda config: config["services"]["web"].update(image="autostock-ai-odoo:19.0"),
         lambda config: config["networks"][NETWORK_KEY]["labels"].pop("com.autostock.target-uuid"),
     ],
 )
@@ -643,6 +647,28 @@ def test_live_container_mounts_and_network_must_match_compose_contract(tmp_path)
     with pytest.raises(SafetyError):
         validate_container_inspect(wrong_network, repo_root=tmp_path, expected_uuid=TARGET_UUID)
 
+    wrong_image = deepcopy(expected)
+    wrong_image["image"] = "autostock-ai-odoo:19.0"
+    with pytest.raises(SafetyError, match="image"):
+        validate_container_inspect(wrong_image, repo_root=tmp_path, expected_uuid=TARGET_UUID)
+
+    validate_container_inspect(
+        wrong_image,
+        repo_root=tmp_path,
+        expected_uuid=TARGET_UUID,
+        allow_shared_web_image=True,
+    )
+
+    unrelated_image = deepcopy(expected)
+    unrelated_image["image"] = "autostock-unrelated:19.0"
+    with pytest.raises(SafetyError, match="image"):
+        validate_container_inspect(
+            unrelated_image,
+            repo_root=tmp_path,
+            expected_uuid=TARGET_UUID,
+            allow_shared_web_image=True,
+        )
+
 
 def test_live_database_mount_cannot_use_another_volume_or_target(tmp_path):
     expected = container_inspect(tmp_path, service="db")
@@ -656,6 +682,11 @@ def test_live_database_mount_cannot_use_another_volume_or_target(tmp_path):
         tampered["mounts"][0].update(changes)
         with pytest.raises(SafetyError):
             validate_container_inspect(tampered, repo_root=tmp_path, expected_uuid=TARGET_UUID)
+
+    wrong_image = deepcopy(expected)
+    wrong_image["image"] = "postgres:15"
+    with pytest.raises(SafetyError, match="image"):
+        validate_container_inspect(wrong_image, repo_root=tmp_path, expected_uuid=TARGET_UUID)
 
 
 @pytest.mark.parametrize(
