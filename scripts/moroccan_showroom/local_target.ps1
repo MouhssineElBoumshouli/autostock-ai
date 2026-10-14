@@ -220,6 +220,29 @@ function Resolve-ApprovedBackupDirectory([string]$Stamp) {
     return $candidate
 }
 
+function Stage-ApplyEvidenceVolume([string]$BackupDir, [string]$Volume, [string]$Scope) {
+    Invoke-Docker @("volume", "create", "--label", "com.autostock.apply-evidence=$Scope", $Volume)
+    $sourceMount = "type=bind,source=$BackupDir,target=/source,readonly"
+    $evidenceMount = "type=volume,source=$Volume,target=/evidence"
+    Invoke-Docker @(
+        "run", "--rm", "--user", "root", "--entrypoint", "sh",
+        "--mount", $sourceMount,
+        "--mount", $evidenceMount,
+        $image,
+        "-c",
+        "cp /source/database.dump /source/filestore.tar /source/backup-manifest.json /source/backup-manifest.key /source/restore-evidence.json /evidence/ && chown -R odoo:odoo /evidence && chmod 0444 /evidence/database.dump /evidence/filestore.tar /evidence/backup-manifest.json /evidence/restore-evidence.json && chmod 0400 /evidence/backup-manifest.key"
+    )
+}
+
+function Remove-OwnedApplyEvidenceVolume([string]$Volume, [string]$Scope) {
+    $resource = Get-ExistingDockerResource "volume" $Volume
+    if ($null -eq $resource) { return }
+    if ($null -eq $resource.Labels -or $resource.Labels."com.autostock.apply-evidence" -ne $Scope) {
+        throw "Refusing to remove Apply evidence volume $Volume because it is not owned by $Scope."
+    }
+    Invoke-Docker @("volume", "rm", $Volume)
+}
+
 function Initialize-Target {
     Write-Host "Starting only the isolated Moroccan services."
     Invoke-Prepare "Start"
@@ -574,7 +597,10 @@ function Apply-Dataset {
     Write-Host "Running a final read-only importer preflight before mutation."
     Assert-ImporterPreviewClean
 
+    $applyEvidenceScope = "autostock-apply-evidence-" + [guid]::NewGuid().ToString("N").Substring(0, 12)
+    $applyEvidenceVolume = "$applyEvidenceScope-private"
     $success = $false
+    $cleanupOk = $false
     try {
         Write-Host "Stopping only Moroccan Odoo for the guarded dataset transaction."
         Invoke-Compose @("stop", "web")
@@ -584,10 +610,13 @@ function Apply-Dataset {
         Invoke-Python $validateArgs
         Invoke-Python $restoreArgs
 
+        Write-Host "Staging read-only Apply evidence in a disposable labeled Docker volume."
+        Stage-ApplyEvidenceVolume $backupDir $applyEvidenceVolume $applyEvidenceScope
+
         $containerNamesJson = ConvertTo-Json -Compress -InputObject @($dbContainerName, $webContainerName)
-        $backupMount = $backupDir + ":/mnt/atlas-backup:ro"
+        $evidenceMount = $applyEvidenceVolume + ":/mnt/atlas-backup:ro"
         $extraArgs = @(
-            "--volume", $backupMount,
+            "--volume", $evidenceMount,
             "--env", "AUTOSTOCK_MOROCCO_TYPED_TARGET_UUID=$TypedTargetUuid",
             "--env", "AUTOSTOCK_MOROCCO_POSTGRES_SYSTEM_IDENTIFIER=$postgresSystemIdentifier",
             "--env", "AUTOSTOCK_MOROCCO_CONTAINER_NAMES_JSON=$containerNamesJson"
@@ -601,12 +630,18 @@ function Apply-Dataset {
         $success = $true
     }
     finally {
-        if ($success) {
-            Write-Host "Restarting only Moroccan Odoo after verified Apply."
-            Invoke-Compose @("start", "web")
+        try {
+            Remove-OwnedApplyEvidenceVolume $applyEvidenceVolume $applyEvidenceScope
+            $cleanupOk = $true
         }
-        else {
-            Write-Warning "Apply did not finish with post-commit verification; Moroccan Odoo remains stopped for safety."
+        finally {
+            if ($success -and $cleanupOk) {
+                Write-Host "Restarting only Moroccan Odoo after verified Apply."
+                Invoke-Compose @("start", "web")
+            }
+            else {
+                Write-Warning "Apply did not finish with verified cleanup; Moroccan Odoo remains stopped for safety."
+            }
         }
     }
 
