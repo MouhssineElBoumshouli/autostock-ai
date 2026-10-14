@@ -79,7 +79,7 @@ After the CI mechanism proof was merged, the owner explicitly authorized prepara
 
 The operator still exposes **no dataset import path** and does not change public `run_import(..., mode="apply")`. The old USD Atlas project/database/volumes remain denied.
 
-This local operator must be rehearsed in disposable CI and independently reviewed before the owner runs it on Windows. A CI rehearsal proves the commands work in a clean disposable environment; it is not evidence that the owner's real local backup/restore has happened.
+This local operator passed its Initialize → BackupRestore → Apply rehearsal in disposable CI on 2026-10-15. That proves the commands work in a clean disposable environment; it is not evidence that the owner's real local backup/restore or Apply has happened.
 
 Unsigned restore-evidence files from the earlier implementation are intentionally rejected. A fresh isolated `BackupRestore` run is required to produce authenticated evidence before any later Apply attempt.
 
@@ -89,12 +89,14 @@ The restore observations are now authenticated with a domain-separated HMAC-SHA2
 
 The Windows `BackupRestore` action and disposable CI restore proof both create observations only after verifier cleanup and then invoke `restore_contract.py --sign-evidence`. That command validates the completed evidence before atomically replacing the unsigned temporary JSON. Apply continues to use the normal validation-only path; an older unsigned evidence file fails closed and must be regenerated.
 
-### Verification status (2026-10-14)
+### Verification status (2026-10-15)
 
 - `python -m pytest -q --disable-warnings`: **101 passed**. Python 3.14 on Windows emitted the existing non-fatal pytest temporary-directory cleanup warnings (`WinError 145`).
 - Focused restore/security tests: **57 passed** across `tests/test_moroccan_restore_contract.py` and `tests/test_moroccan_showroom.py`, including field tampering, a different-manifest replay, malformed signatures, CLI signing, and backup-manifest signature-format compatibility.
 - `python -m compileall -q addons ml scripts tests`: passed.
 - React lint, typecheck, unit tests (**10**), API contract tests (**16**), browser tests (**36**), and production build: passed. Synthetic forecast evaluation completed for **6 labeled fixture products**; this is pipeline validation, not a Moroccan or customer accuracy claim.
-- PowerShell parser check for `local_target.ps1`: passed.
-- An initial local Odoo 19/PostgreSQL 16 attempt used the pre-existing cached `autostock-ai-odoo:19.0` image and stopped before addon tests because that stale image lacked Python `tzdata`. Its unique disposable Compose project and volumes were cleaned up. A clean-image Odoo run and the final GitHub Actions restore/owner-operator rehearsals are pending.
+- PowerShell parser check for `local_target.ps1` and `prepare.ps1`: passed.
+- GitHub Actions [run #163](https://github.com/MouhssineElBoumshouli/autostock-ai/actions/runs/38656268357) passed all five jobs. The Odoo 19/PostgreSQL 16 integration job reports `0 failed, 0 error(s) of 76 tests`; the Python job reports **101 passed**; and the React, restore-proof, and operator-rehearsal jobs passed.
+- The disposable operator rehearsal completed Initialize, authenticated BackupRestore, and Apply of `atlas-ma-2026.4`, followed by fixture-registry verification and cleanup. An earlier rehearsal failed when Docker reported an endpoint outside the verified Compose project. The preflight now re-reads network attachments for a bounded interval without adding unvalidated containers to the allow-list; the network contract still rejects a persistent foreign endpoint. Run #163 passed without needing the retry.
+- An initial local Odoo 19/PostgreSQL 16 attempt used the pre-existing cached `autostock-ai-odoo:19.0` image and stopped before addon tests because that stale image lacked Python `tzdata`. Its unique disposable Compose project and volumes were cleaned up. Odoo integration and owner-operator checks were then completed on clean GitHub-hosted Docker runners.
 - The local Moroccan Odoo container was already restarting when inspected. It, the existing USD Atlas showroom, all showroom volumes, and app connections were left untouched. No real local Moroccan Apply was run.
