@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts.moroccan_showroom.filestore_tree_hash import filestore_tree_sha256
 from scripts.moroccan_showroom.local_backup import (
     create_backup_manifest,
     validate_manifest_files,
@@ -80,3 +81,27 @@ def test_local_backup_manifest_refuses_overwrite(tmp_path):
             postgres_system_identifier=SYSTEM_IDENTIFIER,
             container_names=CONTAINERS,
         )
+
+
+def test_filestore_tree_hash_is_deterministic_and_path_sensitive(tmp_path):
+    root = tmp_path / "filestore"
+    (root / "aa").mkdir(parents=True)
+    (root / "bb").mkdir()
+    (root / "aa" / "one").write_bytes(b"same")
+    (root / "bb" / "two").write_bytes(b"other")
+
+    first = filestore_tree_sha256(root)
+    second = filestore_tree_sha256(root)
+    assert first == second
+
+    (root / "bb" / "two").write_bytes(b"changed")
+    assert filestore_tree_sha256(root) != first
+
+    (root / "bb" / "two").write_bytes(b"other")
+    (root / "bb" / "two").rename(root / "bb" / "renamed")
+    assert filestore_tree_sha256(root) != first
+
+
+def test_filestore_tree_hash_rejects_missing_root(tmp_path):
+    with pytest.raises(ValueError, match="does not exist"):
+        filestore_tree_sha256(tmp_path / "missing")
