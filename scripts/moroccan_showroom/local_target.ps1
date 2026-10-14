@@ -93,6 +93,14 @@ function Get-ContainerName([string]$ContainerId) {
     return (Get-DockerOutput @("inspect", "--format", "{{.Name}}", $ContainerId)).TrimStart("/")
 }
 
+function Assert-WebRuntimeReady {
+    Write-Host "Verifying the dedicated Moroccan Odoo runtime dependencies."
+    Invoke-Compose @(
+        "run", "--rm", "--no-deps", "--entrypoint", "python3", "web",
+        "-c", "import tzdata; import numpy; import sklearn"
+    )
+}
+
 function Assert-ImporterPreviewClean {
     $previewPath = Join-Path $PSScriptRoot "odoo_preview.py"
     $previewBody = Get-Content -LiteralPath $previewPath -Raw
@@ -168,6 +176,7 @@ function Initialize-Target {
     try {
         Write-Host "Stopping only Moroccan Odoo while the clean database is initialized."
         Invoke-Compose @("stop", "web")
+        Assert-WebRuntimeReady
         $exists = Invoke-Psql "SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_database WHERE datname='$database') THEN 'true' ELSE 'false' END" "postgres"
 
         if ($exists -eq "false") {
