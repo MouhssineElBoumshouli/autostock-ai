@@ -420,7 +420,7 @@ function Backup-And-Restore {
         if ($restoredTreeHash -ne $sourceTreeHash) { throw "Restored filestore tree differs." }
 
         Write-Host "Removing only the disposable restore verifier."
-        Remove-RestoreResources $restoreContainer $restorePostgresVolume $restoreFilestoreVolume $restoreNetwork $restoreProject $restoreProject
+        Remove-RestoreResources $restoreContainer $restorePostgresVolume $restoreFilestoreVolume $restoreNetwork $restoreProject
         Assert-RestoreResourcesRemoved $restoreContainer $restorePostgresVolume $restoreFilestoreVolume $restoreNetwork
 
         # Re-check the exact artifacts after they were used for restore.
@@ -459,10 +459,14 @@ function Backup-And-Restore {
         Write-Host "No showroom dataset was imported and no app connection was changed."
     }
     finally {
-        Remove-RestoreResources $restoreContainer $restorePostgresVolume $restoreFilestoreVolume $restoreNetwork
-        if ($webStopped) {
-            try { Invoke-Compose @("start", "web") }
-            catch { Write-Warning "Moroccan Odoo could not be restarted automatically; the database backup remains unchanged." }
+        try {
+            Remove-RestoreResources $restoreContainer $restorePostgresVolume $restoreFilestoreVolume $restoreNetwork $restoreProject
+        }
+        finally {
+            if ($webStopped) {
+                try { Invoke-Compose @("start", "web") }
+                catch { Write-Warning "Moroccan Odoo could not be restarted automatically; the database backup remains unchanged." }
+            }
         }
     }
 
