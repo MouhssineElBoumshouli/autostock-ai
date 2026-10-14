@@ -124,6 +124,7 @@ def validate_backup_manifest_integrity(
     expected_uuid: str,
     target_identity: TargetIdentity,
     signing_key: bytes,
+    artifact_paths: dict[str, Path] | None = None,
 ) -> None:
     """Verify signed backup metadata and artifact bytes, not a restore operation.
 
@@ -155,9 +156,10 @@ def validate_backup_manifest_integrity(
         size = manifest.get(f"{prefix}_size_bytes")
         if not path or not isinstance(size, int) or size <= 0:
             raise SafetyError(f"Backup manifest must include a readable {prefix} artifact and size.")
+        artifact_path = Path((artifact_paths or {}).get(prefix, path))
         try:
-            actual_size = Path(path).stat().st_size
-            actual_hash = sha256_file(path)
+            actual_size = artifact_path.stat().st_size
+            actual_hash = sha256_file(artifact_path)
         except OSError as error:
             raise SafetyError(f"Backup {prefix} artifact cannot be read.") from error
         if actual_size != size or actual_hash != manifest[f"{prefix}_sha256"]:
@@ -172,8 +174,10 @@ def require_apply_approval(
     target_identity: TargetIdentity | None = None,
     backup_manifest: dict | None = None,
     backup_signing_key: bytes | None = None,
+    backup_artifact_paths: dict[str, Path] | None = None,
+    restore_evidence: dict | None = None,
 ) -> None:
-    """Permit previews only; Apply stays disabled until independent restore checks exist."""
+    """Require the exact target, signed backup bytes, and independent restore proof before Apply."""
     if mode not in {"dry-run", "offline-dry-run", "preview", "apply"}:
         raise SafetyError(f"Unsupported execution mode: {mode!r}.")
     if mode in {"dry-run", "offline-dry-run", "preview"}:
@@ -196,7 +200,17 @@ def require_apply_approval(
         expected_uuid=expected,
         target_identity=target_identity,
         signing_key=backup_signing_key,
+        artifact_paths=backup_artifact_paths,
     )
-    raise SafetyError(
-        "Apply is disabled until independent restore evidence is verified and a write path exists."
+    if not restore_evidence:
+        raise SafetyError("Apply requires successful independent restore evidence.")
+    # Imported lazily to avoid a module-import cycle: restore_contract itself
+    # uses the target/manifest primitives defined in this module.
+    from .restore_contract import validate_restore_evidence
+
+    validate_restore_evidence(
+        restore_evidence,
+        backup_manifest=backup_manifest,
+        backup_signing_key=backup_signing_key,
+        expected_uuid=expected,
     )
