@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import tempfile
 from pathlib import Path
 
 from .safety import (
@@ -15,7 +17,11 @@ from .safety import (
     TARGET_FILESTORE_VOLUME,
     TARGET_POSTGRES_VOLUME,
     TARGET_PROJECT,
+    RESTORE_EVIDENCE_SIGNATURE_FIELD,
+    canonical_json_sha256,
+    restore_evidence_signature,
     validate_backup_manifest_signature,
+    validate_restore_evidence_signature,
     validate_uuid,
 )
 
@@ -35,6 +41,32 @@ def _sha256(value, label: str) -> str:
     return value
 
 
+def sign_restore_evidence(
+    evidence: dict,
+    *,
+    backup_manifest: dict,
+    backup_signing_key: bytes,
+) -> dict:
+    """Authenticate finalized observations and their exact signed backup manifest."""
+    if not isinstance(evidence, dict):
+        raise SafetyError("Restore evidence must be a JSON object.")
+    if RESTORE_EVIDENCE_SIGNATURE_FIELD in evidence:
+        raise SafetyError("Refusing to replace an existing restore-evidence signature.")
+    validate_backup_manifest_signature(backup_manifest, backup_signing_key)
+
+    signed = dict(evidence)
+    signed["evidence_version"] = 1
+    signed["backup_manifest_signature_hmac_sha256"] = backup_manifest.get(
+        "signature_hmac_sha256"
+    )
+    signed["backup_manifest_sha256"] = canonical_json_sha256(backup_manifest)
+    signed[RESTORE_EVIDENCE_SIGNATURE_FIELD] = restore_evidence_signature(
+        signed,
+        backup_signing_key,
+    )
+    return signed
+
+
 def validate_restore_evidence(
     evidence: dict,
     *,
@@ -45,6 +77,21 @@ def validate_restore_evidence(
     """Require a real restore result isolated from both showroom environments."""
     expected_uuid = validate_uuid(expected_uuid, "Expected target UUID")
     validate_backup_manifest_signature(backup_manifest, backup_signing_key)
+
+    # Do not read or branch on any restore observation until its complete
+    # payload has been authenticated with the private backup signing key.
+    validate_restore_evidence_signature(evidence, backup_signing_key)
+    manifest_signature = backup_manifest.get("signature_hmac_sha256")
+    manifest_digest = canonical_json_sha256(backup_manifest)
+    _require(
+        evidence.get("evidence_version") == 1,
+        "Restore evidence version is unsupported.",
+    )
+    _require(
+        evidence.get("backup_manifest_signature_hmac_sha256") == manifest_signature
+        and evidence.get("backup_manifest_sha256") == manifest_digest,
+        "Restore evidence is bound to a different signed backup manifest.",
+    )
 
     _require(
         backup_manifest.get("database_name") == TARGET_DATABASE,
@@ -182,6 +229,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--backup-manifest-json", type=Path, required=True)
     parser.add_argument("--signing-key-file", type=Path, required=True)
     parser.add_argument("--expected-target-uuid", required=True)
+    parser.add_argument(
+        "--sign-evidence",
+        action="store_true",
+        help="Sign a finalized evidence object, validate it, and atomically replace the JSON file.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -190,17 +242,54 @@ def main(argv: list[str] | None = None) -> int:
             args.backup_manifest_json.read_text(encoding="utf-8")
         )
         signing_key = args.signing_key_file.read_bytes()
+        if args.sign_evidence:
+            evidence = sign_restore_evidence(
+                evidence,
+                backup_manifest=manifest,
+                backup_signing_key=signing_key,
+            )
         validate_restore_evidence(
             evidence,
             backup_manifest=manifest,
             backup_signing_key=signing_key,
             expected_uuid=args.expected_target_uuid,
         )
+        if args.sign_evidence:
+            temporary_path = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w",
+                    encoding="utf-8",
+                    dir=args.evidence_json.parent,
+                    prefix=f".{args.evidence_json.name}.",
+                    suffix=".tmp",
+                    delete=False,
+                ) as stream:
+                    temporary_path = Path(stream.name)
+                    json.dump(
+                        evidence,
+                        stream,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        indent=2,
+                    )
+                    stream.write("\n")
+                try:
+                    os.chmod(temporary_path, 0o600)
+                except OSError:
+                    pass
+                os.replace(temporary_path, args.evidence_json)
+            finally:
+                if temporary_path is not None:
+                    temporary_path.unlink(missing_ok=True)
     except (OSError, json.JSONDecodeError, TypeError, ValueError) as error:
         print(f"Restore evidence refused: {error}")
         return 2
 
-    print("Independent Moroccan backup restore evidence passed.")
+    if args.sign_evidence:
+        print("Authenticated Moroccan backup restore evidence signed and validated.")
+    else:
+        print("Independent Moroccan backup restore evidence passed.")
     return 0
 
 

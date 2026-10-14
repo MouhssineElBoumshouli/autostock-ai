@@ -32,6 +32,40 @@ class SafetyError(ValueError):
     """Raised when a target identity is incomplete, ambiguous, or unsafe."""
 
 
+RESTORE_EVIDENCE_SIGNATURE_FIELD = "restore_evidence_hmac_sha256"
+_RESTORE_EVIDENCE_HMAC_DOMAIN = b"AutoStock Moroccan restore evidence v1\0"
+
+
+def _canonical_json_bytes(payload: dict) -> bytes:
+    return json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+
+
+def _payload_hmac_sha256(
+    payload: dict,
+    signing_key: bytes,
+    *,
+    domain: bytes = b"",
+) -> str:
+    if not signing_key or len(signing_key) < 32:
+        raise SafetyError("A private backup-manifest signing key of at least 32 bytes is required.")
+    return hmac.new(
+        signing_key,
+        domain + _canonical_json_bytes(payload),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def canonical_json_sha256(payload: dict) -> str:
+    """Digest canonical JSON, including any embedded signature field."""
+    return hashlib.sha256(_canonical_json_bytes(payload)).hexdigest()
+
+
 @dataclass(frozen=True)
 class TargetIdentity:
     database_name: str
@@ -104,11 +138,41 @@ def sha256_file(path, chunk_size: int = 1024 * 1024) -> str:
 
 def backup_manifest_signature(manifest: dict, signing_key: bytes) -> str:
     """Return the HMAC for the manifest body; the key must remain outside Git."""
-    if not signing_key or len(signing_key) < 32:
-        raise SafetyError("A private backup-manifest signing key of at least 32 bytes is required.")
     body = {key: value for key, value in manifest.items() if key != "signature_hmac_sha256"}
-    payload = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    return hmac.new(signing_key, payload, hashlib.sha256).hexdigest()
+    # The empty domain preserves the existing backup-manifest signature format.
+    return _payload_hmac_sha256(body, signing_key)
+
+
+def restore_evidence_signature(evidence: dict, signing_key: bytes) -> str:
+    """Sign every restore-evidence field with a purpose-specific HMAC domain."""
+    body = {
+        key: value
+        for key, value in evidence.items()
+        if key != RESTORE_EVIDENCE_SIGNATURE_FIELD
+    }
+    return _payload_hmac_sha256(
+        body,
+        signing_key,
+        domain=_RESTORE_EVIDENCE_HMAC_DOMAIN,
+    )
+
+
+def validate_restore_evidence_signature(evidence: dict, signing_key: bytes) -> None:
+    """Authenticate the complete evidence object before callers inspect its fields."""
+    if not isinstance(evidence, dict):
+        raise SafetyError("Restore evidence signature is invalid.")
+    signature = evidence.get(RESTORE_EVIDENCE_SIGNATURE_FIELD)
+    try:
+        expected_signature = restore_evidence_signature(evidence, signing_key)
+    except (TypeError, ValueError):
+        raise SafetyError("Restore evidence signature is invalid.") from None
+    if (
+        not isinstance(signature, str)
+        or re.fullmatch(r"[a-f0-9]{64}", signature) is None
+        or not hmac.compare_digest(signature, expected_signature)
+    ):
+        raise SafetyError("Restore evidence signature is invalid.")
+
 
 def validate_backup_manifest_signature(manifest: dict, signing_key: bytes) -> None:
     """Require the manifest HMAC to match before trusting its contents."""

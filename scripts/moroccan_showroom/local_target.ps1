@@ -529,7 +529,14 @@ function Backup-And-Restore {
         }
         [System.IO.File]::WriteAllText($evidencePath, (ConvertTo-Json -InputObject $evidence -Depth 10), [System.Text.UTF8Encoding]::new($false))
 
-        $restoreArgs = @("-m", "scripts.moroccan_showroom.restore_contract", "--evidence-json", $evidencePath, "--backup-manifest-json", $manifestPath, "--signing-key-file", $signingKeyPath, "--expected-target-uuid", $targetUuid)
+        $restoreArgs = @(
+            "-m", "scripts.moroccan_showroom.restore_contract",
+            "--evidence-json", $evidencePath,
+            "--backup-manifest-json", $manifestPath,
+            "--signing-key-file", $signingKeyPath,
+            "--expected-target-uuid", $targetUuid,
+            "--sign-evidence"
+        )
         Invoke-Python $restoreArgs
 
         Write-Host "PASS: real Moroccan target database + filestore backup restored and independently verified."

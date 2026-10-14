@@ -17,6 +17,7 @@ from scripts.moroccan_showroom.generator import (
     canonical_json,
     generate_dataset,
 )
+from scripts.moroccan_showroom.restore_contract import sign_restore_evidence
 from scripts.moroccan_showroom.safety import (
     SafetyError,
     TargetIdentity,
@@ -127,11 +128,11 @@ def safe_identity(**changes):
     return TargetIdentity(**fields)
 
 
-def valid_restore_evidence(manifest):
+def valid_restore_evidence(manifest, signing_key):
     project = "autostock-restore-proof-local-test"
     attachment_hash = "a" * 64
     tree_hash = "b" * 64
-    return {
+    evidence = {
         "restore_project": project,
         "published_ports": [],
         "restore_postgres_volume": f"{project}-postgres",
@@ -153,6 +154,11 @@ def valid_restore_evidence(manifest):
         "cleanup_scope": project,
         "restore_resources_removed": True,
     }
+    return sign_restore_evidence(
+        evidence,
+        backup_manifest=manifest,
+        backup_signing_key=signing_key,
+    )
 
 
 def test_dataset_is_deterministic_and_hits_approved_counts():
@@ -573,7 +579,7 @@ def test_backup_manifest_integrity_is_separate_from_restore_verification(tmp_pat
             signing_key=signing_key,
         )
     filestore_path.write_bytes(b"matching filestore backup fixture")
-    restore_evidence = valid_restore_evidence(manifest)
+    restore_evidence = valid_restore_evidence(manifest, signing_key)
     require_apply_approval(mode="dry-run")
     with pytest.raises(SafetyError, match="Unsupported execution mode"):
         require_apply_approval(mode="aply")
@@ -605,7 +611,7 @@ def test_backup_manifest_integrity_is_separate_from_restore_verification(tmp_pat
         )
 
     tampered_restore = {**restore_evidence, "marker_uuid": "00000000-0000-0000-0000-000000000000"}
-    with pytest.raises(SafetyError, match="marker UUID"):
+    with pytest.raises(SafetyError, match="Restore evidence signature is invalid"):
         require_apply_approval(
             mode="apply",
             typed_target_uuid=TARGET_UUID,

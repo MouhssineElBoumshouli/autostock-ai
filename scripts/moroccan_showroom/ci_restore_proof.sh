@@ -293,6 +293,13 @@ python3 -m scripts.moroccan_showroom.restore_contract \
     --evidence-json "$evidence_path" \
     --backup-manifest-json "$manifest_path" \
     --signing-key-file "$signing_key_path" \
+    --expected-target-uuid "$target_uuid" \
+    --sign-evidence
+
+python3 -m scripts.moroccan_showroom.restore_contract \
+    --evidence-json "$evidence_path" \
+    --backup-manifest-json "$manifest_path" \
+    --signing-key-file "$signing_key_path" \
     --expected-target-uuid "$target_uuid"
 
 echo "PASS: disposable PostgreSQL + Odoo filestore backup restored and verified."
