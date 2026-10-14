@@ -74,6 +74,11 @@ try:
         restore_evidence=restore_evidence,
     )
 
+    if apply_report.get("mode") not in {"apply", "apply-noop"}:
+        raise RuntimeError(f"Unexpected guarded Apply result: {apply_report.get('mode')!r}")
+    if apply_report.get("dataset_sha256") != dataset.digest:
+        raise RuntimeError("Guarded Apply result does not match the approved dataset digest.")
+
     verification = importer.run_import(env, dataset, mode="dry-run")
     expected_actions = {"create": 0, "unchanged": expected_entries}
     if verification.get("entry_actions") != expected_actions:
