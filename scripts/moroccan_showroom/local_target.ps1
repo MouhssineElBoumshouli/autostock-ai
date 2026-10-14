@@ -124,18 +124,15 @@ function Get-VolumeFileHash([string]$Volume, [string]$RelativePath) {
 
 function Get-FilestoreTreeHash([string]$Volume) {
     $mount = "type=volume,source=$Volume,target=/data,readonly"
-    $python = @'
-import hashlib
-import pathlib
-import sys
-root = pathlib.Path(sys.argv[1])
-digest = hashlib.sha256()
-for path in sorted(item for item in root.rglob("*") if item.is_file()):
-    digest.update(path.relative_to(root).as_posix().encode() + b"\0")
-    digest.update(hashlib.sha256(path.read_bytes()).digest())
-print(digest.hexdigest())
-'@
-    return Get-DockerOutput @("run", "--rm", "--entrypoint", "python3", "--mount", $mount, $image, "-c", $python, "/data/filestore/$database")
+    $scriptMount = "type=bind,source=$PSScriptRoot,target=/mnt/atlas-morocco,readonly"
+    return Get-DockerOutput @(
+        "run", "--rm", "--entrypoint", "python3",
+        "--mount", $mount,
+        "--mount", $scriptMount,
+        $image,
+        "/mnt/atlas-morocco/filestore_tree_hash.py",
+        "/data/filestore/$database"
+    )
 }
 
 function Assert-CleanInitializedTarget {
@@ -256,11 +253,60 @@ env.cr.commit()
     Write-Host "PASS: clean Moroccan target initialized and marked. No showroom dataset was imported."
 }
 
-function Remove-RestoreResources([string]$Container, [string]$PostgresRestoreVolume, [string]$FilestoreRestoreVolume, [string]$Network) {
-    & docker rm -f $Container *> $null
-    & docker volume rm $PostgresRestoreVolume *> $null
-    & docker volume rm $FilestoreRestoreVolume *> $null
-    & docker network rm $Network *> $null
+function Get-ExistingDockerResource([string]$Kind, [string]$Name) {
+    switch ($Kind) {
+        "container" {
+            $names = @((Get-DockerOutput @("ps", "-aq", "--filter", "name=^/$Name$")) -split "[\r\n]+" | Where-Object { $_ })
+            if ($names.Count -eq 0) { return $null }
+            if ($names.Count -ne 1) { throw "Unexpected duplicate verifier container name $Name." }
+            $json = Get-DockerOutput @("inspect", $Name)
+            return (($json | ConvertFrom-Json)[0])
+        }
+        "volume" {
+            $names = @((Get-DockerOutput @("volume", "ls", "--format", "{{.Name}}")) -split "[\r\n]+" | Where-Object { $_ -eq $Name })
+            if ($names.Count -eq 0) { return $null }
+            if ($names.Count -ne 1) { throw "Unexpected duplicate verifier volume name $Name." }
+            $json = Get-DockerOutput @("volume", "inspect", $Name)
+            return (($json | ConvertFrom-Json)[0])
+        }
+        "network" {
+            $names = @((Get-DockerOutput @("network", "ls", "--format", "{{.Name}}")) -split "[\r\n]+" | Where-Object { $_ -eq $Name })
+            if ($names.Count -eq 0) { return $null }
+            if ($names.Count -ne 1) { throw "Unexpected duplicate verifier network name $Name." }
+            $json = Get-DockerOutput @("network", "inspect", $Name)
+            return (($json | ConvertFrom-Json)[0])
+        }
+        default { throw "Unsupported Docker resource kind $Kind." }
+    }
+}
+
+function Remove-OwnedRestoreResource([string]$Kind, [string]$Name, [string]$RestoreProject) {
+    $resource = Get-ExistingDockerResource $Kind $Name
+    if ($null -eq $resource) { return }
+
+    $labels = if ($Kind -eq "container") { $resource.Config.Labels } else { $resource.Labels }
+    if ($null -eq $labels -or $labels."com.autostock.restore-proof" -ne $RestoreProject) {
+        throw "Refusing to remove $Kind $Name because it is not owned by restore project $RestoreProject."
+    }
+
+    switch ($Kind) {
+        "container" { Invoke-Docker @("rm", "-f", $Name) }
+        "volume" { Invoke-Docker @("volume", "rm", $Name) }
+        "network" { Invoke-Docker @("network", "rm", $Name) }
+    }
+}
+
+function Remove-RestoreResources(
+    [string]$Container,
+    [string]$PostgresRestoreVolume,
+    [string]$FilestoreRestoreVolume,
+    [string]$Network,
+    [string]$RestoreProject
+) {
+    Remove-OwnedRestoreResource "container" $Container $RestoreProject
+    Remove-OwnedRestoreResource "volume" $PostgresRestoreVolume $RestoreProject
+    Remove-OwnedRestoreResource "volume" $FilestoreRestoreVolume $RestoreProject
+    Remove-OwnedRestoreResource "network" $Network $RestoreProject
 }
 
 function Assert-RestoreResourcesRemoved([string]$Container, [string]$PostgresRestoreVolume, [string]$FilestoreRestoreVolume, [string]$Network) {
@@ -331,7 +377,7 @@ function Backup-And-Restore {
         Invoke-Docker @("network", "create", "--label", "com.autostock.restore-proof=$restoreProject", $restoreNetwork)
         Invoke-Docker @("volume", "create", "--label", "com.autostock.restore-proof=$restoreProject", $restorePostgresVolume)
         Invoke-Docker @("volume", "create", "--label", "com.autostock.restore-proof=$restoreProject", $restoreFilestoreVolume)
-        Invoke-Docker @("run", "--detach", "--name", $restoreContainer, "--network", $restoreNetwork, "--env", "POSTGRES_USER=$postgresUser", "--env", "POSTGRES_PASSWORD=$restorePassword", "--env", "POSTGRES_DB=postgres", "--mount", "type=volume,source=$restorePostgresVolume,target=/var/lib/postgresql/data", "postgres:16")
+        Invoke-Docker @("run", "--detach", "--name", $restoreContainer, "--label", "com.autostock.restore-proof=$restoreProject", "--network", $restoreNetwork, "--env", "POSTGRES_USER=$postgresUser", "--env", "POSTGRES_PASSWORD=$restorePassword", "--env", "POSTGRES_DB=postgres", "--mount", "type=volume,source=$restorePostgresVolume,target=/var/lib/postgresql/data", "postgres:16")
 
         $ready = $false
         for ($attempt = 0; $attempt -lt 60; $attempt++) {
@@ -374,7 +420,7 @@ function Backup-And-Restore {
         if ($restoredTreeHash -ne $sourceTreeHash) { throw "Restored filestore tree differs." }
 
         Write-Host "Removing only the disposable restore verifier."
-        Remove-RestoreResources $restoreContainer $restorePostgresVolume $restoreFilestoreVolume $restoreNetwork
+        Remove-RestoreResources $restoreContainer $restorePostgresVolume $restoreFilestoreVolume $restoreNetwork $restoreProject
         Assert-RestoreResourcesRemoved $restoreContainer $restorePostgresVolume $restoreFilestoreVolume $restoreNetwork
 
         # Re-check the exact artifacts after they were used for restore.
@@ -413,10 +459,14 @@ function Backup-And-Restore {
         Write-Host "No showroom dataset was imported and no app connection was changed."
     }
     finally {
-        Remove-RestoreResources $restoreContainer $restorePostgresVolume $restoreFilestoreVolume $restoreNetwork
-        if ($webStopped) {
-            try { Invoke-Compose @("start", "web") }
-            catch { Write-Warning "Moroccan Odoo could not be restarted automatically; the database backup remains unchanged." }
+        try {
+            Remove-RestoreResources $restoreContainer $restorePostgresVolume $restoreFilestoreVolume $restoreNetwork $restoreProject
+        }
+        finally {
+            if ($webStopped) {
+                try { Invoke-Compose @("start", "web") }
+                catch { Write-Warning "Moroccan Odoo could not be restarted automatically; the database backup remains unchanged." }
+            }
         }
     }
 
