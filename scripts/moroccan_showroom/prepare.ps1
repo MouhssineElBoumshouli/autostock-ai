@@ -112,6 +112,7 @@ function Assert-NewEnvironmentIsolated {
             })
         }
         $serviceEvidence[$serviceProperty.Name] = @{
+            image = $service.image
             volumes = $mounts
             networks = $serviceNetworks
             ports = $ports
@@ -162,6 +163,7 @@ function Assert-NewEnvironmentIsolated {
         $container = (($containerJson -join [Environment]::NewLine) | ConvertFrom-Json)[0]
         $containerEvidence = @{
             name = $container.Name
+            image = $container.Config.Image
             labels = $container.Config.Labels
             mounts = @($container.Mounts | ForEach-Object {
                 @{ Type = $_.Type; Name = $_.Name; Source = $_.Source; Destination = $_.Destination; RW = [bool]$_.RW }
