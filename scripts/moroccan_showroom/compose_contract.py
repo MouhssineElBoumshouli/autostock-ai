@@ -6,6 +6,8 @@ import argparse
 import json
 import os
 from pathlib import Path
+import posixpath
+import re
 import sys
 
 from .safety import (
@@ -34,7 +36,35 @@ def _property_names(value: object) -> set[str]:
     return set(value)
 
 
+def _windows_path_key(value: str) -> str | None:
+    """Normalize native and Docker Desktop spellings of one Windows path."""
+    normalized = value.replace("\\", "/")
+
+    # Docker Desktop exposes Windows host paths through a Linux VM. These are
+    # aliases of the same native drive path, not broader path substitutions.
+    for prefix in ("/run/desktop/mnt/host/", "/host_mnt/"):
+        if normalized.casefold().startswith(prefix.casefold()):
+            remainder = normalized[len(prefix):]
+            parts = remainder.split("/", 1)
+            if parts and len(parts[0]) == 1 and parts[0].isalpha():
+                tail = parts[1] if len(parts) == 2 else ""
+                normalized = f"{parts[0]}:/{tail}"
+            break
+
+    match = re.fullmatch(r"([A-Za-z]):(?:/(.*))?", normalized)
+    if not match:
+        return None
+
+    drive = match.group(1).lower()
+    tail = match.group(2) or ""
+    canonical_tail = posixpath.normpath("/" + tail).lstrip("/")
+    return f"windows:{drive}:/{canonical_tail}".casefold()
+
+
 def _path_key(value: str) -> str:
+    windows_key = _windows_path_key(value)
+    if windows_key is not None:
+        return windows_key
     return os.path.normcase(os.path.abspath(os.path.normpath(value)))
 
 
