@@ -27,7 +27,7 @@ SCRIPTS_TARGET = "/mnt/atlas-morocco"
 POSTGRES_IMAGE = "postgres:16"
 MOROCCAN_WEB_IMAGE = "autostock-ai-odoo-morocco:19.0"
 SHARED_WEB_IMAGE = "autostock-ai-odoo:19.0"
-WEB_START_COMMAND = ["bash", f"{SCRIPTS_TARGET}/start_web.sh"]
+WEB_START_COMMAND = ["python3", f"{SCRIPTS_TARGET}/start_web.py"]
 WEB_HEALTHCHECK_TEST = [
     "CMD",
     "python3",

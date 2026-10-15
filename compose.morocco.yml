@@ -31,8 +31,8 @@ services:
       db:
         condition: service_healthy
     command:
-      - bash
-      - /mnt/atlas-morocco/start_web.sh
+      - python3
+      - /mnt/atlas-morocco/start_web.py
     ports:
       - "127.0.0.1:${ODOO_PORT:-8070}:8069"
     environment:
