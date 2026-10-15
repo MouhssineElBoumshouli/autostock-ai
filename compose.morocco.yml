@@ -31,14 +31,15 @@ services:
       db:
         condition: service_healthy
     command:
-      - --admin-passwd=${ODOO_MASTER_PASSWORD:?Prepare .env.atlas-morocco first}
-      - --http-interface=0.0.0.0
+      - bash
+      - /mnt/atlas-morocco/start_web.sh
     ports:
       - "127.0.0.1:${ODOO_PORT:-8070}:8069"
     environment:
       HOST: db
       USER: ${POSTGRES_USER:?Prepare .env.atlas-morocco first}
       PASSWORD: ${POSTGRES_PASSWORD:?Prepare .env.atlas-morocco first}
+      ODOO_MASTER_PASSWORD: ${ODOO_MASTER_PASSWORD:?Prepare .env.atlas-morocco first}
       AUTOSTOCK_DEMO_TARGET_UUID: ${ATLAS_MOROCCO_TARGET_UUID:?Prepare .env.atlas-morocco first}
     volumes:
       - morocco_filestore:/var/lib/odoo
@@ -46,6 +47,16 @@ services:
       - ./scripts/moroccan_showroom:/mnt/atlas-morocco:ro
     networks:
       - morocco_private
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import socket; s=socket.create_connection(('127.0.0.1', 8069), 3); s.close()"
+      interval: 5s
+      timeout: 4s
+      retries: 24
+      start_period: 10s
     labels:
       com.autostock.environment: morocco-demo
       com.autostock.target-uuid: ${ATLAS_MOROCCO_TARGET_UUID:?Prepare .env.atlas-morocco first}
