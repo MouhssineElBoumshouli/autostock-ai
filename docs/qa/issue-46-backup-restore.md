@@ -2,7 +2,7 @@
 
 ## What this milestone does
 
-This milestone proves the **backup and restore mechanism** before any owner database is imported.
+Issue #46 originally proved the **backup and restore mechanism** before any owner dataset import. PR #53 later added a separate guarded Apply stage, documented below.
 
 The code is deliberately small:
 
@@ -10,7 +10,7 @@ The code is deliberately small:
 2. `ci_restore_proof.sh` performs a real restore in disposable GitHub Actions Docker resources.
 3. Unit tests cover wrong projects, volumes, hashes, database identity, Odoo state, filestore bytes, incomplete cleanup, evidence-field tampering, and replay against a different signed backup.
 
-It does **not** enable the Moroccan importer, create or import the owner's local Moroccan database, modify the USD Atlas showroom, or switch the application.
+The original CI restore proof did **not** import the owner's local database, modify the USD Atlas showroom, or switch the application. CI still uses disposable resources rather than the owner's database.
 
 ## What the real CI check does
 
@@ -36,11 +36,11 @@ The temporary CI source and restore environments are not the owner's showroom an
 
 Changing any signed evidence field invalidates its HMAC before field validation. Replaying valid evidence with a different signed manifest fails because both the manifest HMAC and canonical digest must match. Signing and verification use the shared canonical HMAC helper; the evidence does not contain the key.
 
-## What this does not prove yet
+## What CI proof alone does not prove
 
-A successful CI restore proves that the mechanism works and that the restore evidence is bound to the same signed manifest used for the backup hashes. It is **not** yet evidence that the owner's local Moroccan target has been backed up and restored.
+A successful CI restore proves that the mechanism works and that the restore evidence is bound to the same signed manifest used for the backup hashes. It does **not**, by itself, prove that the owner's local Moroccan target was backed up or restored. That target-only step was performed separately before PR #53, and the earlier unsigned restore evidence must be regenerated under the new signing contract.
 
-Before a local import can be considered, a later explicitly approved operator step must:
+The real-target backup/restore procedure, which must be repeated with signed evidence before Apply, must:
 
 - initialize only the already-prepared Moroccan target;
 - collect its real target UUID, PostgreSQL cluster ID and resource identities;
@@ -49,7 +49,7 @@ Before a local import can be considered, a later explicitly approved operator st
 - restore those exact artifacts into a separate local verification environment;
 - capture redacted PASS evidence.
 
-Do not run that local step until the owner explicitly authorizes it.
+Only the prepared Moroccan target may be used. The new guarded Apply remains a separate, explicitly approved local action; CI success is never sufficient authorization.
 
 ## Owner-facing rule
 
@@ -61,11 +61,11 @@ No backup or restore should ever target `autostock_showroom_demo`, `autostock-sh
 
 ## Safety gates that remain unchanged
 
-- Public `run_import(..., mode="apply")` remains disabled.
+- `run_import(..., mode="apply")` is fail-closed unless the exact typed target UUID, cross-checked live identity, signed backup bytes, and authenticated independent restore evidence all pass. The supported owner-local entrypoint is `local_target.ps1 -Action Apply`.
 - The original USD Atlas showroom remains untouched.
 - No destructive Docker prune/reset/down-with-volumes command is allowed.
 - No application connection switch is authorized.
-- Dataset `atlas-ma-2026.4` still ends 10 October 2026 and the normal 14-day freshness rule remains unchanged.
+- Dataset `atlas-ma-2026.4` still ends 10 October 2026 and the normal 14-day freshness rule remains unchanged. After it becomes stale, do not present forecast guidance as current.
 
 
 ## Local operator stage
@@ -77,7 +77,7 @@ After the CI mechanism proof was merged, the owner explicitly authorized prepara
 - After every restore observation and successful verifier cleanup is recorded, `BackupRestore` asks `restore_contract.py` to sign and validate the complete evidence with the protected backup-manifest key. The evidence signature authenticates every field and binds it to the exact signed manifest.
 - `local_backup.py` owns signed manifest creation/revalidation; `restore_contract.py` owns restore-evidence signing/validation. Both reuse the canonical HMAC implementation in `safety.py`, so PowerShell does not duplicate signature or artifact-hash policy.
 
-The operator still exposes **no dataset import path** and does not change public `run_import(..., mode="apply")`. The old USD Atlas project/database/volumes remain denied.
+The `Initialize` and `BackupRestore` actions do not import data. PR #53 adds a separate guarded `Apply` action, subject to owner approval and the verified backup/restore gates. The old USD Atlas project/database/volumes remain denied.
 
 This local operator passed its Initialize → BackupRestore → Apply rehearsal in disposable CI on 2026-10-15. That proves the commands work in a clean disposable environment; it is not evidence that the owner's real local backup/restore or Apply has happened.
 
