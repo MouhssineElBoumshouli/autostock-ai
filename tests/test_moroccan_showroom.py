@@ -844,3 +844,19 @@ def test_morocco_effective_noon_uses_date_specific_timezone_offset():
     assert _event_time_utc(date(2026, 4, 13)) == "2026-04-13T11:00:00"
     assert _event_time_utc(date(2026, 9, 19)) == "2026-09-19T11:00:00"
     assert _event_time_utc(date(2026, 9, 20)) == "2026-09-20T12:00:00"
+
+
+
+def test_guarded_apply_container_names_avoid_json_native_argument_quoting():
+    repo_root = Path(__file__).resolve().parents[1]
+    local_target = (repo_root / "scripts" / "moroccan_showroom" / "local_target.ps1").read_text(encoding="utf-8")
+    apply_runner = (repo_root / "scripts" / "moroccan_showroom" / "odoo_apply.py").read_text(encoding="utf-8")
+
+    assert "AUTOSTOCK_MOROCCO_CONTAINER_NAMES_JSON" not in local_target
+    assert "AUTOSTOCK_MOROCCO_CONTAINER_NAMES_JSON" not in apply_runner
+    for variable in (
+        "AUTOSTOCK_MOROCCO_DB_CONTAINER_NAME",
+        "AUTOSTOCK_MOROCCO_WEB_CONTAINER_NAME",
+    ):
+        assert variable in local_target
+        assert variable in apply_runner
