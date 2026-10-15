@@ -177,13 +177,23 @@ docker run --detach \
     --volume "${restore_postgres_volume}:/var/lib/postgresql/data" \
     postgres:16 >/dev/null
 
-for _ in $(seq 1 30); do
-    if docker exec "$restore_db_container" pg_isready -U "$postgres_user" -d postgres >/dev/null 2>&1; then
+# PostgreSQL's entrypoint starts a temporary server during initialization.
+# pg_isready can succeed against it before the final server has started.
+# Require the final postgres PID 1 process as well as a ready database.
+restore_ready=false
+for _ in $(seq 1 60); do
+    pid_one="$(docker exec "$restore_db_container" cat /proc/1/comm 2>/dev/null || true)"
+    if [[ "$pid_one" == "postgres" ]] &&
+       docker exec "$restore_db_container" pg_isready -U "$postgres_user" -d postgres >/dev/null 2>&1; then
+        restore_ready=true
         break
     fi
     sleep 1
 done
-docker exec "$restore_db_container" pg_isready -U "$postgres_user" -d postgres >/dev/null
+if [[ "$restore_ready" != true ]]; then
+    echo "Disposable restore PostgreSQL did not reach its final ready process." >&2
+    exit 1
+fi
 
 restore_port_bindings="$(docker inspect --format '{{json .HostConfig.PortBindings}}' "$restore_db_container")"
 test "$restore_port_bindings" = "null" -o "$restore_port_bindings" = "{}"
@@ -288,6 +298,13 @@ with open(path, "w", encoding="utf-8") as stream:
         "restore_resources_removed": True,
     }, stream, sort_keys=True)
 PY
+
+python3 -m scripts.moroccan_showroom.restore_contract \
+    --evidence-json "$evidence_path" \
+    --backup-manifest-json "$manifest_path" \
+    --signing-key-file "$signing_key_path" \
+    --expected-target-uuid "$target_uuid" \
+    --sign-evidence
 
 python3 -m scripts.moroccan_showroom.restore_contract \
     --evidence-json "$evidence_path" \

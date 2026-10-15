@@ -1,7 +1,9 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("Initialize", "BackupRestore")]
-    [string]$Action
+    [ValidateSet("Initialize", "BackupRestore", "Apply")]
+    [string]$Action,
+    [string]$BackupStamp,
+    [string]$TypedTargetUuid
 )
 
 $ErrorActionPreference = "Stop"
@@ -88,6 +90,16 @@ function Invoke-OdooShell([string]$Code) {
     if ($LASTEXITCODE -ne 0) { throw "Odoo shell target initialization failed." }
 }
 
+function Invoke-OdooMountedScript([string]$ScriptName, [string[]]$ExtraRunArgs = @()) {
+    $mountedPath = "/mnt/atlas-morocco/$ScriptName"
+    $code = "__file__ = '$mountedPath'" + [Environment]::NewLine +
+        "exec(compile(open(__file__, encoding='utf-8').read(), __file__, 'exec'), globals(), globals())"
+    $args = (Get-ComposeArgs) + @("run", "--rm", "--no-deps", "-T") + $ExtraRunArgs +
+        @("web", "odoo", "shell", "--database=$database", "--no-http")
+    $code | & docker @args
+    if ($LASTEXITCODE -ne 0) { throw "Odoo shell script $ScriptName failed." }
+}
+
 function Get-ContainerName([string]$ContainerId) {
     if (-not $ContainerId) { throw "Expected Moroccan container is missing." }
     return (Get-DockerOutput @("inspect", "--format", "{{.Name}}", $ContainerId)).TrimStart("/")
@@ -163,6 +175,72 @@ function Assert-CleanInitializedTarget {
         proof_store_fname = $proofStore
         attachment_count = [int](Invoke-Psql "SELECT count(*) FROM ir_attachment")
     }
+}
+
+function Assert-MarkedTargetIdentity {
+    if ((Invoke-Psql "SELECT state FROM ir_module_module WHERE name='autostock_ai' LIMIT 1") -ne "installed") {
+        throw "AutoStock is not installed in the Moroccan target."
+    }
+    if ([int](Invoke-Psql "SELECT count(*) FROM res_company") -ne 1) {
+        throw "The Moroccan target must contain exactly one company."
+    }
+    if ((Invoke-Psql "SELECT COALESCE(value, '') FROM ir_config_parameter WHERE key='autostock.morocco.target_uuid' LIMIT 1") -ne $targetUuid) {
+        throw "Database target marker does not match the prepared Moroccan UUID."
+    }
+    $companyIdentity = Invoke-Psql "SELECT COALESCE(autostock_demo_target_uuid, '') || '|' || CASE WHEN autostock_demo_environment THEN 'true' ELSE 'false' END FROM res_company LIMIT 1"
+    $identityParts = $companyIdentity -split "\|", 2
+    if ($identityParts.Count -ne 2 -or $identityParts[0] -ne $targetUuid -or $identityParts[1] -ne "true") {
+        throw "Company target marker does not match the prepared Moroccan environment."
+    }
+    $proofStore = Invoke-Psql "SELECT COALESCE(store_fname, '') FROM ir_attachment WHERE name='$proofAttachmentName' ORDER BY id DESC LIMIT 1"
+    if (-not $proofStore) {
+        throw "The local restore-proof attachment is missing from the Moroccan target."
+    }
+}
+
+function Resolve-ApprovedBackupDirectory([string]$Stamp) {
+    if ($Stamp -notmatch "^[0-9]{8}-[0-9]{6}$") {
+        throw "Apply requires an explicit backup stamp in yyyyMMdd-HHmmss form."
+    }
+    $root = [System.IO.Path]::GetFullPath((Join-Path $repoRoot ".showroom/morocco-backups"))
+    $candidate = [System.IO.Path]::GetFullPath((Join-Path $root $Stamp))
+    $separators = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    $prefix = $root.TrimEnd($separators) + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $candidate.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Backup directory escaped the private Moroccan backup root."
+    }
+    if (-not (Test-Path -LiteralPath $candidate -PathType Container)) {
+        throw "Approved backup directory does not exist."
+    }
+    foreach ($name in @("database.dump", "filestore.tar", "backup-manifest.json", "backup-manifest.key", "restore-evidence.json")) {
+        if (-not (Test-Path -LiteralPath (Join-Path $candidate $name) -PathType Leaf)) {
+            throw "Approved backup directory is incomplete: missing $name."
+        }
+    }
+    return $candidate
+}
+
+function Stage-ApplyEvidenceVolume([string]$BackupDir, [string]$Volume, [string]$Scope) {
+    Invoke-Docker @("volume", "create", "--label", "com.autostock.apply-evidence=$Scope", $Volume)
+    $sourceMount = "type=bind,source=$BackupDir,target=/source,readonly"
+    $evidenceMount = "type=volume,source=$Volume,target=/evidence"
+    Invoke-Docker @(
+        "run", "--rm", "--user", "root", "--entrypoint", "sh",
+        "--mount", $sourceMount,
+        "--mount", $evidenceMount,
+        $image,
+        "-c",
+        "cp /source/database.dump /source/filestore.tar /source/backup-manifest.json /source/backup-manifest.key /source/restore-evidence.json /evidence/ && chown -R odoo:odoo /evidence && chmod 0444 /evidence/database.dump /evidence/filestore.tar /evidence/backup-manifest.json /evidence/restore-evidence.json && chmod 0400 /evidence/backup-manifest.key"
+    )
+}
+
+function Remove-OwnedApplyEvidenceVolume([string]$Volume, [string]$Scope) {
+    $resource = Get-ExistingDockerResource "volume" $Volume
+    if ($null -eq $resource) { return }
+    if ($null -eq $resource.Labels -or $resource.Labels."com.autostock.apply-evidence" -ne $Scope) {
+        throw "Refusing to remove Apply evidence volume $Volume because it is not owned by $Scope."
+    }
+    Invoke-Docker @("volume", "rm", $Volume)
 }
 
 function Initialize-Target {
@@ -451,7 +529,14 @@ function Backup-And-Restore {
         }
         [System.IO.File]::WriteAllText($evidencePath, (ConvertTo-Json -InputObject $evidence -Depth 10), [System.Text.UTF8Encoding]::new($false))
 
-        $restoreArgs = @("-m", "scripts.moroccan_showroom.restore_contract", "--evidence-json", $evidencePath, "--backup-manifest-json", $manifestPath, "--signing-key-file", $signingKeyPath, "--expected-target-uuid", $targetUuid)
+        $restoreArgs = @(
+            "-m", "scripts.moroccan_showroom.restore_contract",
+            "--evidence-json", $evidencePath,
+            "--backup-manifest-json", $manifestPath,
+            "--signing-key-file", $signingKeyPath,
+            "--expected-target-uuid", $targetUuid,
+            "--sign-evidence"
+        )
         Invoke-Python $restoreArgs
 
         Write-Host "PASS: real Moroccan target database + filestore backup restored and independently verified."
@@ -473,7 +558,107 @@ function Backup-And-Restore {
     Invoke-Prepare "Status"
 }
 
+function Apply-Dataset {
+    if (-not $TypedTargetUuid -or $TypedTargetUuid -ne $targetUuid) {
+        throw "Apply requires typing the exact prepared target UUID."
+    }
+    $backupDir = Resolve-ApprovedBackupDirectory $BackupStamp
+
+    Write-Host "Starting and re-checking only the isolated Moroccan target."
+    Invoke-Prepare "Start"
+    Assert-MarkedTargetIdentity
+    Assert-WebRuntimeReady
+
+    $dbContainerId = Get-ComposeOutput @("ps", "-q", "db")
+    $webContainerId = Get-ComposeOutput @("ps", "-q", "web")
+    $dbContainerName = Get-ContainerName $dbContainerId
+    $webContainerName = Get-ContainerName $webContainerId
+    $postgresSystemIdentifier = Invoke-Psql "SELECT system_identifier FROM pg_control_system()" "postgres"
+    if ($postgresSystemIdentifier -notmatch "^[0-9]{10,}$") {
+        throw "PostgreSQL cluster identity is missing or malformed."
+    }
+
+    $manifestPath = Join-Path $backupDir "backup-manifest.json"
+    $signingKeyPath = Join-Path $backupDir "backup-manifest.key"
+    $evidencePath = Join-Path $backupDir "restore-evidence.json"
+    $validateArgs = @(
+        "-m", "scripts.moroccan_showroom.local_backup", "validate",
+        "--manifest-path", $manifestPath,
+        "--signing-key-path", $signingKeyPath,
+        "--target-uuid", $targetUuid,
+        "--postgres-system-identifier", $postgresSystemIdentifier,
+        "--container-name", $dbContainerName,
+        "--container-name", $webContainerName
+    )
+    $restoreArgs = @(
+        "-m", "scripts.moroccan_showroom.restore_contract",
+        "--evidence-json", $evidencePath,
+        "--backup-manifest-json", $manifestPath,
+        "--signing-key-file", $signingKeyPath,
+        "--expected-target-uuid", $targetUuid
+    )
+
+    Write-Host "Re-validating the exact signed backup and independent restore evidence."
+    Invoke-Python $validateArgs
+    Invoke-Python $restoreArgs
+    Write-Host "Running a final read-only importer preflight before mutation."
+    Assert-ImporterPreviewClean
+
+    $applyEvidenceScope = "autostock-apply-evidence-" + [guid]::NewGuid().ToString("N").Substring(0, 12)
+    $applyEvidenceVolume = "$applyEvidenceScope-private"
+    $success = $false
+    $cleanupOk = $false
+    try {
+        Write-Host "Stopping only Moroccan Odoo for the guarded dataset transaction."
+        Invoke-Compose @("stop", "web")
+        Assert-MarkedTargetIdentity
+
+        # Re-check private evidence after stopping web and immediately before writes.
+        Invoke-Python $validateArgs
+        Invoke-Python $restoreArgs
+
+        Write-Host "Staging read-only Apply evidence in a disposable labeled Docker volume."
+        Stage-ApplyEvidenceVolume $backupDir $applyEvidenceVolume $applyEvidenceScope
+
+        $containerNamesJson = ConvertTo-Json -Compress -InputObject @($dbContainerName, $webContainerName)
+        $evidenceMount = $applyEvidenceVolume + ":/mnt/atlas-backup:ro"
+        $extraArgs = @(
+            "--volume", $evidenceMount,
+            "--env", "AUTOSTOCK_MOROCCO_TYPED_TARGET_UUID=$TypedTargetUuid",
+            "--env", "AUTOSTOCK_MOROCCO_POSTGRES_SYSTEM_IDENTIFIER=$postgresSystemIdentifier",
+            "--env", "AUTOSTOCK_MOROCCO_CONTAINER_NAMES_JSON=$containerNamesJson"
+        )
+
+        Write-Host "Applying atlas-ma-2026.4 through the guarded Odoo ORM importer."
+        Invoke-OdooMountedScript "odoo_apply.py" $extraArgs
+
+        Write-Host "Verifying the committed fixture registry in a separate read-only Odoo process."
+        Invoke-OdooMountedScript "odoo_verify.py"
+        $success = $true
+    }
+    finally {
+        try {
+            Remove-OwnedApplyEvidenceVolume $applyEvidenceVolume $applyEvidenceScope
+            $cleanupOk = $true
+        }
+        finally {
+            if ($success -and $cleanupOk) {
+                Write-Host "Restarting only Moroccan Odoo after verified Apply."
+                Invoke-Compose @("start", "web")
+            }
+            else {
+                Write-Warning "Apply did not finish with verified cleanup; Moroccan Odoo remains stopped for safety."
+            }
+        }
+    }
+
+    Invoke-Prepare "Status"
+    Write-Host "PASS: atlas-ma-2026.4 imported and registry-verified on the isolated Moroccan target."
+    Write-Host "No application connection was changed. Legacy USD Atlas remains separate."
+}
+
 switch ($Action) {
     "Initialize" { Initialize-Target }
     "BackupRestore" { Backup-And-Restore }
+    "Apply" { Apply-Dataset }
 }

@@ -17,6 +17,7 @@ from scripts.moroccan_showroom.generator import (
     canonical_json,
     generate_dataset,
 )
+from scripts.moroccan_showroom.restore_contract import sign_restore_evidence
 from scripts.moroccan_showroom.safety import (
     SafetyError,
     TargetIdentity,
@@ -125,6 +126,39 @@ def safe_identity(**changes):
     }
     fields.update(changes)
     return TargetIdentity(**fields)
+
+
+def valid_restore_evidence(manifest, signing_key):
+    project = "autostock-restore-proof-local-test"
+    attachment_hash = "a" * 64
+    tree_hash = "b" * 64
+    evidence = {
+        "restore_project": project,
+        "published_ports": [],
+        "restore_postgres_volume": f"{project}-postgres",
+        "restore_filestore_volume": f"{project}-filestore",
+        "restore_database": "autostock_atlas_morocco_demo",
+        "backup_database_sha256": manifest["database_sha256"],
+        "backup_filestore_sha256": manifest["filestore_sha256"],
+        "pg_restore_succeeded": True,
+        "module_state": "installed",
+        "marker_uuid": TARGET_UUID,
+        "fixture_table_exists": True,
+        "source_attachment_sha256": attachment_hash,
+        "restored_attachment_sha256": attachment_hash,
+        "source_filestore_tree_sha256": tree_hash,
+        "restored_filestore_tree_sha256": tree_hash,
+        "source_attachment_count": 1,
+        "restored_attachment_count": 1,
+        "proof_attachment_present": True,
+        "cleanup_scope": project,
+        "restore_resources_removed": True,
+    }
+    return sign_restore_evidence(
+        evidence,
+        backup_manifest=manifest,
+        backup_signing_key=signing_key,
+    )
 
 
 def test_dataset_is_deterministic_and_hits_approved_counts():
@@ -545,6 +579,7 @@ def test_backup_manifest_integrity_is_separate_from_restore_verification(tmp_pat
             signing_key=signing_key,
         )
     filestore_path.write_bytes(b"matching filestore backup fixture")
+    restore_evidence = valid_restore_evidence(manifest, signing_key)
     require_apply_approval(mode="dry-run")
     with pytest.raises(SafetyError, match="Unsupported execution mode"):
         require_apply_approval(mode="aply")
@@ -554,6 +589,7 @@ def test_backup_manifest_integrity_is_separate_from_restore_verification(tmp_pat
             expected_target_uuid=TARGET_UUID,
             backup_manifest=manifest,
             backup_signing_key=signing_key,
+            restore_evidence=restore_evidence,
         )
     with pytest.raises(SafetyError, match="cross-checked target identity"):
         require_apply_approval(
@@ -562,8 +598,9 @@ def test_backup_manifest_integrity_is_separate_from_restore_verification(tmp_pat
             expected_target_uuid=TARGET_UUID,
             backup_manifest=manifest,
             backup_signing_key=signing_key,
+            restore_evidence=restore_evidence,
         )
-    with pytest.raises(SafetyError, match="Apply is disabled"):
+    with pytest.raises(SafetyError, match="independent restore evidence"):
         require_apply_approval(
             mode="apply",
             typed_target_uuid=TARGET_UUID,
@@ -572,6 +609,38 @@ def test_backup_manifest_integrity_is_separate_from_restore_verification(tmp_pat
             backup_manifest=manifest,
             backup_signing_key=signing_key,
         )
+
+    tampered_restore = {**restore_evidence, "marker_uuid": "00000000-0000-0000-0000-000000000000"}
+    with pytest.raises(SafetyError, match="Restore evidence signature is invalid"):
+        require_apply_approval(
+            mode="apply",
+            typed_target_uuid=TARGET_UUID,
+            expected_target_uuid=TARGET_UUID,
+            target_identity=safe_identity(),
+            backup_manifest=manifest,
+            backup_signing_key=signing_key,
+            restore_evidence=tampered_restore,
+        )
+
+    mounted_database = tmp_path / "mounted-database.dump"
+    mounted_filestore = tmp_path / "mounted-filestore.tar"
+    mounted_database.write_bytes(database_path.read_bytes())
+    mounted_filestore.write_bytes(filestore_path.read_bytes())
+    database_path.unlink()
+    filestore_path.unlink()
+    require_apply_approval(
+        mode="apply",
+        typed_target_uuid=TARGET_UUID,
+        expected_target_uuid=TARGET_UUID,
+        target_identity=safe_identity(),
+        backup_manifest=manifest,
+        backup_signing_key=signing_key,
+        backup_artifact_paths={
+            "database": mounted_database,
+            "filestore": mounted_filestore,
+        },
+        restore_evidence=restore_evidence,
+    )
 
 
 def test_mocked_first_start_repeat_start_and_status_preflights_are_repeatable(tmp_path):
