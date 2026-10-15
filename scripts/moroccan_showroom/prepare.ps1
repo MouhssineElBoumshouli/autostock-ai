@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("Prepare", "Start", "Status", "DryRun")]
+    [ValidateSet("Prepare", "Start", "Status", "RuntimeStatus", "DryRun")]
     [string]$Action = "Prepare",
     [int]$Seed = 36036
 )
@@ -41,6 +41,39 @@ function Invoke-Compose([string[]]$Arguments) {
     if ($LASTEXITCODE -ne 0) {
         throw "Docker Compose failed with exit code $LASTEXITCODE."
     }
+}
+
+function Assert-WebServiceHealthy {
+    $webContainerId = (& docker @((Get-ComposeArgs) + @("ps", "-q", "web")) | Select-Object -First 1)
+    if ($LASTEXITCODE -ne 0 -or -not $webContainerId) {
+        throw "Moroccan Odoo web container is missing."
+    }
+
+    $lastHealth = "unknown"
+    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+        $stateJson = & docker inspect --format "{{json .State}}" $webContainerId
+        if ($LASTEXITCODE -ne 0) { throw "Could not inspect Moroccan Odoo runtime state." }
+        $state = ($stateJson -join [Environment]::NewLine) | ConvertFrom-Json
+
+        if (-not $state.Running -or $state.Restarting -or $state.Status -ne "running") {
+            throw "Moroccan Odoo web container is not stably running."
+        }
+        if ($null -eq $state.Health) {
+            throw "Moroccan Odoo web health check is missing."
+        }
+
+        $lastHealth = [string]$state.Health.Status
+        if ($lastHealth -eq "healthy") {
+            return
+        }
+        if ($lastHealth -notin @("starting", "unhealthy")) {
+            throw "Moroccan Odoo web health state is unexpected: $lastHealth."
+        }
+
+        Start-Sleep -Seconds 1
+    }
+
+    throw "Moroccan Odoo web did not become healthy within 60 seconds (last state: $lastHealth)."
 }
 
 function Invoke-IsolationContract(
@@ -120,11 +153,26 @@ function Assert-NewEnvironmentIsolated([switch]$AllowSharedWebImage) {
                 @{ host_ip = $_.host_ip; published = $_.published; target = $_.target }
             })
         }
+        $command = @()
+        if ($null -ne $service.command) {
+            $command = @($service.command | ForEach-Object { [string]$_ })
+        }
+        $healthcheckTest = @()
+        if ($null -ne $service.healthcheck -and $null -ne $service.healthcheck.test) {
+            $healthcheckTest = @($service.healthcheck.test | ForEach-Object { [string]$_ })
+        }
+        $environmentKeys = @()
+        if ($null -ne $service.environment) {
+            $environmentKeys = @($service.environment.PSObject.Properties.Name)
+        }
         $serviceEvidence[$serviceProperty.Name] = @{
             image = $service.image
             volumes = $mounts
             networks = $serviceNetworks
             ports = $ports
+            command = $command
+            healthcheck_test = $healthcheckTest
+            environment_keys = $environmentKeys
         }
     }
     $volumeEvidence = @{}
@@ -247,6 +295,7 @@ switch ($Action) {
         Invoke-Compose @("up", "--detach", "--wait", "--build", "db", "web")
         # After the rebuild/recreate, require the dedicated Moroccan image strictly.
         Assert-NewEnvironmentIsolated
+        Assert-WebServiceHealthy
         Write-Host "The separate Moroccan Odoo/PostgreSQL services are running at http://127.0.0.1:8070."
         Write-Host "No database was initialized and no dataset was imported."
     }
@@ -255,6 +304,14 @@ switch ($Action) {
             throw "Moroccan private environment file is not prepared."
         }
         Assert-NewEnvironmentIsolated
+        Invoke-Compose @("ps")
+    }
+    "RuntimeStatus" {
+        if (-not (Test-Path -LiteralPath $envPath)) {
+            throw "Moroccan private environment file is not prepared."
+        }
+        Assert-NewEnvironmentIsolated
+        Assert-WebServiceHealthy
         Invoke-Compose @("ps")
     }
     "DryRun" {

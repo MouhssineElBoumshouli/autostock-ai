@@ -327,7 +327,7 @@ env.cr.commit()
         }
     }
 
-    Invoke-Prepare "Status"
+    Invoke-Prepare "RuntimeStatus"
     Write-Host "PASS: clean Moroccan target initialized and marked. No showroom dataset was imported."
 }
 
@@ -555,7 +555,7 @@ function Backup-And-Restore {
         }
     }
 
-    Invoke-Prepare "Status"
+    Invoke-Prepare "RuntimeStatus"
 }
 
 function Apply-Dataset {
@@ -652,7 +652,7 @@ function Apply-Dataset {
         }
     }
 
-    Invoke-Prepare "Status"
+    Invoke-Prepare "RuntimeStatus"
     Write-Host "PASS: atlas-ma-2026.4 imported and registry-verified on the isolated Moroccan target."
     Write-Host "No application connection was changed. Legacy USD Atlas remains separate."
 }

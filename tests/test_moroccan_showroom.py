@@ -33,6 +33,9 @@ from scripts.moroccan_showroom.compose_contract import (
     NETWORK_KEY,
     SCRIPTS_TARGET,
     TARGET_NETWORK,
+    WEB_HEALTHCHECK_TEST,
+    WEB_REQUIRED_ENVIRONMENT_KEYS,
+    WEB_START_COMMAND,
     validate_compose_config,
     validate_container_inspect,
     validate_network_inspect,
@@ -65,6 +68,9 @@ def compose_config(repo_root: Path):
                 ],
                 "networks": {NETWORK_KEY: None},
                 "ports": [{"host_ip": "127.0.0.1", "published": "8070", "target": 8069}],
+                "command": list(WEB_START_COMMAND),
+                "healthcheck_test": list(WEB_HEALTHCHECK_TEST),
+                "environment_keys": sorted(WEB_REQUIRED_ENVIRONMENT_KEYS),
             },
         },
         "volumes": {
@@ -686,6 +692,14 @@ def test_mocked_first_start_repeat_start_and_status_preflights_are_repeatable(tm
         lambda config: config["services"]["web"]["volumes"][1].update(read_only=False),
         lambda config: config["services"]["web"].update(networks={NETWORK_KEY: None, "default": None}),
         lambda config: config["services"]["web"].update(image="autostock-ai-odoo:19.0"),
+        lambda config: config["services"]["web"].update(command=["--admin-passwd=bad"]),
+        lambda config: config["services"]["web"].update(healthcheck_test=[]),
+        lambda config: config["services"]["web"].update(
+            environment_keys=[
+                key for key in config["services"]["web"]["environment_keys"]
+                if key != "ODOO_MASTER_PASSWORD"
+            ]
+        ),
         lambda config: config["networks"][NETWORK_KEY]["labels"].pop("com.autostock.target-uuid"),
     ],
 )
