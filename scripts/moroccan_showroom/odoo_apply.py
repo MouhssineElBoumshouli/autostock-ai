@@ -40,11 +40,11 @@ local_backup = importlib.import_module(f"{package.__name__}.local_backup")
 seed = int(os.environ.get("AUTOSTOCK_MOROCCO_DATASET_SEED", generator.DEFAULT_SEED))
 typed_uuid = os.environ.get("AUTOSTOCK_MOROCCO_TYPED_TARGET_UUID", "")
 system_identifier = os.environ.get("AUTOSTOCK_MOROCCO_POSTGRES_SYSTEM_IDENTIFIER", "")
-container_names = tuple(
-    json.loads(os.environ.get("AUTOSTOCK_MOROCCO_CONTAINER_NAMES_JSON", "[]"))
-)
-if len(container_names) != 2 or not all(isinstance(name, str) and name for name in container_names):
-    raise RuntimeError("The guarded Apply runner requires exactly two verified Moroccan container names.")
+db_container_name = os.environ.get("AUTOSTOCK_MOROCCO_DB_CONTAINER_NAME", "")
+web_container_name = os.environ.get("AUTOSTOCK_MOROCCO_WEB_CONTAINER_NAME", "")
+container_names = (db_container_name, web_container_name)
+if not all(container_names):
+    raise RuntimeError("The guarded Apply runner requires both verified Moroccan container names.")
 
 manifest = json.loads((BACKUP_DIR / "backup-manifest.json").read_text(encoding="utf-8"))
 signing_key = (BACKUP_DIR / "backup-manifest.key").read_bytes()
