@@ -27,6 +27,20 @@ SCRIPTS_TARGET = "/mnt/atlas-morocco"
 POSTGRES_IMAGE = "postgres:16"
 MOROCCAN_WEB_IMAGE = "autostock-ai-odoo-morocco:19.0"
 SHARED_WEB_IMAGE = "autostock-ai-odoo:19.0"
+WEB_START_COMMAND = ["bash", f"{SCRIPTS_TARGET}/start_web.sh"]
+WEB_HEALTHCHECK_TEST = [
+    "CMD",
+    "python3",
+    "-c",
+    "import socket; s=socket.create_connection(('127.0.0.1', 8069), 3); s.close()",
+]
+WEB_REQUIRED_ENVIRONMENT_KEYS = {
+    "HOST",
+    "USER",
+    "PASSWORD",
+    "ODOO_MASTER_PASSWORD",
+    "AUTOSTOCK_DEMO_TARGET_UUID",
+}
 
 
 def _require(condition: bool, message: str) -> None:
@@ -132,6 +146,20 @@ def validate_compose_config(config: dict, *, repo_root: Path, expected_uuid: str
     _require(db.get("image") == POSTGRES_IMAGE, "PostgreSQL image does not match the isolated Moroccan contract.")
     _require(web.get("image") == MOROCCAN_WEB_IMAGE, "Odoo image does not match the dedicated Moroccan contract.")
     _require(not db.get("ports"), "PostgreSQL must not publish a host port.")
+    _require(
+        web.get("command") == WEB_START_COMMAND,
+        "Odoo must start through the reviewed Odoo 19 config launcher.",
+    )
+    _require(
+        web.get("healthcheck_test") == WEB_HEALTHCHECK_TEST,
+        "Odoo must use the reviewed local runtime health check.",
+    )
+    environment_keys = web.get("environment_keys")
+    _require(
+        isinstance(environment_keys, list)
+        and WEB_REQUIRED_ENVIRONMENT_KEYS.issubset(set(environment_keys)),
+        "Odoo runtime environment is missing a required private/configuration key.",
+    )
     web_ports = web.get("ports") or []
     _require(len(web_ports) == 1, "Odoo must publish exactly one local port.")
     port = web_ports[0]
