@@ -60,3 +60,22 @@ Docker Desktop is running. The Atlas showroom Odoo container is running and its 
 ## Remaining limitations
 
 The Atlas showroom is demonstration data. These checks do not establish forecast accuracy for a real business, production readiness, or readiness for purchasing automation. A separate restricted Atlas account is not configured for live screenshots; restricted access is covered by Odoo integration and browser contract tests.
+
+## Issue #59 follow-up — current-stock scope in forecast details
+
+For a saved real forecast, the current-stock snapshot now uses the selected warehouse context when the run is warehouse-scoped. A company-wide run continues to use company-wide stock. The disclosure label names the scope as `Current stock — <warehouse>` or `Current stock — company-wide`. Forecast calculations, history, reviews, and freshness rules are unchanged.
+
+The Odoo HTTP regression creates one shared SKU with four units at Atlas Central and eleven at South Depot, then reads both warehouse forecast details and the company-wide detail. It verifies on-hand and projected stock of 4, 11, and 15 respectively. The Playwright regression verifies both scope labels in the detail disclosure.
+
+| Check | Result |
+|---|---|
+| `python -m pytest -q` | Passed: 105 tests. Windows emitted non-fatal pytest temporary-directory cleanup warnings (`WinError 145`). |
+| `python -m compileall -q addons ml scripts tests` | Passed. |
+| `npm run lint` / `npm run typecheck` | Passed. |
+| `npm run test:unit` / `npm run test:contract` | Passed: 10 unit tests and 16 contract tests. |
+| `npm run test:browser` | Passed: 37 tests, including the new company-wide/warehouse scope-label regression. |
+| `npm run build` | Passed: production Vite build. |
+| Odoo 19 + PostgreSQL 16 focused integration test | Passed: `odoo.tests.result` reports 0 failures, 0 errors of 1 actual test. It ran in a fresh temporary database and isolated network with `--test-tags=/autostock_ai:TestAutoStockForecastApi.test_forecast_detail_current_stock_matches_warehouse_or_company_scope`. |
+| Full local Odoo addon suite | Not completed. The run was stopped during the existing Moroccan importer history audit before it reached the forecast API tests; no full-suite pass is claimed. |
+
+The temporary PostgreSQL data used tmpfs. The cached Odoo image declares `/var/lib/odoo` as a Docker volume; two anonymous volumes created by the temporary test containers were confirmed unattached and removed. The final Docker volume inventory matches its recorded pre-test inventory, and no test containers or networks remain. No showroom database, environment credentials, or named showroom volumes were used or changed.

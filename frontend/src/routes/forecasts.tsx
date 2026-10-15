@@ -402,7 +402,7 @@ function EvaluationDisclosure({ detail, timezone }: { detail: ForecastDetailData
         <EvidenceRow label="Source timezone">{run.source_timezone}</EvidenceRow>
         {run.source_snapshot_sha256 && <EvidenceRow label="Source snapshot">{run.source_snapshot_sha256}</EvidenceRow>}
         {run.model_version && <EvidenceRow label="Engine version">{run.model_version}</EvidenceRow>}
-        {run.current_stock && <EvidenceRow label="Current stock snapshot">{formatQuantity(run.current_stock.on_hand)} on hand · {formatQuantity(run.current_stock.odoo_projected)} projected · {run.current_stock.uom}</EvidenceRow>}
+        {run.current_stock && <EvidenceRow label={`Current stock — ${run.warehouse_name || 'company-wide'}`}>{formatQuantity(run.current_stock.on_hand)} on hand · {formatQuantity(run.current_stock.odoo_projected)} projected · {run.current_stock.uom}</EvidenceRow>}
         {run.reviewed_by && <EvidenceRow label="Reviewed by">{run.reviewed_by}</EvidenceRow>}
         {run.reviewed_at && <EvidenceRow label="Review date">{formatForecastDateTime(run.reviewed_at, timezone)}</EvidenceRow>}
         <EvidenceRow label="Restock guidance">{detail.restock_guidance.reason}</EvidenceRow>

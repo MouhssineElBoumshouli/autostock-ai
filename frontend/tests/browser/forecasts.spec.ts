@@ -103,13 +103,13 @@ function historyPageData(url: URL) {
   }
 }
 
-function detailData(id: number, reviewStatus: 'reviewed' | 'unreviewed' = 'reviewed') {
+function detailData(id: number, reviewStatus: 'reviewed' | 'unreviewed' = 'reviewed', warehouseName: string | false = 'Atlas Central Warehouse') {
   return {
     schema_version: 1, company,
     estimate: id === 14 ? estimate('available', 30) : estimate('incomplete', 60),
     run: {
       id, name: 'BP-FR-420 · 30 days', company_id: 1, company_name: company.name,
-      product_id: 1001, warehouse_id: 10, warehouse_name: 'Atlas Central Warehouse', uom: 'Units',
+      product_id: 1001, warehouse_id: warehouseName ? 10 : false, warehouse_name: warehouseName, uom: 'Units',
       created_at: '2026-09-27 14:20:00', state: 'completed', evaluation_status: 'evaluated', failure_reason: false,
       source_type: 'completed_deliveries', source_label: 'Completed deliveries, with returns recorded separately',
       sku: 'BP-FR-420', product_name: 'Front Brake Pad Set', horizon_days: id === 14 ? 30 : 60,
@@ -155,7 +155,7 @@ async function installForecastRoutes(page: Page) {
   await page.route('**/autostock/api/v1/forecasts?**', (route) => route.fulfill({ json: historyPageData(new URL(route.request().url())) }))
   await page.route(/\/autostock\/api\/v1\/forecasts\/\d+(\?|$)/, (route) => {
     const id = Number(new URL(route.request().url()).pathname.split('/').at(-1))
-    return route.fulfill({ json: detailData(id, id === 15 ? 'unreviewed' : 'reviewed') })
+    return route.fulfill({ json: detailData(id, id === 15 ? 'unreviewed' : 'reviewed', id === 21 ? false : 'Atlas Central Warehouse') })
   })
 }
 
@@ -269,6 +269,21 @@ test('forecast detail leads with an approximate saved estimate and keeps evidenc
   await expect(page).toHaveURL(/\/forecasts\?view=history/)
   expect(writes).toEqual([])
   expect(browserErrors).toEqual([])
+})
+
+test('forecast detail labels current stock with its warehouse or company-wide scope', async ({ page }) => {
+  await installForecastRoutes(page)
+  await page.goto('/forecasts/14')
+  const warehouseDisclosure = page.locator('.forecast-evaluation-disclosure')
+  await warehouseDisclosure.locator('summary').click()
+  await expect(warehouseDisclosure.getByText('Current stock — Atlas Central Warehouse', { exact: true })).toBeVisible()
+  await expect(warehouseDisclosure).toContainText('18 on hand · 22 projected · Units')
+
+  await page.goto('/forecasts/21')
+  const companyDisclosure = page.locator('.forecast-evaluation-disclosure')
+  await companyDisclosure.locator('summary').click()
+  await expect(companyDisclosure.getByText('Current stock — company-wide', { exact: true })).toBeVisible()
+  await expect(companyDisclosure).toContainText('18 on hand · 22 projected · Units')
 })
 
 test('warehouse-scoped demo evidence explains current and stale source provenance', async ({ page }) => {
