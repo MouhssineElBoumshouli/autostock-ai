@@ -136,11 +136,26 @@ function Assert-NewEnvironmentIsolated([switch]$AllowSharedWebImage) {
                 @{ host_ip = $_.host_ip; published = $_.published; target = $_.target }
             })
         }
+        $command = @()
+        if ($null -ne $service.command) {
+            $command = @($service.command | ForEach-Object { [string]$_ })
+        }
+        $healthcheckTest = @()
+        if ($null -ne $service.healthcheck -and $null -ne $service.healthcheck.test) {
+            $healthcheckTest = @($service.healthcheck.test | ForEach-Object { [string]$_ })
+        }
+        $environmentKeys = @()
+        if ($null -ne $service.environment) {
+            $environmentKeys = @($service.environment.PSObject.Properties.Name)
+        }
         $serviceEvidence[$serviceProperty.Name] = @{
             image = $service.image
             volumes = $mounts
             networks = $serviceNetworks
             ports = $ports
+            command = $command
+            healthcheck_test = $healthcheckTest
+            environment_keys = $environmentKeys
         }
     }
     $volumeEvidence = @{}
