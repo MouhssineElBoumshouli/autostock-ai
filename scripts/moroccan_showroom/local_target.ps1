@@ -638,13 +638,13 @@ function Apply-Dataset {
         Write-Host "Staging read-only Apply evidence in a disposable labeled Docker volume."
         Stage-ApplyEvidenceVolume $backupDir $applyEvidenceVolume $applyEvidenceScope
 
-        $containerNamesJson = ConvertTo-Json -Compress -InputObject @($dbContainerName, $webContainerName)
         $evidenceMount = $applyEvidenceVolume + ":/mnt/atlas-backup:ro"
         $extraArgs = @(
             "--volume", $evidenceMount,
             "--env", "AUTOSTOCK_MOROCCO_TYPED_TARGET_UUID=$TypedTargetUuid",
             "--env", "AUTOSTOCK_MOROCCO_POSTGRES_SYSTEM_IDENTIFIER=$postgresSystemIdentifier",
-            "--env", "AUTOSTOCK_MOROCCO_CONTAINER_NAMES_JSON=$containerNamesJson"
+            "--env", "AUTOSTOCK_MOROCCO_DB_CONTAINER_NAME=$dbContainerName",
+            "--env", "AUTOSTOCK_MOROCCO_WEB_CONTAINER_NAME=$webContainerName"
         )
 
         Write-Host "Applying atlas-ma-2026.4 through the guarded Odoo ORM importer."
