@@ -105,6 +105,24 @@ function Get-ContainerName([string]$ContainerId) {
     return (Get-DockerOutput @("inspect", "--format", "{{.Name}}", $ContainerId)).TrimStart("/")
 }
 
+function Get-ExactTargetContainerId([string]$Service, [string]$ExpectedName) {
+    $inspectJson = & docker inspect $ExpectedName 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $inspectJson) {
+        throw "Expected Moroccan $Service container is missing."
+    }
+    $container = (($inspectJson -join [Environment]::NewLine) | ConvertFrom-Json)[0]
+    if ($container.Name.TrimStart("/") -ne $ExpectedName -or
+        $container.Config.Labels."com.docker.compose.project" -ne $project -or
+        $container.Config.Labels."com.docker.compose.service" -ne $Service -or
+        $container.Config.Labels."com.autostock.target-uuid" -ne $targetUuid) {
+        throw "Expected Moroccan $Service container identity does not match the isolated target."
+    }
+    if (-not $container.Id) {
+        throw "Expected Moroccan $Service container ID is missing."
+    }
+    return [string]$container.Id
+}
+
 function Assert-WebRuntimeReady {
     Write-Host "Verifying the dedicated Moroccan Odoo runtime dependencies."
     Invoke-Compose @(
@@ -400,8 +418,8 @@ function Backup-And-Restore {
     Invoke-Prepare "Start"
     $source = Assert-CleanInitializedTarget
 
-    $dbContainerId = Get-ComposeOutput @("ps", "-q", "db")
-    $webContainerId = Get-ComposeOutput @("ps", "-q", "web")
+    $dbContainerId = Get-ExactTargetContainerId "db" "autostock-atlas-morocco-db-1"
+    $webContainerId = Get-ExactTargetContainerId "web" "autostock-atlas-morocco-web-1"
     $dbContainerName = Get-ContainerName $dbContainerId
     $webContainerName = Get-ContainerName $webContainerId
     $postgresSystemIdentifier = Invoke-Psql "SELECT system_identifier FROM pg_control_system()" "postgres"
