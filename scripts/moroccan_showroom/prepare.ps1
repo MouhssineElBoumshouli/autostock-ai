@@ -48,15 +48,32 @@ function Assert-WebServiceHealthy {
     if ($LASTEXITCODE -ne 0 -or -not $webContainerId) {
         throw "Moroccan Odoo web container is missing."
     }
-    $stateJson = & docker inspect --format "{{json .State}}" $webContainerId
-    if ($LASTEXITCODE -ne 0) { throw "Could not inspect Moroccan Odoo runtime state." }
-    $state = ($stateJson -join [Environment]::NewLine) | ConvertFrom-Json
-    if (-not $state.Running -or $state.Restarting -or $state.Status -ne "running") {
-        throw "Moroccan Odoo web container is not stably running."
+
+    $lastHealth = "unknown"
+    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+        $stateJson = & docker inspect --format "{{json .State}}" $webContainerId
+        if ($LASTEXITCODE -ne 0) { throw "Could not inspect Moroccan Odoo runtime state." }
+        $state = ($stateJson -join [Environment]::NewLine) | ConvertFrom-Json
+
+        if (-not $state.Running -or $state.Restarting -or $state.Status -ne "running") {
+            throw "Moroccan Odoo web container is not stably running."
+        }
+        if ($null -eq $state.Health) {
+            throw "Moroccan Odoo web health check is missing."
+        }
+
+        $lastHealth = [string]$state.Health.Status
+        if ($lastHealth -eq "healthy") {
+            return
+        }
+        if ($lastHealth -notin @("starting", "unhealthy")) {
+            throw "Moroccan Odoo web health state is unexpected: $lastHealth."
+        }
+
+        Start-Sleep -Seconds 1
     }
-    if ($null -eq $state.Health -or $state.Health.Status -ne "healthy") {
-        throw "Moroccan Odoo web health check is not healthy."
-    }
+
+    throw "Moroccan Odoo web did not become healthy within 60 seconds (last state: $lastHealth)."
 }
 
 function Invoke-IsolationContract(
