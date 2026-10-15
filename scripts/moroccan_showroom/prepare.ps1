@@ -44,10 +44,18 @@ function Invoke-Compose([string[]]$Arguments) {
 }
 
 function Assert-WebServiceHealthy {
-    $webContainerId = (& docker @((Get-ComposeArgs) + @("ps", "-q", "web")) | Select-Object -First 1)
-    if ($LASTEXITCODE -ne 0 -or -not $webContainerId) {
+    $webContainerName = "autostock-atlas-morocco-web-1"
+    $inspectJson = & docker inspect $webContainerName 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $inspectJson) {
         throw "Moroccan Odoo web container is missing."
     }
+    $inspected = (($inspectJson -join [Environment]::NewLine) | ConvertFrom-Json)[0]
+    if ($inspected.Name.TrimStart("/") -ne $webContainerName -or
+        $inspected.Config.Labels."com.docker.compose.project" -ne $project -or
+        $inspected.Config.Labels."com.docker.compose.service" -ne "web") {
+        throw "Moroccan Odoo web container identity does not match the isolated target."
+    }
+    $webContainerId = [string]$inspected.Id
 
     $lastHealth = "unknown"
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
