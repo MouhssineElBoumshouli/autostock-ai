@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("Prepare", "Start", "Status", "DryRun")]
+    [ValidateSet("Prepare", "Start", "Status", "RuntimeStatus", "DryRun")]
     [string]$Action = "Prepare",
     [int]$Seed = 36036
 )
@@ -283,6 +283,13 @@ switch ($Action) {
         Write-Host "No database was initialized and no dataset was imported."
     }
     "Status" {
+        if (-not (Test-Path -LiteralPath $envPath)) {
+            throw "Moroccan private environment file is not prepared."
+        }
+        Assert-NewEnvironmentIsolated
+        Invoke-Compose @("ps")
+    }
+    "RuntimeStatus" {
         if (-not (Test-Path -LiteralPath $envPath)) {
             throw "Moroccan private environment file is not prepared."
         }
