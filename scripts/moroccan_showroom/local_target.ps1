@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("Initialize", "BackupRestore", "Apply")]
+    [ValidateSet("Initialize", "BackupRestore", "PostApplyRestore", "Apply")]
     [string]$Action,
     [string]$BackupStamp,
     [string]$TypedTargetUuid
@@ -18,6 +18,8 @@ $filestoreVolume = "autostock_atlas_morocco_filestore"
 $image = "autostock-ai-odoo-morocco:19.0"
 $proofAttachmentName = "AutoStock local restore proof"
 $proofAttachmentBytes = "autostock-local-independent-restore-proof-v1"
+$datasetVersion = "atlas-ma-2026.4"
+$expectedForecastRequests = 90
 
 if (-not (Test-Path -LiteralPath $envPath)) {
     throw "Moroccan environment is not prepared. Do not regenerate it; restore the existing .env.atlas-morocco first."
@@ -192,6 +194,61 @@ function Assert-CleanInitializedTarget {
     return @{
         proof_store_fname = $proofStore
         attachment_count = [int](Invoke-Psql "SELECT count(*) FROM ir_attachment")
+    }
+}
+
+function Get-TextSha256([string]$Text) {
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Text)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ([System.BitConverter]::ToString($sha.ComputeHash($bytes))).Replace("-", "").ToLowerInvariant()
+    }
+    finally { $sha.Dispose() }
+}
+
+function Get-FixtureRegistrySnapshot([string]$RestoreContainer = "") {
+    $serializeSql = "SELECT COALESCE(string_agg(dataset_version || '|' || fixture_key || '|' || entity || '|' || record_model || '|' || record_id::text || '|' || payload_sha256, E'\n' ORDER BY fixture_key, id), '') FROM autostock_morocco_fixture"
+    if ($RestoreContainer) {
+        $serialized = Invoke-RestorePsql $RestoreContainer $serializeSql
+        $count = [int](Invoke-RestorePsql $RestoreContainer "SELECT count(*) FROM autostock_morocco_fixture")
+        $forecastRequests = [int](Invoke-RestorePsql $RestoreContainer "SELECT count(*) FROM autostock_morocco_fixture WHERE entity='forecast_request'")
+    }
+    else {
+        $serialized = Invoke-Psql $serializeSql
+        $count = [int](Invoke-Psql "SELECT count(*) FROM autostock_morocco_fixture")
+        $forecastRequests = [int](Invoke-Psql "SELECT count(*) FROM autostock_morocco_fixture WHERE entity='forecast_request'")
+    }
+    return @{
+        count = $count
+        forecast_requests = $forecastRequests
+        sha256 = Get-TextSha256 $serialized
+    }
+}
+
+function Assert-ImportedTarget {
+    Assert-MarkedTargetIdentity
+    $version = Invoke-Psql "SELECT COALESCE(autostock_demo_dataset_version, '') FROM res_company LIMIT 1"
+    if ($version -ne $datasetVersion) {
+        throw "Imported Moroccan dataset version does not match $datasetVersion."
+    }
+    $registry = Get-FixtureRegistrySnapshot
+    if ($registry.count -le 0) {
+        throw "Imported Moroccan fixture registry is empty."
+    }
+    if ($registry.forecast_requests -ne $expectedForecastRequests) {
+        throw "Imported Moroccan forecast request registry count is incomplete."
+    }
+    $proofStore = Invoke-Psql "SELECT COALESCE(store_fname, '') FROM ir_attachment WHERE name='$proofAttachmentName' ORDER BY id DESC LIMIT 1"
+    if (-not $proofStore) {
+        throw "The local restore-proof attachment is missing from the imported Moroccan target."
+    }
+    return @{
+        proof_store_fname = $proofStore
+        attachment_count = [int](Invoke-Psql "SELECT count(*) FROM ir_attachment")
+        dataset_version = $version
+        fixture_registry_count = [int]$registry.count
+        forecast_request_count = [int]$registry.forecast_requests
+        fixture_registry_sha256 = [string]$registry.sha256
     }
 }
 
@@ -414,9 +471,17 @@ function Assert-RestoreResourcesRemoved([string]$Container, [string]$PostgresRes
     }
 }
 
-function Backup-And-Restore {
+function Backup-And-Restore([bool]$PostApply = $false) {
     Invoke-Prepare "Start"
-    $source = Assert-CleanInitializedTarget
+    if ($PostApply) {
+        Assert-WebRuntimeReady
+        Write-Host "Verifying the committed imported registry before taking the post-import backup."
+        Invoke-OdooMountedScript "odoo_verify.py"
+        $source = Assert-ImportedTarget
+    }
+    else {
+        $source = Assert-CleanInitializedTarget
+    }
 
     $dbContainerId = Get-ExactTargetContainerId "db" "autostock-atlas-morocco-db-1"
     $webContainerId = Get-ExactTargetContainerId "web" "autostock-atlas-morocco-web-1"
@@ -427,7 +492,7 @@ function Backup-And-Restore {
 
     $stamp = [DateTime]::UtcNow.ToString("yyyyMMdd-HHmmss")
     $backupDir = Join-Path $repoRoot ".showroom/morocco-backups/$stamp"
-    New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
+    New-Item -ItemType Directory -Path $backupDir -ErrorAction Stop | Out-Null
     $dumpPath = Join-Path $backupDir "database.dump"
     $filestorePath = Join-Path $backupDir "filestore.tar"
     $manifestPath = Join-Path $backupDir "backup-manifest.json"
@@ -448,8 +513,13 @@ function Backup-And-Restore {
         Write-Host "Stopping only Moroccan Odoo to take a consistent target backup."
         Invoke-Compose @("stop", "web")
         $webStopped = $true
-        $source = Assert-CleanInitializedTarget
-        Assert-ImporterPreviewClean
+        if ($PostApply) {
+            $source = Assert-ImportedTarget
+        }
+        else {
+            $source = Assert-CleanInitializedTarget
+            Assert-ImporterPreviewClean
+        }
 
         Write-Host "Creating private database and filestore backup artifacts under ignored .showroom/."
         $containerDumpPath = "/tmp/autostock-morocco-$restoreSuffix.dump"
@@ -503,12 +573,23 @@ function Backup-And-Restore {
         $fixtureTable = Invoke-RestorePsql $restoreContainer "SELECT CASE WHEN to_regclass('public.autostock_morocco_fixture') IS NULL THEN 'false' ELSE 'true' END"
         $restoredAttachmentCount = [int](Invoke-RestorePsql $restoreContainer "SELECT count(*) FROM ir_attachment")
         $restoredStore = Invoke-RestorePsql $restoreContainer "SELECT COALESCE(store_fname, '') FROM ir_attachment WHERE name='$proofAttachmentName' ORDER BY id DESC LIMIT 1"
+        $restoredDatasetVersion = Invoke-RestorePsql $restoreContainer "SELECT COALESCE(autostock_demo_dataset_version, '') FROM res_company LIMIT 1"
+        $restoredRegistry = Get-FixtureRegistrySnapshot $restoreContainer
 
         if ($moduleState -ne "installed") { throw "Restored AutoStock module is not installed." }
         if ($restoredMarker -ne $targetUuid) { throw "Restored target UUID marker does not match." }
         if ($fixtureTable -ne "true") { throw "Restored fixture table is missing." }
         if ($restoredAttachmentCount -ne $source.attachment_count) { throw "Restored attachment count differs from source." }
         if ($restoredStore -ne $source.proof_store_fname) { throw "Restored proof attachment path differs from source." }
+        if ($PostApply) {
+            if ($restoredDatasetVersion -ne $source.dataset_version) { throw "Restored dataset version differs from source." }
+            if ($restoredRegistry.count -ne $source.fixture_registry_count) { throw "Restored fixture registry count differs from source." }
+            if ($restoredRegistry.forecast_requests -ne $source.forecast_request_count) { throw "Restored forecast request registry count differs from source." }
+            if ($restoredRegistry.sha256 -ne $source.fixture_registry_sha256) { throw "Restored fixture registry digest differs from source." }
+        }
+        elseif ($restoredDatasetVersion) {
+            throw "Pre-import restore unexpectedly contains a dataset version."
+        }
 
         $restoredAttachmentHash = Get-VolumeFileHash $restoreFilestoreVolume $restoredStore
         $restoredTreeHash = Get-FilestoreTreeHash $restoreFilestoreVolume
@@ -542,6 +623,14 @@ function Backup-And-Restore {
             source_attachment_count = [int]$source.attachment_count
             restored_attachment_count = $restoredAttachmentCount
             proof_attachment_present = $true
+            backup_stage = if ($PostApply) { "post-import" } else { "pre-import" }
+            dataset_version = if ($PostApply) { $source.dataset_version } else { "" }
+            source_fixture_registry_count = if ($PostApply) { [int]$source.fixture_registry_count } else { 0 }
+            restored_fixture_registry_count = if ($PostApply) { [int]$restoredRegistry.count } else { 0 }
+            source_forecast_request_count = if ($PostApply) { [int]$source.forecast_request_count } else { 0 }
+            restored_forecast_request_count = if ($PostApply) { [int]$restoredRegistry.forecast_requests } else { 0 }
+            source_fixture_registry_sha256 = if ($PostApply) { [string]$source.fixture_registry_sha256 } else { "" }
+            restored_fixture_registry_sha256 = if ($PostApply) { [string]$restoredRegistry.sha256 } else { "" }
             cleanup_scope = $restoreProject
             restore_resources_removed = $true
         }
@@ -557,9 +646,16 @@ function Backup-And-Restore {
         )
         Invoke-Python $restoreArgs
 
-        Write-Host "PASS: real Moroccan target database + filestore backup restored and independently verified."
+        if ($PostApply) {
+            Write-Host "PASS: imported Moroccan dataset database + filestore backup restored and independently verified."
+            Write-Host "Verified $($source.fixture_registry_count) registry entries, $($source.forecast_request_count) forecast requests, and registry digest $($source.fixture_registry_sha256)."
+        }
+        else {
+            Write-Host "PASS: real Moroccan target database + filestore backup restored and independently verified."
+            Write-Host "No showroom dataset was imported."
+        }
         Write-Host "Private backup artifacts remain under .showroom/morocco-backups/$stamp."
-        Write-Host "No showroom dataset was imported and no app connection was changed."
+        Write-Host "No application connection was changed. Legacy USD Atlas remains separate."
     }
     finally {
         try {
@@ -677,6 +773,7 @@ function Apply-Dataset {
 
 switch ($Action) {
     "Initialize" { Initialize-Target }
-    "BackupRestore" { Backup-And-Restore }
+    "BackupRestore" { Backup-And-Restore $false }
+    "PostApplyRestore" { Backup-And-Restore $true }
     "Apply" { Apply-Dataset }
 }
