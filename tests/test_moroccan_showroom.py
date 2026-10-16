@@ -17,7 +17,14 @@ from scripts.moroccan_showroom.generator import (
     canonical_json,
     generate_dataset,
 )
-from scripts.moroccan_showroom.restore_contract import sign_restore_evidence
+from scripts.moroccan_showroom.post_apply_state import (
+    expected_post_apply_state,
+    validate_post_apply_state,
+)
+from scripts.moroccan_showroom.restore_contract import (
+    sign_restore_evidence,
+    validate_restore_evidence,
+)
 from scripts.moroccan_showroom.safety import (
     SafetyError,
     TargetIdentity,
@@ -134,7 +141,7 @@ def safe_identity(**changes):
     return TargetIdentity(**fields)
 
 
-def valid_restore_evidence(manifest, signing_key):
+def restore_evidence_body(manifest):
     project = "autostock-restore-proof-local-test"
     attachment_hash = "a" * 64
     tree_hash = "b" * 64
@@ -160,11 +167,98 @@ def valid_restore_evidence(manifest, signing_key):
         "cleanup_scope": project,
         "restore_resources_removed": True,
     }
+    post_apply_state = manifest.get("post_apply_state")
+    if post_apply_state:
+        evidence.update(
+            {
+                "source_dataset_version": post_apply_state["dataset_version"],
+                "restored_dataset_version": post_apply_state["dataset_version"],
+                "approved_dataset_sha256": post_apply_state["dataset_sha256"],
+                "source_fixture_registry_entries": post_apply_state["fixture_registry_entries"],
+                "restored_fixture_registry_entries": post_apply_state["fixture_registry_entries"],
+                "source_forecast_requests": post_apply_state["forecast_requests"],
+                "restored_forecast_requests": post_apply_state["forecast_requests"],
+                "source_fixture_registry_sha256": post_apply_state["fixture_registry_sha256"],
+                "restored_fixture_registry_sha256": post_apply_state["fixture_registry_sha256"],
+            }
+        )
+    return evidence
+
+
+def valid_restore_evidence(manifest, signing_key):
     return sign_restore_evidence(
-        evidence,
+        restore_evidence_body(manifest),
         backup_manifest=manifest,
         backup_signing_key=signing_key,
     )
+
+
+def test_post_apply_state_contract_is_deterministic_and_fail_closed():
+    state = expected_post_apply_state()
+    dataset = generate_dataset()
+
+    assert state["state_version"] == 1
+    assert state["dataset_version"] == DATASET_VERSION
+    assert state["dataset_sha256"] == dataset.digest
+    assert state["fixture_registry_entries"] == 7024
+    assert state["forecast_requests"] == 90
+    assert len(state["fixture_registry_sha256"]) == 64
+    validate_post_apply_state(state)
+
+    with pytest.raises(SafetyError, match="Post-Apply state"):
+        validate_post_apply_state({**state, "fixture_registry_entries": 7023})
+
+
+def test_post_apply_restore_evidence_requires_exact_approved_registry(tmp_path):
+    signing_key = b"post-apply-private-test-key-32-bytes"
+    database_path = tmp_path / "post-apply.dump"
+    filestore_path = tmp_path / "post-apply-filestore.tar"
+    database_path.write_bytes(b"post-apply database backup")
+    filestore_path.write_bytes(b"post-apply filestore backup")
+    post_apply_state = expected_post_apply_state()
+    manifest = {
+        "database_name": "autostock_atlas_morocco_demo",
+        "target_uuid": TARGET_UUID,
+        "database_sha256": hashlib.sha256(database_path.read_bytes()).hexdigest(),
+        "filestore_sha256": hashlib.sha256(filestore_path.read_bytes()).hexdigest(),
+        "post_apply_state": post_apply_state,
+    }
+    manifest["signature_hmac_sha256"] = backup_manifest_signature(manifest, signing_key)
+
+    evidence = valid_restore_evidence(manifest, signing_key)
+    validate_restore_evidence(
+        evidence,
+        backup_manifest=manifest,
+        backup_signing_key=signing_key,
+        expected_uuid=TARGET_UUID,
+    )
+
+    drifted = restore_evidence_body(manifest)
+    drifted["restored_fixture_registry_sha256"] = "f" * 64
+    drifted = sign_restore_evidence(
+        drifted,
+        backup_manifest=manifest,
+        backup_signing_key=signing_key,
+    )
+    with pytest.raises(SafetyError, match="fixture registry differs"):
+        validate_restore_evidence(
+            drifted,
+            backup_manifest=manifest,
+            backup_signing_key=signing_key,
+            expected_uuid=TARGET_UUID,
+        )
+
+
+def test_post_apply_operator_is_separate_from_pre_import_apply_backup():
+    repo_root = Path(__file__).resolve().parents[1]
+    local_target = (
+        repo_root / "scripts" / "moroccan_showroom" / "local_target.ps1"
+    ).read_text(encoding="utf-8")
+
+    assert '"PostApplyRestore"' in local_target
+    assert ".showroom/morocco-post-apply-backups" in local_target
+    assert 'if ($PostApply) { $createArgs += "--post-apply" }' in local_target
+    assert '"PostApplyRestore" { Backup-And-Restore -PostApply }' in local_target
 
 
 def test_dataset_is_deterministic_and_hits_approved_counts():
