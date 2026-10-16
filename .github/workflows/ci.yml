@@ -179,6 +179,7 @@ jobs:
               Where-Object { $_ -like "ATLAS_MOROCCO_TARGET_UUID=*" }
             ).Split("=", 2)[1]
             ./scripts/moroccan_showroom/local_target.ps1 -Action Apply -BackupStamp $backupStamp -TypedTargetUuid $targetUuid
+            ./scripts/moroccan_showroom/local_target.ps1 -Action PostApplyRestore -TypedTargetUuid $targetUuid
           }
           finally {
             # CI-only cleanup: this runner is disposable and contains no owner showroom.
