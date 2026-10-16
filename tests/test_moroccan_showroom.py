@@ -258,6 +258,7 @@ def test_post_apply_operator_is_separate_from_pre_import_apply_backup():
     assert '"PostApplyRestore"' in local_target
     assert ".showroom/morocco-post-apply-backups" in local_target
     assert 'if ($PostApply) { $createArgs += "--post-apply" }' in local_target
+    assert 'Invoke-RestoreOdooMountedScript "odoo_verify.py"' in local_target
     assert '"PostApplyRestore" { Backup-And-Restore -PostApply }' in local_target
 
 
