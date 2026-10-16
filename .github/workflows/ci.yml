@@ -162,9 +162,10 @@ jobs:
           docker pull mirror.gcr.io/library/odoo:19.0-20260926
           docker tag mirror.gcr.io/library/odoo:19.0-20260926 odoo:19.0
 
-      - name: Rehearse clean initialization and real target backup restore
+      - name: Rehearse Apply and guarded post-Apply restore
         shell: pwsh
         run: |
+          python -m pip install tzdata==2026.5
           ./scripts/moroccan_showroom/prepare.ps1 -Action Prepare
           try {
             ./scripts/moroccan_showroom/local_target.ps1 -Action Initialize
