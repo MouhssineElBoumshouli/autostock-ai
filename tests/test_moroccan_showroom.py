@@ -847,6 +847,22 @@ def test_morocco_effective_noon_uses_date_specific_timezone_offset():
 
 
 
+def test_post_apply_restore_contract_is_separate_and_dataset_guarded():
+    repo_root = Path(__file__).resolve().parents[1]
+    local_target = (repo_root / "scripts" / "moroccan_showroom" / "local_target.ps1").read_text(encoding="utf-8")
+
+    assert '"PostApplyRestore"' in local_target
+    assert '"PostApplyRestore" { Backup-And-Restore $true }' in local_target
+    assert '"BackupRestore" { Backup-And-Restore $false }' in local_target
+    assert '$datasetVersion = "atlas-ma-2026.4"' in local_target
+    assert '$expectedForecastRequests = 90' in local_target
+    assert 'Invoke-OdooMountedScript "odoo_verify.py"' in local_target
+    assert "fixture_registry_sha256" in local_target
+    assert "Restored fixture registry digest differs from source." in local_target
+    assert 'backup_stage = if ($PostApply) { "post-import" } else { "pre-import" }' in local_target
+    assert "No application connection was changed. Legacy USD Atlas remains separate." in local_target
+
+
 def test_guarded_apply_container_names_avoid_json_native_argument_quoting():
     repo_root = Path(__file__).resolve().parents[1]
     local_target = (repo_root / "scripts" / "moroccan_showroom" / "local_target.ps1").read_text(encoding="utf-8")
