@@ -9,6 +9,7 @@ import re
 import tempfile
 from pathlib import Path
 
+from .post_apply_state import validate_post_apply_state
 from .safety import (
     LEGACY_PROJECTS,
     LEGACY_VOLUMES,
@@ -212,6 +213,44 @@ def validate_restore_evidence(
         evidence.get("proof_attachment_present") is True,
         "Restore proof attachment is missing.",
     )
+
+    post_apply_state = backup_manifest.get("post_apply_state")
+    if post_apply_state is not None:
+        validate_post_apply_state(post_apply_state)
+        _require(
+            evidence.get("source_dataset_version") == post_apply_state["dataset_version"]
+            and evidence.get("restored_dataset_version") == post_apply_state["dataset_version"],
+            "Post-Apply dataset version does not match the approved dataset.",
+        )
+        _require(
+            evidence.get("approved_dataset_sha256") == post_apply_state["dataset_sha256"],
+            "Post-Apply dataset digest does not match the approved dataset.",
+        )
+        _require(
+            evidence.get("source_fixture_registry_entries")
+            == post_apply_state["fixture_registry_entries"]
+            and evidence.get("restored_fixture_registry_entries")
+            == post_apply_state["fixture_registry_entries"],
+            "Post-Apply fixture registry count does not match the approved dataset.",
+        )
+        _require(
+            evidence.get("source_forecast_requests") == post_apply_state["forecast_requests"]
+            and evidence.get("restored_forecast_requests") == post_apply_state["forecast_requests"],
+            "Post-Apply forecast request count does not match the approved dataset.",
+        )
+        source_registry = _sha256(
+            evidence.get("source_fixture_registry_sha256"),
+            "Source fixture registry hash",
+        )
+        restored_registry = _sha256(
+            evidence.get("restored_fixture_registry_sha256"),
+            "Restored fixture registry hash",
+        )
+        _require(
+            source_registry == post_apply_state["fixture_registry_sha256"]
+            and restored_registry == post_apply_state["fixture_registry_sha256"],
+            "Post-Apply fixture registry differs from the approved dataset.",
+        )
 
     _require(
         evidence.get("cleanup_scope") == project,
