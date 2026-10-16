@@ -854,6 +854,8 @@ def test_post_apply_restore_contract_is_separate_and_dataset_guarded():
     assert '"PostApplyRestore"' in local_target
     assert '"PostApplyRestore" { Backup-And-Restore $true }' in local_target
     assert '"BackupRestore" { Backup-And-Restore $false }' in local_target
+    assert 'Invoke-Prepare "RuntimeStatus"' in local_target
+    assert 'Do not rebuild or recreate it before' in local_target
     assert '$datasetVersion = "atlas-ma-2026.4"' in local_target
     assert '$expectedForecastRequests = 90' in local_target
     assert 'Invoke-OdooMountedScript "odoo_verify.py"' in local_target
