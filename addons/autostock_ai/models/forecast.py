@@ -1025,10 +1025,13 @@ class AutoStockForecastRun(models.Model):
 
         current_stock = False
         if source_type == REAL_SOURCE:
+            stock_context = {"allowed_company_ids": [company.id]}
+            if warehouse:
+                stock_context["warehouse_id"] = warehouse.id
             scoped_product = (
                 self.env["product.product"]
                 .with_company(company)
-                .with_context(allowed_company_ids=[company.id])
+                .with_context(**stock_context)
                 .browse(product.id)
             )
             current_stock = {

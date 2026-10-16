@@ -509,6 +509,55 @@ class TestAutoStockForecastApi(HttpCase):
         self.assertEqual(detail["restock_guidance"]["status"], "not_applicable")
         self.assertFalse(detail["restock_guidance"]["usable"])
 
+    def test_forecast_detail_current_stock_matches_warehouse_or_company_scope(self):
+        company = self.env.company
+        central = self._warehouse(company)
+        south = self.env["stock.warehouse"].with_company(company).create(
+            {
+                "name": "Gate 7 South Depot",
+                "code": f"S{company.id:04d}"[-5:],
+                "company_id": company.id,
+            }
+        )
+        product = self._product(
+            company, "Gate 7 Shared Stock Rotor", "G7-SCOPE-ROTOR", shared=True
+        )
+        quant = self.env["stock.quant"].with_company(company)
+        quant._update_available_quantity(product, central.lot_stock_id, 4)
+        quant._update_available_quantity(product, south.lot_stock_id, 11)
+
+        central_run = self._run(
+            company,
+            sku=product.default_code,
+            product=product,
+            warehouse=central,
+            source_type=REAL_SOURCE,
+        )
+        south_run = self._run(
+            company,
+            sku=product.default_code,
+            product=product,
+            warehouse=south,
+            source_type=REAL_SOURCE,
+        )
+        company_run = self._run(
+            company,
+            sku=product.default_code,
+            product=product,
+            source_type=REAL_SOURCE,
+        )
+
+        central_detail = self._get_json(f"/autostock/api/v1/forecasts/{central_run.id}")
+        south_detail = self._get_json(f"/autostock/api/v1/forecasts/{south_run.id}")
+        company_detail = self._get_json(f"/autostock/api/v1/forecasts/{company_run.id}")
+
+        self.assertEqual(central_detail["run"]["current_stock"]["on_hand"], 4)
+        self.assertEqual(central_detail["run"]["current_stock"]["odoo_projected"], 4)
+        self.assertEqual(south_detail["run"]["current_stock"]["on_hand"], 11)
+        self.assertEqual(south_detail["run"]["current_stock"]["odoo_projected"], 11)
+        self.assertEqual(company_detail["run"]["current_stock"]["on_hand"], 15)
+        self.assertEqual(company_detail["run"]["current_stock"]["odoo_projected"], 15)
+
     def test_real_delivery_records_are_restricted_without_sales_access(self):
         company = self.env.company
         product = self._product(company, "Gate 7 Restricted Rotor", "G7-RESTRICTED")
