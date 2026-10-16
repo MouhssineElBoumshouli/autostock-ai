@@ -106,6 +106,8 @@ def create_backup_manifest(
             target_identity=identity,
             signing_key=signing_key,
         )
+        if "post_apply_state" in manifest:
+            validate_post_apply_state(manifest["post_apply_state"])
     except Exception:
         signing_key_path.unlink(missing_ok=True)
         manifest_path.unlink(missing_ok=True)
