@@ -114,7 +114,7 @@ function Invoke-RestoreOdooMountedScript(
     $addonsSource = (Resolve-Path (Join-Path $repoRoot "addons")).Path
     $scriptsSource = (Resolve-Path $PSScriptRoot).Path
     $args = @(
-        "run", "--rm",
+        "run", "--rm", "--interactive",
         "--label", "com.autostock.restore-proof=$RestoreProject",
         "--network", $RestoreNetwork,
         "--env", "HOST=$RestoreContainer",
@@ -260,15 +260,18 @@ function Get-TextSha256([string]$Text) {
 }
 
 function Get-FixtureRegistryDigest([string]$RestoreContainer = "") {
-    $sql = "SELECT entity || E'\t' || fixture_key || E'\t' || payload_sha256 FROM autostock_morocco_fixture ORDER BY entity, fixture_key"
-    $rows = if ($RestoreContainer) {
+    $sql = "SELECT entity || E'\t' || fixture_key || E'\t' || payload_sha256 FROM autostock_morocco_fixture"
+    $rawRows = if ($RestoreContainer) {
         Invoke-RestorePsql $RestoreContainer $sql
     }
     else {
         Invoke-Psql $sql
     }
-    if (-not $rows) { throw "Fixture registry is empty; refusing post-Apply restore proof." }
-    return Get-TextSha256 $rows
+    if (-not $rawRows) { throw "Fixture registry is empty; refusing post-Apply restore proof." }
+
+    [string[]]$rows = @($rawRows -split "\r?\n" | Where-Object { $_ })
+    [Array]::Sort($rows, [System.StringComparer]::Ordinal)
+    return Get-TextSha256 ([string]::Join("`n", $rows))
 }
 
 function Assert-ImportedTarget {
