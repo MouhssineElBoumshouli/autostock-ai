@@ -9,7 +9,6 @@ import re
 import tempfile
 from pathlib import Path
 
-from .post_apply_state import validate_post_apply_state
 from .safety import (
     LEGACY_PROJECTS,
     LEGACY_VOLUMES,
@@ -216,6 +215,8 @@ def validate_restore_evidence(
 
     post_apply_state = backup_manifest.get("post_apply_state")
     if post_apply_state is not None:
+        from .post_apply_state import validate_post_apply_state
+
         validate_post_apply_state(post_apply_state)
         _require(
             evidence.get("source_dataset_version") == post_apply_state["dataset_version"]
