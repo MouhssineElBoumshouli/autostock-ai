@@ -8,6 +8,7 @@ import os
 import secrets
 from pathlib import Path
 
+from .post_apply_state import expected_post_apply_state, validate_post_apply_state
 from .safety import (
     TARGET_DATABASE,
     TARGET_FILESTORE_VOLUME,
@@ -52,6 +53,7 @@ def create_backup_manifest(
     target_uuid: str,
     postgres_system_identifier: str,
     container_names: tuple[str, ...],
+    post_apply: bool = False,
 ) -> dict:
     """Write a new key + signed manifest, then immediately validate both artifacts."""
     identity = target_identity(
@@ -83,6 +85,8 @@ def create_backup_manifest(
         "filestore_size_bytes": filestore_path.stat().st_size,
         "filestore_sha256": sha256_file(filestore_path),
     }
+    if post_apply:
+        manifest["post_apply_state"] = expected_post_apply_state()
     manifest["signature_hmac_sha256"] = backup_manifest_signature(manifest, signing_key)
 
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -130,6 +134,8 @@ def validate_manifest_files(
         target_identity=identity,
         signing_key=signing_key,
     )
+    if "post_apply_state" in manifest:
+        validate_post_apply_state(manifest["post_apply_state"])
     return manifest
 
 
@@ -149,6 +155,11 @@ def main(argv: list[str] | None = None) -> int:
     create.add_argument("--filestore-path", type=Path, required=True)
     create.add_argument("--manifest-path", type=Path, required=True)
     create.add_argument("--signing-key-path", type=Path, required=True)
+    create.add_argument(
+        "--post-apply",
+        action="store_true",
+        help="Bind the signed manifest to the exact approved imported dataset state.",
+    )
 
     check = subparsers.add_parser("validate", help="Re-check an existing manifest and artifacts.")
     _add_identity_args(check)
@@ -168,6 +179,7 @@ def main(argv: list[str] | None = None) -> int:
                 target_uuid=args.target_uuid,
                 postgres_system_identifier=args.postgres_system_identifier,
                 container_names=names,
+                post_apply=args.post_apply,
             )
         else:
             manifest = validate_manifest_files(
