@@ -8,7 +8,6 @@ import os
 import secrets
 from pathlib import Path
 
-from .post_apply_state import expected_post_apply_state, validate_post_apply_state
 from .safety import (
     TARGET_DATABASE,
     TARGET_FILESTORE_VOLUME,
@@ -86,6 +85,8 @@ def create_backup_manifest(
         "filestore_sha256": sha256_file(filestore_path),
     }
     if post_apply:
+        from .post_apply_state import expected_post_apply_state
+
         manifest["post_apply_state"] = expected_post_apply_state()
     manifest["signature_hmac_sha256"] = backup_manifest_signature(manifest, signing_key)
 
@@ -107,6 +108,8 @@ def create_backup_manifest(
             signing_key=signing_key,
         )
         if "post_apply_state" in manifest:
+            from .post_apply_state import validate_post_apply_state
+
             validate_post_apply_state(manifest["post_apply_state"])
     except Exception:
         signing_key_path.unlink(missing_ok=True)
@@ -137,6 +140,8 @@ def validate_manifest_files(
         signing_key=signing_key,
     )
     if "post_apply_state" in manifest:
+        from .post_apply_state import validate_post_apply_state
+
         validate_post_apply_state(manifest["post_apply_state"])
     return manifest
 
