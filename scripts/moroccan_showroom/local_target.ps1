@@ -472,14 +472,17 @@ function Assert-RestoreResourcesRemoved([string]$Container, [string]$PostgresRes
 }
 
 function Backup-And-Restore([bool]$PostApply = $false) {
-    Invoke-Prepare "Start"
     if ($PostApply) {
+        # The imported target already exists. Do not rebuild or recreate it before
+        # capturing the post-import recovery point.
+        Invoke-Prepare "RuntimeStatus"
         Assert-WebRuntimeReady
         Write-Host "Verifying the committed imported registry before taking the post-import backup."
         Invoke-OdooMountedScript "odoo_verify.py"
         $source = Assert-ImportedTarget
     }
     else {
+        Invoke-Prepare "Start"
         $source = Assert-CleanInitializedTarget
     }
 
