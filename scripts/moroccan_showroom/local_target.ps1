@@ -100,6 +100,39 @@ function Invoke-OdooMountedScript([string]$ScriptName, [string[]]$ExtraRunArgs =
     if ($LASTEXITCODE -ne 0) { throw "Odoo shell script $ScriptName failed." }
 }
 
+function Invoke-RestoreOdooMountedScript(
+    [string]$ScriptName,
+    [string]$RestoreContainer,
+    [string]$RestoreNetwork,
+    [string]$RestoreFilestoreVolume,
+    [string]$RestorePassword,
+    [string]$RestoreProject
+) {
+    $mountedPath = "/mnt/atlas-morocco/$ScriptName"
+    $code = "__file__ = '$mountedPath'" + [Environment]::NewLine +
+        "exec(compile(open(__file__, encoding='utf-8').read(), __file__, 'exec'), globals(), globals())"
+    $addonsSource = (Resolve-Path (Join-Path $repoRoot "addons")).Path
+    $scriptsSource = (Resolve-Path $PSScriptRoot).Path
+    $args = @(
+        "run", "--rm",
+        "--label", "com.autostock.restore-proof=$RestoreProject",
+        "--network", $RestoreNetwork,
+        "--env", "HOST=$RestoreContainer",
+        "--env", "USER=$postgresUser",
+        "--env", "PASSWORD=$RestorePassword",
+        "--env", "AUTOSTOCK_DEMO_TARGET_UUID=$targetUuid",
+        "--mount", "type=volume,source=$RestoreFilestoreVolume,target=/var/lib/odoo,readonly",
+        "--mount", "type=bind,source=$addonsSource,target=/mnt/extra-addons,readonly",
+        "--mount", "type=bind,source=$scriptsSource,target=/mnt/atlas-morocco,readonly",
+        $image,
+        "odoo", "shell", "--database=$database", "--no-http"
+    )
+    $code | & docker @args
+    if ($LASTEXITCODE -ne 0) {
+        throw "Restored Odoo read-only script $ScriptName failed."
+    }
+}
+
 function Get-ContainerName([string]$ContainerId) {
     if (-not $ContainerId) { throw "Expected Moroccan container is missing." }
     return (Get-DockerOutput @("inspect", "--format", "{{.Name}}", $ContainerId)).TrimStart("/")
@@ -550,6 +583,11 @@ function Backup-And-Restore([switch]$PostApply) {
         $restoreFilestoreMount = "type=volume,source=$restoreFilestoreVolume,target=/data"
         $backupReadOnlyMount = "type=bind,source=$backupDir,target=/backup,readonly"
         Invoke-Docker @("run", "--rm", "--user", "root", "--entrypoint", "sh", "--mount", $restoreFilestoreMount, "--mount", $backupReadOnlyMount, $image, "-c", "cd /data && tar -xf /backup/filestore.tar")
+
+        if ($PostApply) {
+            Write-Host "Running the full read-only Moroccan dataset audit against the restored database."
+            Invoke-RestoreOdooMountedScript "odoo_verify.py" $restoreContainer $restoreNetwork $restoreFilestoreVolume $restorePassword $restoreProject
+        }
 
         $moduleState = Invoke-RestorePsql $restoreContainer "SELECT state FROM ir_module_module WHERE name='autostock_ai' LIMIT 1"
         $restoredMarker = Invoke-RestorePsql $restoreContainer "SELECT COALESCE(autostock_demo_target_uuid, '') FROM res_company WHERE autostock_demo_environment IS TRUE LIMIT 1"
