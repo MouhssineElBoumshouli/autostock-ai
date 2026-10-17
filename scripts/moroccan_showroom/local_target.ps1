@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("Initialize", "BackupRestore", "PostApplyRestore", "Apply")]
+    [ValidateSet("Initialize", "BackupRestore", "PostApplyRestore", "DiagnosePostApply", "Apply")]
     [string]$Action,
     [string]$BackupStamp,
     [string]$TypedTargetUuid
@@ -675,6 +675,15 @@ function Backup-And-Restore([bool]$PostApply = $false) {
     Invoke-Prepare "RuntimeStatus"
 }
 
+function Diagnose-PostApply {
+    Write-Host "Inspecting the imported Moroccan target without changing it."
+    Invoke-Prepare "Status"
+    Assert-MarkedTargetIdentity
+    Assert-WebRuntimeReady
+    Invoke-OdooMountedScript "odoo_diagnose.py"
+    Write-Host "PASS: diagnostic completed read-only; no database mutation or cleanup was attempted."
+}
+
 function Apply-Dataset {
     if (-not $TypedTargetUuid -or $TypedTargetUuid -ne $targetUuid) {
         throw "Apply requires typing the exact prepared target UUID."
@@ -778,5 +787,6 @@ switch ($Action) {
     "Initialize" { Initialize-Target }
     "BackupRestore" { Backup-And-Restore $false }
     "PostApplyRestore" { Backup-And-Restore $true }
+    "DiagnosePostApply" { Diagnose-PostApply }
     "Apply" { Apply-Dataset }
 }
