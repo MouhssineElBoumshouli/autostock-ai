@@ -860,11 +860,10 @@ def test_post_apply_restore_contract_is_separate_and_dataset_guarded():
     assert 'Do not rebuild or recreate it before' in local_target
     assert '$datasetVersion = "atlas-ma-2026.4"' in local_target
     assert '$expectedForecastRequests = 90' in local_target
+    assert "exact signed database dump" in local_target
     assert 'Invoke-OdooMountedScript "odoo_verify.py"' in local_target
-    assert "fixture_registry_sha256" in local_target
     assert "jsonb_agg(jsonb_build_array(dataset_version, fixture_key, entity, record_model, record_id, payload_sha256)" in local_target
     assert "string_agg(dataset_version ||" not in local_target
-    assert "Restored fixture registry digest differs from source." in local_target
     assert 'backup_stage = if ($PostApply) { "post-import" } else { "pre-import" }' in local_target
     assert "No application connection was changed. Legacy USD Atlas remains separate." in local_target
 
