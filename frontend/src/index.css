@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/* Design colors and font from CLAUDE.md. Use them as Tailwind classes, e.g. bg-page, text-ink. */
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --color-page: #f7f8fc;
+  --color-card: #ffffff;
+  --color-line: #e9eaf1;
+  --color-ink: #1b2340;
+  --color-muted: #7d8394;
+  --color-accent: #7847ee;
+
+  --color-good: #15803d;
+  --color-good-soft: #e7f6ec;
+  --color-low: #b45309;
+  --color-low-soft: #fdf3e2;
+  --color-bad: #c62828;
+  --color-bad-soft: #fdecec;
+
+  --radius-card: 16px;
+}
+
+body {
+  @apply bg-page text-ink font-sans antialiased;
+  font-variant-numeric: tabular-nums;
+}
