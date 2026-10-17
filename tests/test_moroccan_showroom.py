@@ -853,6 +853,8 @@ def test_post_apply_restore_contract_is_separate_and_dataset_guarded():
 
     assert '"PostApplyRestore"' in local_target
     assert '"PostApplyRestore" { Backup-And-Restore $true }' in local_target
+    assert '"DiagnosePostApply" { Diagnose-PostApply }' in local_target
+    assert 'Invoke-OdooMountedScript "odoo_diagnose.py"' in local_target
     assert '"BackupRestore" { Backup-And-Restore $false }' in local_target
     assert 'Invoke-Prepare "RuntimeStatus"' in local_target
     assert 'Do not rebuild or recreate it before' in local_target
