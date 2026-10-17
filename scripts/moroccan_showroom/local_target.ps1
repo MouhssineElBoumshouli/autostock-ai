@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("Initialize", "BackupRestore", "PostApplyRestore", "DiagnosePostApply", "Apply")]
+    [ValidateSet("Initialize", "BackupRestore", "PostApplyRestore", "DiagnosePostApply", "RepairAutoReplenishment", "Apply")]
     [string]$Action,
     [string]$BackupStamp,
     [string]$TypedTargetUuid
