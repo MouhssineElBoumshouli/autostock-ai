@@ -1,0 +1,3 @@
+# Keep Linux line endings in every file, so scripts and configs work inside Docker on Windows.
+* text=auto eol=lf
+*.png binary
