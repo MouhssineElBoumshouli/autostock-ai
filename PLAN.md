@@ -3,7 +3,7 @@
 Each step ends with something the owner can open and click. The owner approves before the next step starts.
 
 ## Step 1 — Foundation
-- [ ] 1a. Project runs: `docker compose up` starts the database, the server and the website. Website shows a styled "AutoStock AI" page. A health check endpoint answers.
+- [x] 1a. Project runs: `docker compose up` starts the database, the server and the website. Website shows a styled "AutoStock AI" page. A health check endpoint answers.
 - [ ] 1b. Design system: colors, Inter font, buttons, cards, inputs, tables, badges, empty/loading/error states. One page that shows them all.
 - [ ] 1c. Accounts: organization, users, roles (owner / manager / staff), login, logout, first-owner setup screen.
 - [ ] 1d. App shell: sidebar, top bar, page layout, works on phone. Audit log in place.
