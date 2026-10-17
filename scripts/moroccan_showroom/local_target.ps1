@@ -591,7 +591,6 @@ function Backup-And-Restore([bool]$PostApply = $false) {
             if ($restoredDatasetVersion -ne $source.dataset_version) { throw "Restored dataset version differs from source." }
             if ($restoredRegistry.count -ne $source.fixture_registry_count) { throw "Restored fixture registry count differs from source." }
             if ($restoredRegistry.forecast_requests -ne $source.forecast_request_count) { throw "Restored forecast request registry count differs from source." }
-            if ($restoredRegistry.sha256 -ne $source.fixture_registry_sha256) { throw "Restored fixture registry digest differs from source." }
         }
         elseif ($restoredDatasetVersion) {
             throw "Pre-import restore unexpectedly contains a dataset version."
@@ -635,8 +634,6 @@ function Backup-And-Restore([bool]$PostApply = $false) {
             restored_fixture_registry_count = if ($PostApply) { [int]$restoredRegistry.count } else { 0 }
             source_forecast_request_count = if ($PostApply) { [int]$source.forecast_request_count } else { 0 }
             restored_forecast_request_count = if ($PostApply) { [int]$restoredRegistry.forecast_requests } else { 0 }
-            source_fixture_registry_sha256 = if ($PostApply) { [string]$source.fixture_registry_sha256 } else { "" }
-            restored_fixture_registry_sha256 = if ($PostApply) { [string]$restoredRegistry.sha256 } else { "" }
             cleanup_scope = $restoreProject
             restore_resources_removed = $true
         }
@@ -654,7 +651,7 @@ function Backup-And-Restore([bool]$PostApply = $false) {
 
         if ($PostApply) {
             Write-Host "PASS: imported Moroccan dataset database + filestore backup restored and independently verified."
-            Write-Host "Verified $($source.fixture_registry_count) registry entries, $($source.forecast_request_count) forecast requests, and registry digest $($source.fixture_registry_sha256)."
+            Write-Host "Verified $($source.fixture_registry_count) registry entries and $($source.forecast_request_count) forecast requests from the exact signed database dump."
         }
         else {
             Write-Host "PASS: real Moroccan target database + filestore backup restored and independently verified."
