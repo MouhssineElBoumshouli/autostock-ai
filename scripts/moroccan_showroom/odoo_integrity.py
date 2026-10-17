@@ -267,8 +267,9 @@ class _FixtureAudit:
                     or rule.location_id != warehouse.lot_stock_id
                     or rule.warehouse_id != warehouse
                     or rule.company_id != self.company
+                    or rule.trigger != "manual"
                 ):
-                    self.fail(identity, "reorder rule product, location, or company changed")
+                    self.fail(identity, "reorder rule product, location, company, or manual trigger changed")
                 self._expect_number(identity, rule.product_min_qty, product_data.reorder_minimum,
                                     "reorder minimum", rule.product_id.uom_id.rounding)
                 self._expect_number(identity, rule.product_max_qty, product_data.reorder_maximum,
