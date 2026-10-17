@@ -54,12 +54,34 @@ orderpoint_triggers = (
     else {"(trigger field unavailable)": len(orderpoints)}
 )
 
-purchase_orders = env["purchase.order"]
-if "purchase.order.line" in env.registry.models:
+purchase_model_available = (
+    "purchase.order" in env.registry.models
+    and "purchase.order.line" in env.registry.models
+)
+purchase_orders = []
+if purchase_model_available:
     purchase_lines = env["purchase.order.line"].with_company(company).with_context(
         allowed_company_ids=[company.id], active_test=False
     ).search([("company_id", "=", company.id), ("product_id", "in", product_ids)])
     purchase_orders = purchase_lines.mapped("order_id")
+
+has_rule = "rule_id" in StockMove._fields
+rule_summary = {}
+if has_rule:
+    for move in extra_moves:
+        rule = move.rule_id
+        if not rule:
+            key = "(no rule)"
+        else:
+            action = getattr(rule, "action", False) or "(no action)"
+            route = getattr(getattr(rule, "route_id", False), "display_name", False) or "(no route)"
+            key = f"{rule.display_name} | action={action} | route={route}"
+        rule_summary[key] = rule_summary.get(key, 0) + 1
+    rule_summary = dict(sorted(rule_summary.items()))
+
+installed_modules = sorted(
+    env["ir.module.module"].search([("state", "=", "installed")]).mapped("name")
+)
 
 samples = []
 for move in extra_moves[:25]:
@@ -103,10 +125,17 @@ report = {
         extra_moves, lambda move: f"{move.location_id.usage}->{move.location_dest_id.usage}"
     ),
     "unexpected_with_purchase_line": len(purchase_moves),
+    "purchase_model_available": purchase_model_available,
+    "unexpected_by_stock_rule": rule_summary,
+    "installed_modules": installed_modules,
     "orderpoints": len(orderpoints),
     "orderpoints_by_trigger": orderpoint_triggers,
     "purchase_orders": len(purchase_orders),
-    "purchase_orders_by_state": grouped(purchase_orders, lambda order: order.state),
+    "purchase_orders_by_state": (
+        grouped(purchase_orders, lambda order: order.state)
+        if purchase_model_available
+        else {"(purchase module not installed)": 0}
+    ),
     "unexpected_move_samples": samples,
 }
 
