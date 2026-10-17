@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<odoo>
-    <menuitem id="menu_autostock_root" name="AutoStock AI" sequence="25" groups="stock.group_stock_user"/>
-    <menuitem id="menu_autostock_dashboard" name="Dashboard" parent="menu_autostock_root" sequence="10" action="action_autostock_dashboard" groups="stock.group_stock_user"/>
-    <menuitem id="menu_autostock_inventory" name="Automotive Inventory" parent="menu_autostock_root" sequence="20" action="action_autostock_products" groups="stock.group_stock_user"/>
-</odoo>

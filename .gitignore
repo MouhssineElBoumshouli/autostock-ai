@@ -1,35 +1,9 @@
-# Local credentials and environment overrides
 .env
-.env.*
-!.env.example
-docker-compose.override.yml
-.showroom/
-
-# Python
 __pycache__/
-*.py[cod]
-*.pyd
-.Python
+*.pyc
 .venv/
-venv/
-ENV/
 .pytest_cache/
-.coverage
-htmlcov/
-.ruff_cache/
-
-# Generated synthetic data and forecast output
-ml/output/
-
-# Editors and operating systems
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-
-# JavaScript dependencies and generated frontend files
 node_modules/
-frontend/dist/
-frontend/.vite/
-frontend/playwright-report/
-frontend/test-results/
+dist/
+.DS_Store
+*.log
