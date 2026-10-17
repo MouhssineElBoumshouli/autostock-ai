@@ -945,6 +945,10 @@ class OdooMoroccoImporter:
                         "location_id": warehouse.lot_stock_id.id,
                         "warehouse_id": warehouse.id,
                         "company_id": self.company.id,
+                        # AutoStock reorder guidance is review-only. Odoo's default
+                        # automatic trigger can create replenishment stock moves via
+                        # the scheduler, so showroom policies must stay manual.
+                        "trigger": "manual",
                         "product_min_qty": product_data.reorder_minimum,
                         "product_max_qty": product_data.reorder_maximum,
                     }
