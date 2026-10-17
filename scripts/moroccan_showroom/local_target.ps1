@@ -207,7 +207,10 @@ function Get-TextSha256([string]$Text) {
 }
 
 function Get-FixtureRegistrySnapshot([string]$RestoreContainer = "") {
-    $serializeSql = "SELECT COALESCE(string_agg(dataset_version || '|' || fixture_key || '|' || entity || '|' || record_model || '|' || record_id::text || '|' || payload_sha256, E'\n' ORDER BY fixture_key, id), '') FROM autostock_morocco_fixture"
+    # Keep the canonical registry representation on one PostgreSQL output line.
+    # Multiline string_agg output can be normalized differently by PowerShell
+    # across docker compose exec and docker exec even for identical rows.
+    $serializeSql = "SELECT COALESCE(jsonb_agg(jsonb_build_array(dataset_version, fixture_key, entity, record_model, record_id, payload_sha256) ORDER BY fixture_key, id)::text, '[]') FROM autostock_morocco_fixture"
     if ($RestoreContainer) {
         $serialized = Invoke-RestorePsql $RestoreContainer $serializeSql
         $count = [int](Invoke-RestorePsql $RestoreContainer "SELECT count(*) FROM autostock_morocco_fixture")
