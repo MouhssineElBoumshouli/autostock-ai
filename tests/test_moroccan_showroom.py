@@ -867,6 +867,16 @@ def test_post_apply_restore_contract_is_separate_and_dataset_guarded():
     assert "No application connection was changed. Legacy USD Atlas remains separate." in local_target
 
 
+def test_post_apply_diagnostic_does_not_require_purchase_module():
+    repo_root = Path(__file__).resolve().parents[1]
+    diagnostic = (repo_root / "scripts" / "moroccan_showroom" / "odoo_diagnose.py").read_text(encoding="utf-8")
+
+    assert '"purchase.order" in env.registry.models' in diagnostic
+    assert '"purchase.order.line" in env.registry.models' in diagnostic
+    assert 'purchase_model_available' in diagnostic
+    assert 'purchase_orders = []' in diagnostic
+
+
 def test_guarded_apply_container_names_avoid_json_native_argument_quoting():
     repo_root = Path(__file__).resolve().parents[1]
     local_target = (repo_root / "scripts" / "moroccan_showroom" / "local_target.ps1").read_text(encoding="utf-8")
