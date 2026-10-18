@@ -45,7 +45,7 @@ export function StatCard({
         </div>
       ) : (
         <div className="grid gap-1">
-          <p className="text-3xl font-semibold tracking-tight">{value}</p>
+          <p className="text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
           {note && <p className="text-xs text-muted-foreground">{note}</p>}
         </div>
       )}

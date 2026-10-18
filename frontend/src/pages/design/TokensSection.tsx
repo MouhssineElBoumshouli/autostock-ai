@@ -67,7 +67,7 @@ export function TokensSection() {
             <ExampleLabel>Text sizes · numbers use same-width digits: 1,111 / 8,888</ExampleLabel>
             {textSizes.map((size) => (
               <div key={size.label} className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                <span className={size.className}>3,892 parts</span>
+                <span className={`${size.className} tabular-nums`}>3,892 parts</span>
                 <span className="text-xs text-muted-foreground">{size.label}</span>
               </div>
             ))}

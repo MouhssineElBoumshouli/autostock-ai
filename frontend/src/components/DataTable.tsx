@@ -84,7 +84,7 @@ export function DataTable<Row>({
                   {details.map((column) => (
                     <div key={column.header} className="flex items-center justify-between gap-4">
                       <dt className="text-xs text-muted-foreground">{column.header}</dt>
-                      <dd className="text-end">{column.cell(row)}</dd>
+                      <dd className={cn("text-end", column.align === "end" && "tabular-nums")}>{column.cell(row)}</dd>
                     </div>
                   ))}
                 </dl>
@@ -95,8 +95,9 @@ export function DataTable<Row>({
   );
 }
 
+// Number columns line up at the end, with same-width digits.
 function alignClass(column: { align?: "start" | "end" }) {
-  return column.align === "end" ? "text-end" : "text-start";
+  return column.align === "end" ? "text-end tabular-nums" : "text-start";
 }
 
 function range(count: number) {

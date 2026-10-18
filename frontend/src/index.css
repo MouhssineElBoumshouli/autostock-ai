@@ -17,6 +17,8 @@
  *   6 (24px) inside cards, between cards
  *   8 (32px) between page sections
  * Use start/end classes (ps-4, me-2, text-start, end-0), never left/right, so Arabic works.
+ * Numbers people compare (quantities, money, counts) get `tabular-nums` so digits line up.
+ * (Not on all text: Inter's tabular mode also widens hyphens, e.g. in SKUs and names.)
  */
 
 :root {
@@ -125,7 +127,6 @@
   }
   body {
     @apply bg-background text-sm text-foreground antialiased;
-    font-variant-numeric: tabular-nums;
   }
   /* One visible focus ring for everything reached with the keyboard */
   :focus-visible {
