@@ -49,6 +49,7 @@ Update this section as each step of `PLAN.md` is finished, so the final presenta
 - **Step 1a — project runs (17 October 2026):** `docker compose up` starts the database, the server and the website; the website shows a card with a live "Connected" badge from the server's health check, and code changes reload by themselves.
 - **Step 1b — design system (18 October 2026):** every building block (buttons, inputs, cards, stat cards, badges, a table that becomes cards on phones, dialog, toast, tabs, loading/empty/error states) on one `/design` page, with all colors and sizes defined once and a right-to-left preview for Arabic.
 - **Step 1c — accounts (18 October 2026):** first-time setup creates the shop and its owner; login with Argon2 passwords and secure cookies; owner, manager and staff roles checked on the server; owners manage the team; every change is in the audit log; password guessing is slowed down; 40 automatic tests.
+- **Step 1d — app shell (18 October 2026):** sidebar and top bar like the approved design (icons only on tablets, slide-in menu on phones, mirrored for Arabic); Home greets you and shows recent activity; Activity tells the shop's history in plain sentences ("Sara changed Youssef's role from Staff to Manager"); Settings for shop name and currency; 70 automatic tests.
 
 ## The design we kept
 
