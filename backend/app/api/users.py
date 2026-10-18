@@ -32,6 +32,10 @@ class UserChange(BaseModel):
     is_active: bool | None = None
 
 
+class PasswordReset(BaseModel):
+    temporary_password: PasswordText
+
+
 @router.get("")
 def list_users(owner: User = Depends(owner_only), db: Session = Depends(get_session)) -> list[UserOut]:
     users = db.scalars(
@@ -53,6 +57,7 @@ def add_user(body: NewUser, owner: User = Depends(owner_only), db: Session = Dep
         email=email,
         password_hash=hash_password(body.temporary_password),
         role=body.role,
+        must_change_password=True,
     )
     db.add(user)
     db.flush()
@@ -68,12 +73,7 @@ def change_user(
     owner: User = Depends(owner_only),
     db: Session = Depends(get_session),
 ) -> UserOut:
-    user = db.scalar(
-        select(User).where(User.id == user_id, User.organization_id == owner.organization_id).with_for_update()
-    )
-    if user is None:
-        raise HTTPException(404, "This person is not in your team.")
-
+    user = find_team_member(db, owner, user_id)
     before = user.snapshot()
     stops_being_owner = user.role == "owner" and user.is_active and (
         (body.role is not None and body.role != "owner") or body.is_active is False
@@ -92,6 +92,35 @@ def change_user(
         record_change(db, owner, "user.updated", "user", user.id, before=before, after=user.snapshot())
     db.commit()
     return UserOut.of(user)
+
+
+@router.post("/{user_id}/password", status_code=204)
+def reset_password(
+    user_id: uuid.UUID,
+    body: PasswordReset,
+    owner: User = Depends(owner_only),
+    db: Session = Depends(get_session),
+) -> None:
+    """Gives someone a new temporary password. They are logged out everywhere and must choose their own."""
+    user = find_team_member(db, owner, user_id)
+    if user.id == owner.id:
+        raise HTTPException(409, "To change your own password, use Change password.")
+    check_password_rules(body.temporary_password)
+
+    user.password_hash = hash_password(body.temporary_password)
+    user.must_change_password = True
+    end_all_sessions(db, user)
+    record_change(db, owner, "user.password_reset", "user", user.id)
+    db.commit()
+
+
+def find_team_member(db: Session, owner: User, user_id: uuid.UUID) -> User:
+    user = db.scalar(
+        select(User).where(User.id == user_id, User.organization_id == owner.organization_id).with_for_update()
+    )
+    if user is None:
+        raise HTTPException(404, "This person is not in your team.")
+    return user
 
 
 def count_active_owners(db: Session, organization_id: uuid.UUID) -> int:

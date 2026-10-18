@@ -63,6 +63,15 @@ def end_all_sessions(db: Session, user: User) -> None:
     db.execute(delete(UserSession).where(UserSession.user_id == user.id))
 
 
+def end_other_sessions(db: Session, user: User, current_token: str) -> None:
+    """Logs the person out on every other browser, keeps this one."""
+    db.execute(
+        delete(UserSession).where(
+            UserSession.user_id == user.id, UserSession.token_hash != _hash_token(current_token)
+        )
+    )
+
+
 def _set_cookie(response: Response, token: str) -> None:
     response.set_cookie(
         COOKIE_NAME,

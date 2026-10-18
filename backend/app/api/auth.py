@@ -1,4 +1,4 @@
-"""Log in, log out, and "who am I"."""
+"""Log in, log out, "who am I", and changing your own password."""
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from pydantic import BaseModel
@@ -8,9 +8,9 @@ from sqlalchemy.orm import Session
 from app.api.schemas import EmailText, Me, OrganizationOut, PasswordText, UserOut
 from app.audit import record_change
 from app.auth import login_limits
-from app.auth.passwords import password_matches
+from app.auth.passwords import check_password_rules, hash_password, password_matches
 from app.auth.permissions import require_role
-from app.auth.sessions import COOKIE_NAME, end_session, start_session
+from app.auth.sessions import COOKIE_NAME, end_other_sessions, end_session, start_session
 from app.db import get_session, utc_now
 from app.models import Organization, User
 
@@ -24,6 +24,11 @@ ACCOUNT_OFF = "This account is deactivated. Ask your shop owner."
 class LoginRequest(BaseModel):
     email: EmailText
     password: PasswordText
+
+
+class PasswordChange(BaseModel):
+    current_password: PasswordText
+    new_password: PasswordText
 
 
 def describe_me(db: Session, user: User) -> Me:
@@ -62,6 +67,31 @@ def logout(
 
 
 @router.get("/me")
-def me(user: User = Depends(require_role()), db: Session = Depends(get_session)) -> Me:
+def me(user: User = Depends(require_role(before_password_change=True)), db: Session = Depends(get_session)) -> Me:
+    return describe_me(db, user)
+
+
+@router.post("/password")
+def change_password(
+    body: PasswordChange,
+    user: User = Depends(require_role(before_password_change=True)),
+    db: Session = Depends(get_session),
+    token: str = Cookie(alias=COOKIE_NAME),
+) -> Me:
+    """Changes your own password. Other browsers where you are logged in are logged out."""
+    if login_limits.is_blocked(db, user.email):
+        raise HTTPException(429, TOO_MANY_TRIES)
+    if not password_matches(user.password_hash, body.current_password):
+        login_limits.record_failure(db, user.email, user.organization_id)
+        raise HTTPException(400, "Your current password is wrong.")
+    check_password_rules(body.new_password)
+    if body.new_password == body.current_password:
+        raise HTTPException(422, "Choose a password different from the current one.")
+
+    user.password_hash = hash_password(body.new_password)
+    user.must_change_password = False
+    end_other_sessions(db, user, token)
+    record_change(db, user, "user.password_changed", "user", user.id)
+    db.commit()
     return describe_me(db, user)
 

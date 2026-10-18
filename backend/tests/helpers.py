@@ -11,6 +11,7 @@ from app.models import AuditLog, Organization, User
 
 OWNER_PASSWORD = "owner-password-1"
 MEMBER_PASSWORD = "member-password-1"
+OWN_MEMBER_PASSWORD = "chosen-by-member-1"
 
 
 def new_browser() -> TestClient:
@@ -39,6 +40,16 @@ def add_member(owner: TestClient, email: str, role: str) -> dict:
 def logged_in_browser(email: str, password: str) -> TestClient:
     browser = new_browser()
     response = browser.post("/api/auth/login", json={"email": email, "password": password})
+    assert response.status_code == 200, response.text
+    return browser
+
+
+def member_with_own_password(email: str) -> TestClient:
+    """A new person who logged in and chose their own password, so nothing blocks them anymore."""
+    browser = logged_in_browser(email, MEMBER_PASSWORD)
+    response = browser.post(
+        "/api/auth/password", json={"current_password": MEMBER_PASSWORD, "new_password": OWN_MEMBER_PASSWORD}
+    )
     assert response.status_code == 200, response.text
     return browser
 

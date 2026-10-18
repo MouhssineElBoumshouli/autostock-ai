@@ -22,6 +22,8 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(200))
     role: Mapped[str] = mapped_column(String(20))
     is_active: Mapped[bool] = mapped_column(default=True)
+    # True when the owner chose the password (new person or reset): they must pick their own first.
+    must_change_password: Mapped[bool] = mapped_column(default=False, server_default="false")
     last_login_at: Mapped[datetime | None]
 
     def snapshot(self) -> dict:

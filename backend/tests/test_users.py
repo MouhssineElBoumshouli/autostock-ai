@@ -9,6 +9,7 @@ from tests.helpers import (
     audit_rows,
     create_other_shop,
     logged_in_browser,
+    member_with_own_password,
     new_browser,
     set_up_shop,
 )
@@ -26,7 +27,8 @@ def test_owner_adds_and_lists_people(browser):
         ("manager@shop.ma", "manager"),
         ("staff@shop.ma", "staff"),
     ]
-    assert all("password" not in key for person in people for key in person)
+    assert all("password" not in person and "password_hash" not in person for person in people)
+    assert "$argon2" not in str(people)
 
 
 def test_new_person_can_log_in_with_temporary_password(browser):
@@ -65,8 +67,8 @@ def test_staff_and_manager_cannot_manage_people(browser):
     add_member(browser, "manager@shop.ma", "manager")
 
     for email in ["staff@shop.ma", "manager@shop.ma"]:
-        member = logged_in_browser(email, MEMBER_PASSWORD)
-        assert member.get("/api/users").status_code == 403
+        member = member_with_own_password(email)
+        assert member.get("/api/users").json() == {"detail": "You don't have access to this."}
         new = {"name": "X", "email": "x@shop.ma", "role": "owner", "temporary_password": MEMBER_PASSWORD}
         assert member.post("/api/users", json=new).status_code == 403
         assert member.patch(f"/api/users/{staff_member['id']}", json={"role": "owner"}).status_code == 403
