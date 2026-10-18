@@ -71,7 +71,6 @@ export const en = {
     nothingLow: "Nothing is low right now.",
   },
   part: {
-    openDetails: (name: string) => `Open details of ${name}`,
     stockPerBranch: "Stock per branch",
     total: "Total",
     prices: "Prices",
