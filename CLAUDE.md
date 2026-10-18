@@ -48,18 +48,20 @@ AI must be useful and measurable, never decoration.
 - Forecasts are always compared against a simple baseline (for example "average of the last 4 weeks"). Show the measured result honestly. If the model does not beat the baseline for a part, use the baseline and say so.
 - The AI never places orders or changes data by itself. A person approves.
 - Every AI answer about the shop shows the real numbers it used.
-- All LLM calls go through one module: `backend/app/ai/llm.py`. Provider is the Anthropic API, key from the `ANTHROPIC_API_KEY` env var. If no key is set, AI features say "AI is off" and the rest of the app still works.
+- **Everything must be free, forever.** No paid APIs, no API keys, no cloud AI services. All AI runs on the shop's own computer with free, open-source tools (scikit-learn, small local models).
+- Prefer classic machine learning we train and measure ourselves over large language models.
+- If a feature truly needs a language model, it uses an optional local model through Ollama (free), in one module: `backend/app/ai/llm.py`. If Ollama isn't installed, the feature says "AI is off" and the rest of the app works.
 - Pure math problems (reorder quantities, budget limits) use math/optimization, not an LLM.
 
 The old forecasting code (random forest + baselines + Croston for slow-moving parts) is on the `archive/odoo-v0` branch in `ml/forecast.py`. Reuse its ideas when we reach forecasting.
 
 ## Design
 
-Reference image: `design/dashboard-concept.png` (a concept, not real data).
-- Off-white background `#f7f8fc`, white cards, thin borders `#e9eaf1`, 16px rounded corners, almost no shadow.
-- One accent color: violet `#7847ee`, used only for the main action and active states.
-- Text: navy `#1b2340`, muted `#7d8394`. Green = healthy, amber = low, red = out. Never color alone: always a word too.
-- Font: Inter. Numbers use tabular figures.
+Style: **Material Design 3** (Google's public design system, m3.material.io), so the app feels like a Google product. Do not use Google's logos or name.
+- Color: a Material 3 color scheme generated from the seed color violet `#7847ee` (tonal surfaces, primary/secondary containers). Green = healthy, amber = low, red = out. Never color alone: always a word too.
+- Font: Roboto Flex (free). Numbers use tabular figures. Material 3 type scale.
+- Material 3 shapes, elevation, state layers (hover/press), and motion. Pill-shaped buttons, filled/tonal/outlined/text buttons, chips for filters, navigation rail on tablet, navigation drawer on desktop, bottom bar or drawer on phone.
+- Earlier reference image: `design/dashboard-concept.png` (layout ideas only, not real data).
 - One main action per screen. Plain words ("Low stock", not "Below reorder threshold").
 - Big readable numbers, generous space. Hide advanced details behind "Show details".
 - Every screen has a loading state, an empty state with a helpful next step, and an error state.

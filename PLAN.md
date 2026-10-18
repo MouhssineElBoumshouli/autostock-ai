@@ -10,7 +10,7 @@ Each step ends with something the owner can open and click. The owner approves b
 
 ## Step 2 — Smart import + stock
 - Parts, warehouses/branches, suppliers, stock levels, sales history tables.
-- Upload an Excel/CSV file. AI suggests which column is which; the user confirms. Duplicates flagged. Preview before saving.
+- Upload an Excel/CSV file. A free local model suggests which column is which; the user confirms. Duplicates flagged. Preview before saving.
 - Stock screen: search, filter, low / out / dead stock, part detail.
 
 ## Step 3 — Part search
@@ -32,7 +32,7 @@ Each step ends with something the owner can open and click. The owner approves b
 - Alerts for unusual sales spikes, drops, and stock that doesn't match sales.
 
 ## Step 7 — Ask your shop
-- Questions in plain language, answered from the shop's real data, with the numbers shown.
+- Questions in plain language, answered from the shop's real data, with the numbers shown. Runs on a free local model (Ollama); optional.
 
 ## Step 8 — Polish and launch
 - French and Arabic (right-to-left). Realistic Moroccan demo shop. Backups. Speed check. Presentation.
