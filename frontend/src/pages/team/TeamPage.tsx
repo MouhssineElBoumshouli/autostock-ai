@@ -15,6 +15,7 @@ import { formatDateTime } from "@/lib/format";
 
 import { AccessButton } from "./AccessButton";
 import { AddPersonDialog } from "./AddPersonDialog";
+import { ResetPasswordDialog } from "./ResetPasswordDialog";
 import { RoleSelect } from "./RoleSelect";
 
 // Owners only: everyone who can use AutoStock in this shop.
@@ -41,17 +42,28 @@ export function TeamPage() {
     {
       header: t.team.columns.status,
       cell: (user) =>
-        user.is_active ? (
-          <Badge variant="success">{t.team.active}</Badge>
-        ) : (
+        !user.is_active ? (
           <Badge variant="neutral">{t.team.deactivated}</Badge>
+        ) : user.must_change_password ? (
+          <Badge variant="warning">{t.team.needsNewPassword}</Badge>
+        ) : (
+          <Badge variant="success">{t.team.active}</Badge>
         ),
     },
     {
       header: t.team.columns.lastLogin,
       cell: (user) => (user.last_login_at ? formatDateTime(user.last_login_at) : t.common.never),
     },
-    { header: t.team.columns.access, align: "end", cell: (user) => <AccessButton user={user} /> },
+    {
+      header: t.team.columns.access,
+      align: "end",
+      cell: (user) => (
+        <div className="flex justify-end gap-1">
+          {user.id !== myId && <ResetPasswordDialog user={user} />}
+          <AccessButton user={user} />
+        </div>
+      ),
+    },
   ];
 
   return (

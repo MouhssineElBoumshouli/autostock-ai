@@ -11,6 +11,7 @@ export type User = {
   email: string;
   role: Role;
   is_active: boolean;
+  must_change_password: boolean;
   last_login_at: string | null;
 };
 
@@ -27,6 +28,13 @@ export function useAddUser() {
   return useMutation({
     mutationFn: (user: NewUser) => apiRequest<User>("/api/users", { method: "POST", body: user }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: usersQueryKey }),
+  });
+}
+
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: ({ id, temporary_password }: { id: string; temporary_password: string }) =>
+      apiRequest<void>(`/api/users/${id}/password`, { method: "POST", body: { temporary_password } }),
   });
 }
 

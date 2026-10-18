@@ -49,6 +49,8 @@ If you change `package.json` or `requirements.txt`, run `docker compose up --bui
 ## Accounts
 
 - Roles: **owner** (manages the team), **manager**, **staff**. Owners add people on the **Team** page with a temporary password.
+- Someone with a temporary password (new, or reset by an owner) must choose their own right after logging in.
+- Anyone can change their password from the home page. This logs them out on their other devices.
 - 5 wrong passwords for one email within 15 minutes block that email for 15 minutes.
 - A login lasts until 7 days without use. Every change to people is written to the `audit_log` table.
 

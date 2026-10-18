@@ -33,6 +33,9 @@ export function HomePage() {
               </Link>
             </Button>
           )}
+          <Button variant="secondary" asChild>
+            <Link to="/change-password">{t.home.changePassword}</Link>
+          </Button>
           <Button
             variant="subtle"
             loading={logout.isPending}

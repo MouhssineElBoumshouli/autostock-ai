@@ -33,6 +33,11 @@ export function RequireLogin({ roles }: { roles?: Role[] }) {
     const next = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?next=${next}`} replace />;
   }
+  // The owner set this person's password: they must choose their own before anything else.
+  if (me.data.user.must_change_password && location.pathname !== "/change-password") {
+    const next = encodeURIComponent(location.pathname + location.search);
+    return <Navigate to={`/change-password?next=${next}`} replace />;
+  }
   if (roles && !roles.includes(me.data.user.role)) {
     return (
       <main className="flex min-h-screen items-center justify-center px-4">

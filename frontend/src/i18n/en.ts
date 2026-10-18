@@ -32,12 +32,16 @@ export const en = {
     email: "Email",
     password: "Password",
     temporaryPassword: "Temporary password",
+    currentPassword: "Current password",
+    newPassword: "New password",
+    repeatNewPassword: "Type the new password again",
     role: "Role",
   },
   validation: {
     required: "Fill this in.",
     email: "Enter a valid email address, for example name@shop.ma.",
     passwordLength: "Use at least 10 characters for the password.",
+    passwordsDiffer: "The two passwords don't match.",
   },
   setup: {
     title: "Set up your shop",
@@ -54,7 +58,17 @@ export const en = {
   home: {
     signedInAs: "Signed in as",
     manageTeam: "Manage team",
+    changePassword: "Change password",
     logOut: "Log out",
+  },
+  changePassword: {
+    title: "Change password",
+    subtitle: "You stay logged in here. Other devices where you are logged in are logged out.",
+    forcedTitle: "Choose your password",
+    forcedSubtitle: "Your shop owner gave you a temporary password. Choose your own to continue.",
+    newPasswordHelp: "At least 10 characters.",
+    submit: "Save new password",
+    done: "Your password was changed.",
   },
   team: {
     title: "Team",
@@ -63,6 +77,7 @@ export const en = {
     columns: { person: "Person", role: "Role", status: "Status", lastLogin: "Last login", access: "Access" },
     active: "Active",
     deactivated: "Deactivated",
+    needsNewPassword: "Must choose a password",
     deactivate: "Deactivate",
     reactivate: "Reactivate",
     changeRoleLabel: (name: string) => `Role of ${name}`,
@@ -76,6 +91,10 @@ export const en = {
     temporaryPasswordHelp: "At least 10 characters. Give it to them in person.",
     added: (name: string) => `${name} was added. Give them their email and temporary password.`,
     noAccess: "Only owners can see the team.",
+    resetPassword: "Reset password",
+    resetTitle: (name: string) => `Reset the password of ${name}?`,
+    resetText: "They are logged out everywhere. They log in with the temporary password, then choose their own.",
+    resetDone: (name: string) => `New temporary password set. Give it to ${name} in person.`,
   },
   serverStatus: {
     label: "Server",
