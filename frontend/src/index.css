@@ -1,7 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
+
+/* data-open: / data-closed: style dialogs and menus as they open and close (Radix sets data-state). */
+@custom-variant data-open (&:where([data-state="open"]));
+@custom-variant data-closed (&:where([data-state="closed"]));
 
 /*
  * Design tokens: the only place where colors, sizes, radius and shadows are defined.
