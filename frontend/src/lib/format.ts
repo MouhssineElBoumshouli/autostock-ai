@@ -37,3 +37,32 @@ export function initials(name: string): string {
     .map((word) => word[0].toUpperCase())
     .join("");
 }
+
+const moneyFormats = new Map<string, Intl.NumberFormat>();
+
+// Money is stored in centimes: 32000 -> "MAD 320.00".
+export function formatMoney(centimes: number | null | undefined, currency: string): string {
+  if (centimes === null || centimes === undefined) return "—";
+  if (!moneyFormats.has(currency)) {
+    moneyFormats.set(currency, new Intl.NumberFormat(locale, { style: "currency", currency }));
+  }
+  return moneyFormats.get(currency)!.format(centimes / 100);
+}
+
+// "2026-03-15" -> "Mar 15, 2026"
+export function formatDay(value: string): string {
+  return dateOnly.format(new Date(`${value}T00:00:00`));
+}
+
+// What someone types in a money field -> centimes. "12,50" and "12.50" -> 1250. Empty -> null.
+export function parseMoneyInput(text: string): number | null | "invalid" {
+  const cleaned = text.replace(/\s/g, "").replace(",", ".");
+  if (!cleaned) return null;
+  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return "invalid";
+  return Math.round(Number(cleaned) * 100);
+}
+
+// Centimes -> what goes in a money field: 1250 -> "12,50".
+export function moneyInputValue(centimes: number | null): string {
+  return centimes === null ? "" : (centimes / 100).toFixed(2).replace(".", ",");
+}

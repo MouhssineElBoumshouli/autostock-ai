@@ -1,9 +1,9 @@
 import { Badge } from "@/components/ui/badge";
 import { t } from "@/i18n";
 
-export type StockStatus = "healthy" | "low" | "out";
+export type StockStatus = "healthy" | "low" | "out" | "inactive";
 
-const variants = { healthy: "success", low: "warning", out: "destructive" } as const;
+const variants = { healthy: "success", low: "warning", out: "destructive", inactive: "neutral" } as const;
 
 export function StockBadge({ status }: { status: StockStatus }) {
   return <Badge variant={variants[status]}>{t.stock[status]}</Badge>;

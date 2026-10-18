@@ -9,10 +9,12 @@ import { ActivityPage } from "@/pages/ActivityPage";
 import { ChangePasswordPage } from "@/pages/ChangePasswordPage";
 import { DesignPage } from "@/pages/design/DesignPage";
 import { HomePage } from "@/pages/HomePage";
+import { ImportPage } from "@/pages/import/ImportPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { SetupPage } from "@/pages/SetupPage";
+import { StockPage } from "@/pages/stock/StockPage";
 import { TeamPage } from "@/pages/team/TeamPage";
 
 // The /design page is a tool for building screens, so it only exists while developing. It is public.
@@ -35,7 +37,11 @@ export const router = createBrowserRouter([
         children: [
           page("/", <HomePage />, "home"),
           page("/change-password", <ChangePasswordPage />, "changePassword"),
-          { element: <RequireRole roles={["owner", "manager"]} />, children: [page("/activity", <ActivityPage />, "activity")] },
+          page("/stock", <StockPage />, "stock"),
+          {
+            element: <RequireRole roles={["owner", "manager"]} />,
+            children: [page("/activity", <ActivityPage />, "activity"), page("/stock/import", <ImportPage />, "importFile")],
+          },
           {
             element: <RequireRole roles={["owner"]} />,
             children: [page("/team", <TeamPage />, "team"), page("/settings", <SettingsPage />, "settings")],

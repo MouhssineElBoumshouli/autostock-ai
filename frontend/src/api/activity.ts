@@ -11,13 +11,13 @@ export type ActivityItem = {
   entity: string;
   actor: PersonRef | null;
   target: PersonRef | null;
-  before: Record<string, string | boolean> | null;
-  after: Record<string, string | boolean> | null;
+  before: Record<string, string | number | boolean> | null;
+  after: Record<string, string | number | boolean> | null;
 };
 
 export type ActivityPage = { items: ActivityItem[]; total: number; page: number; page_size: number };
 
-export const activityKinds = ["team", "passwords", "logins", "settings"] as const;
+export const activityKinds = ["team", "passwords", "logins", "settings", "stock"] as const;
 export type ActivityKind = (typeof activityKinds)[number];
 
 export type ActivityFilters = { page: number; person?: string; kind?: ActivityKind };

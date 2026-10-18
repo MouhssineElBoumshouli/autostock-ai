@@ -12,10 +12,12 @@ export class ApiError extends Error {
 
 // The one way the website talks to the server. Cookies are sent automatically.
 export async function apiRequest<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
+  // Files go as a form (FormData); everything else as JSON.
+  const isForm = options.body instanceof FormData;
   const response = await fetch(path, {
     method: options.method ?? "GET",
-    headers: options.body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    headers: options.body === undefined || isForm ? undefined : { "Content-Type": "application/json" },
+    body: options.body === undefined ? undefined : isForm ? (options.body as FormData) : JSON.stringify(options.body),
   });
   if (!response.ok) {
     throw new ApiError(response.status, await readMessage(response));

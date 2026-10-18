@@ -1,4 +1,5 @@
 import { cn } from "cn";
+import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,7 +12,11 @@ export type Column<Row> = {
   align?: "start" | "end";
   /** The column used as the title of each card on phones. Exactly one column should set this. */
   primary?: boolean;
+  /** Set to make the column sortable: clicking its header sorts by this key. */
+  sortKey?: string;
 };
+
+export type TableSort = { key: string; direction: "asc" | "desc" };
 
 const loadingRowCount = 4;
 
@@ -22,11 +27,15 @@ export function DataTable<Row>({
   rows,
   rowKey,
   loading = false,
+  sort,
+  onSort,
 }: {
   columns: Column<Row>[];
   rows: Row[];
   rowKey: (row: Row) => string;
   loading?: boolean;
+  sort?: TableSort;
+  onSort?: (sort: TableSort) => void;
 }) {
   const primary = columns.find((column) => column.primary) ?? columns[0];
   const details = columns.filter((column) => column !== primary);
@@ -37,11 +46,29 @@ export function DataTable<Row>({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              {columns.map((column) => (
-                <TableHead key={column.header} className={alignClass(column)}>
-                  {column.header}
-                </TableHead>
-              ))}
+              {columns.map((column) => {
+                const sorted = sort && column.sortKey === sort.key ? sort.direction : undefined;
+                return (
+                  <TableHead
+                    key={column.header}
+                    className={alignClass(column)}
+                    aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : undefined}
+                  >
+                    {column.sortKey && onSort ? (
+                      <SortButton
+                        label={column.header}
+                        direction={sorted}
+                        alignEnd={column.align === "end"}
+                        onClick={() =>
+                          onSort({ key: column.sortKey!, direction: sorted === "asc" ? "desc" : "asc" })
+                        }
+                      />
+                    ) : (
+                      column.header
+                    )}
+                  </TableHead>
+                );
+              })}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -96,6 +123,35 @@ export function DataTable<Row>({
 }
 
 // Number columns line up at the end, with same-width digits.
+// Clicking a header sorts by it; clicking again flips the order.
+function SortButton({
+  label,
+  direction,
+  alignEnd,
+  onClick,
+}: {
+  label: string;
+  direction?: "asc" | "desc";
+  alignEnd: boolean;
+  onClick: () => void;
+}) {
+  const Icon = direction === "asc" ? ArrowUpIcon : direction === "desc" ? ArrowDownIcon : ChevronsUpDownIcon;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "-mx-1 inline-flex items-center gap-1 rounded-sm px-1 py-0.5 hover:text-foreground",
+        direction && "text-foreground",
+        alignEnd && "flex-row-reverse",
+      )}
+    >
+      {label}
+      <Icon aria-hidden="true" className={cn("size-3.5", !direction && "opacity-50")} />
+    </button>
+  );
+}
+
 function alignClass(column: { align?: "start" | "end" }) {
   return column.align === "end" ? "text-end tabular-nums" : "text-start";
 }
