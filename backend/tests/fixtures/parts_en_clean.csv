@@ -1,0 +1,16 @@
+SKU,Name,Brand,Category,OEM reference,Unit cost,Sale price,Minimum stock,Quantity,Branch,Supplier
+BK-310,Brake caliper front left,ATE,Brakes,24.3348-1712.5,650.00,990.00,2,3,Main,ATE Morocco
+BK-311,Brake caliper front right,ATE,Brakes,24.3348-1713.5,650.00,990.00,2,1,Main,ATE Morocco
+BK-320,Brake fluid DOT4 1L,Bosch,Brakes,1987479107,55.00,95.00,10,40,Main,Auto Hall Pieces
+WB-410,Wheel bearing kit front,SKF,Suspension,VKBA 3637,310.00,520.00,3,0,Main,SKF Morocco
+WB-411,Wheel bearing kit rear,SKF,Suspension,VKBA 3569,290.00,490.00,3,6,Main,SKF Morocco
+ST-500,Starter motor,Valeo,Electrical,438170,1150.00,1690.00,1,1,Main,Valeo Service
+AL-510,Alternator 90A,Valeo,Electrical,439561,1350.00,1990.00,1,0,Main,Valeo Service
+IC-520,Ignition coil,Bosch,Ignition,0221604115,260.00,420.00,4,9,Main,Auto Hall Pieces
+FP-530,Fuel pump,Bosch,Fuel,0580453453,780.00,1190.00,1,2,Main,Auto Hall Pieces
+EX-540,Exhaust gasket,Elring,Exhaust,263.920,25.00,45.00,10,37,Main,Elring Distribution
+TR-550,Tie rod end,Lemforder,Steering,37061 01,140.00,230.00,4,8,Main,ZF Aftermarket
+HS-560,Radiator hose upper,Gates,Cooling,05-3123,75.00,130.00,5,12,Main,Gates Maghreb
+BP-001,Front brake pads,Bosch,Freinage,0986494525,185.00,330.00,12,6,Casablanca,Auto Hall Pièces
+FL-200,Oil filter,Mann-Filter,Filtration,W 712/95,35.50,65.00,20,52,Casablanca,Distri Filtres
+SP-104,Spark plug iridium,NGK,Allumage,ILKAR7B11,55.00,95.00,24,36,Casablanca,NGK Distribution

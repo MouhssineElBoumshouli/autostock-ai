@@ -1,3 +1,6 @@
 # Keep Linux line endings in every file, so scripts and configs work inside Docker on Windows.
 * text=auto eol=lf
 *.png binary
+# Import test files keep their exact bytes (Windows line endings and encoding are part of the test).
+backend/tests/fixtures/*.csv -text
+backend/tests/fixtures/*.xlsx binary
