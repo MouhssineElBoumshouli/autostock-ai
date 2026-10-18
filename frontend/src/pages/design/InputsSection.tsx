@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { CheckboxField } from "@/components/CheckboxField";
 import { FormField } from "@/components/FormField";
+import { PasswordInput } from "@/components/PasswordInput";
 import { SearchInput } from "@/components/SearchInput";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,10 @@ export function InputsSection() {
                 </SelectContent>
               </Select>
             )}
+          </FormField>
+
+          <FormField label="Password" help="The eye button shows or hides what was typed. It sits at the end side.">
+            {(field) => <PasswordInput {...field} autoComplete="off" defaultValue="Atlas-parts-2026" />}
           </FormField>
 
           <div className="grid gap-2">

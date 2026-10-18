@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { type NewUser, type Role, roles, useAddUser } from "@/api/users";
 import { FormError } from "@/components/FormError";
 import { FormField } from "@/components/FormField";
+import { PasswordInput } from "@/components/PasswordInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -99,7 +100,7 @@ export function AddPersonDialog({ open, onOpenChange }: { open: boolean; onOpenC
             error={errors.temporary_password}
           >
             {(field) => (
-              <Input
+              <PasswordInput
                 {...field}
                 autoComplete="new-password"
                 value={form.temporary_password}

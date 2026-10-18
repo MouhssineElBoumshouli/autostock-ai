@@ -10,6 +10,8 @@ export const en = {
     backHome: "Back to home",
     never: "Never",
     you: "you",
+    showPassword: "Show password",
+    hidePassword: "Hide password",
   },
   states: {
     loadFailed: "We couldn't load this. Check your connection and try again.",

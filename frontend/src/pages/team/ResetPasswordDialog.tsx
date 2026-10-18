@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { type User, useResetPassword } from "@/api/users";
 import { FormError } from "@/components/FormError";
 import { FormField } from "@/components/FormField";
+import { PasswordInput } from "@/components/PasswordInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,7 +15,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { t } from "@/i18n";
 import { passwordError } from "@/lib/validation";
 
@@ -68,7 +68,7 @@ export function ResetPasswordDialog({ user }: { user: User }) {
             error={showErrors ? passwordError(password) : undefined}
           >
             {(field) => (
-              <Input
+              <PasswordInput
                 {...field}
                 autoComplete="new-password"
                 value={password}

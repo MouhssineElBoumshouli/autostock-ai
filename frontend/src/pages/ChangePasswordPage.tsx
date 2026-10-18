@@ -6,8 +6,8 @@ import { useChangePassword, useLogout, useMe } from "@/api/auth";
 import { CenteredCard } from "@/components/CenteredCard";
 import { FormError } from "@/components/FormError";
 import { FormField } from "@/components/FormField";
+import { PasswordInput } from "@/components/PasswordInput";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { t } from "@/i18n";
 import { passwordError, requiredError, safeNextPath } from "@/lib/validation";
 
@@ -55,9 +55,8 @@ export function ChangePasswordPage() {
       <form noValidate onSubmit={submit} className="grid gap-5">
         <FormField label={forced ? t.fields.temporaryPassword : t.fields.currentPassword} error={errors.current}>
           {(field) => (
-            <Input
+            <PasswordInput
               {...field}
-              type="password"
               autoComplete="current-password"
               value={form.current}
               onChange={(e) => setForm({ ...form, current: e.target.value })}
@@ -66,9 +65,8 @@ export function ChangePasswordPage() {
         </FormField>
         <FormField label={t.fields.newPassword} help={t.changePassword.newPasswordHelp} error={errors.next}>
           {(field) => (
-            <Input
+            <PasswordInput
               {...field}
-              type="password"
               autoComplete="new-password"
               value={form.next}
               onChange={(e) => setForm({ ...form, next: e.target.value })}
@@ -77,9 +75,8 @@ export function ChangePasswordPage() {
         </FormField>
         <FormField label={t.fields.repeatNewPassword} error={errors.repeat}>
           {(field) => (
-            <Input
+            <PasswordInput
               {...field}
-              type="password"
               autoComplete="new-password"
               value={form.repeat}
               onChange={(e) => setForm({ ...form, repeat: e.target.value })}

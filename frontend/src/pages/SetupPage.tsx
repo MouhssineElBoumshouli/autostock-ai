@@ -6,6 +6,7 @@ import { CenteredCard } from "@/components/CenteredCard";
 import { ErrorState } from "@/components/ErrorState";
 import { FormError } from "@/components/FormError";
 import { FormField } from "@/components/FormField";
+import { PasswordInput } from "@/components/PasswordInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -81,9 +82,8 @@ export function SetupPage() {
         </FormField>
         <FormField label={t.fields.password} help={t.setup.passwordHelp} error={errors.password}>
           {(field) => (
-            <Input
+            <PasswordInput
               {...field}
-              type="password"
               autoComplete="new-password"
               value={form.password}
               onChange={(e) => update("password", e.target.value)}

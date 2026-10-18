@@ -5,6 +5,7 @@ import { useLogin, useMe, useSetupNeeded } from "@/api/auth";
 import { CenteredCard } from "@/components/CenteredCard";
 import { FormError } from "@/components/FormError";
 import { FormField } from "@/components/FormField";
+import { PasswordInput } from "@/components/PasswordInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { t } from "@/i18n";
@@ -49,9 +50,8 @@ export function LoginPage() {
         </FormField>
         <FormField label={t.fields.password} error={errors.password}>
           {(field) => (
-            <Input
+            <PasswordInput
               {...field}
-              type="password"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
