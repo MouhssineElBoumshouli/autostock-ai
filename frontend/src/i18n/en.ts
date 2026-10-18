@@ -251,6 +251,7 @@ export const en = {
     shop: "the shop",
     sentences: {
       shopCreated: (actor: string, shop: string) => `${actor} created the shop ${shop}.`,
+      synonymsChanged: (actor: string) => `${actor} changed the search words.`,
       shopRenamed: (actor: string, from: string, to: string) => `${actor} renamed the shop from ${from} to ${to}.`,
       currencyChanged: (actor: string, from: string, to: string) =>
         `${actor} changed the currency from ${from} to ${to}.`,
@@ -277,7 +278,7 @@ export const en = {
     justNow: "just now",
   },
   settings: {
-    subtitle: "Your shop's name, currency, branches and suppliers.",
+    subtitle: "Your shop's name, currency, branches, suppliers and search words.",
     cardTitle: "Shop",
     shopName: "Shop name",
     shopNameHelp: "Shown at the top of every page.",
@@ -294,6 +295,14 @@ export const en = {
       title: "Suppliers",
       description: "Who you order parts from. Rename one, merge a duplicate into another, or remove one no part uses.",
       usedNote: "Used by some parts, merge it instead",
+    },
+    synonyms: {
+      title: "Search words",
+      description:
+        "Words that mean the same part. Searching one finds the others, so “brake pads”, “plaquettes de frein” and “فحمات الفرامل” find the same parts.",
+      field: "Words that mean the same",
+      help: "One line per part type. Separate the words with commas.",
+      saved: "Search words saved.",
     },
     entities: {
       rename: "Rename",
