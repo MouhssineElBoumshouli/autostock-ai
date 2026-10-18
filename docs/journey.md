@@ -46,6 +46,7 @@ No outside business system. The shop's data comes in from an Excel file.
 The comparison above is not fair yet: version 2 is just starting.
 Update this section as each step of `PLAN.md` is finished, so the final presentation can compare the two versions feature for feature.
 
+- **Step 1a — project runs (17 October 2026):** `docker compose up` starts the database, the server and the website; the website shows a card with a live "Connected" badge from the server's health check, and code changes reload by themselves.
 - **Step 1b — design system (18 October 2026):** every building block (buttons, inputs, cards, stat cards, badges, a table that becomes cards on phones, dialog, toast, tabs, loading/empty/error states) on one `/design` page, with all colors and sizes defined once and a right-to-left preview for Arabic.
 
 ## The design we kept
