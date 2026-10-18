@@ -33,7 +33,7 @@ class PasswordChange(BaseModel):
 
 def describe_me(db: Session, user: User) -> Me:
     organization = db.get_one(Organization, user.organization_id)
-    return Me(user=UserOut.of(user), organization=OrganizationOut(id=organization.id, name=organization.name))
+    return Me(user=UserOut.of(user), organization=OrganizationOut(id=organization.id, name=organization.name, currency=organization.currency))
 
 
 @router.post("/login")

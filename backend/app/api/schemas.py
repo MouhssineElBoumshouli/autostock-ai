@@ -26,6 +26,7 @@ class UserOut(BaseModel):
 class OrganizationOut(BaseModel):
     id: uuid.UUID
     name: str
+    currency: str
 
 
 class Me(BaseModel):
