@@ -51,6 +51,10 @@ export const en = {
       allBranches: "All branches",
       supplier: "Supplier",
       allSuppliers: "All suppliers",
+      title: "Filters",
+      openFilters: "Filters",
+      openFiltersWithCount: (count: number) => `Filters (${count})`,
+      done: "Done",
     },
     columns: {
       part: "Part",
