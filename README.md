@@ -22,7 +22,9 @@ The old Odoo-based version is kept on the `archive/odoo-v0` branch. Why we rebui
    docker compose up
    ```
    The first start downloads and builds images. It takes a few minutes. Later starts take seconds.
-5. Open **http://localhost:5173**. The badge should say **Connected** in green.
+5. Open **http://localhost:5173**. The first time, you see **Set up your shop**: enter the shop name,
+   your name, email and a password (10+ characters). You become the owner and are logged in.
+   Setup only works once. After that, everyone logs in at http://localhost:5173/login.
 
 Stop with `Ctrl+C`, or `docker compose down` from another terminal.
 Your data stays in a Docker volume. `docker compose down -v` deletes it.
@@ -44,6 +46,12 @@ Colors, sizes and corners are defined once, in `frontend/src/index.css`.
 Code changes reload by themselves: save a file in `frontend/` or `backend/` and the page or server updates.
 If you change `package.json` or `requirements.txt`, run `docker compose up --build`.
 
+## Accounts
+
+- Roles: **owner** (manages the team), **manager**, **staff**. Owners add people on the **Team** page with a temporary password.
+- 5 wrong passwords for one email within 15 minutes block that email for 15 minutes.
+- A login lasts until 7 days without use. Every change to people is written to the `audit_log` table.
+
 ## Tests
 
 With the app running, in another terminal:
@@ -51,6 +59,8 @@ With the app running, in another terminal:
 ```
 docker compose exec api pytest
 ```
+
+Tests use their own database (`autostock_test`), so they never touch your data.
 
 ## Database changes
 
@@ -63,5 +73,7 @@ docker compose exec api alembic revision --autogenerate -m "describe the change"
 
 ## If something goes wrong
 
-- **Port 5173 is already in use**: set another port in `.env`, e.g. `WEB_PORT=5174`, then open that port.
+- **Port 5173 is already in use**: set another port in `.env`, e.g. `WEB_PORT=5174` and `APP_URL=http://localhost:5174`, then open that port.
+- **"This request did not come from the AutoStock website"**: `APP_URL` in `.env` must be exactly the address in your browser bar.
+- **Start over with an empty shop**: `docker compose down -v`, then `docker compose up` (this deletes all data).
 - **Badge says "Can't reach server"**: run `docker compose logs api` to see the server's error.
