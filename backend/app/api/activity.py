@@ -19,16 +19,25 @@ can_read_activity = require_role("owner", "manager")
 PAGE_SIZE = 25
 
 # Types of change people can filter by, and the audit actions in each.
-Kind = Literal["team", "passwords", "logins", "settings"]
+Kind = Literal["team", "passwords", "logins", "settings", "stock"]
 ACTIONS_BY_KIND: dict[str, list[str]] = {
     "team": ["user.created", "user.updated"],
     "passwords": ["user.password_changed", "user.password_reset"],
     "logins": ["user.logged_in"],
     "settings": ["organization.created", "organization.updated"],
+    "stock": ["import.saved", "part.updated"],
 }
 
 # Only these fields of before/after are ever sent to the website (never anything secret).
-SHOWN_FIELDS = {"name", "email", "role", "is_active", "currency"}
+SHOWN_FIELDS = {
+    # people and shop
+    "name", "email", "role", "is_active", "currency",
+    # parts
+    "sku",
+    # imports
+    "kind", "file_name", "new_parts", "updated_parts", "unchanged_parts", "new_sales", "already_imported",
+    "problem_rows", "new_suppliers", "new_branches",
+}
 
 
 class PersonRef(BaseModel):

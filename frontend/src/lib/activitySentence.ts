@@ -1,6 +1,7 @@
 import type { ActivityItem } from "@/api/activity";
 import type { Role } from "@/api/users";
 import { t } from "@/i18n";
+import { formatNumber } from "@/lib/format";
 
 const words = t.activity.sentences;
 
@@ -49,6 +50,17 @@ export function activitySentence(item: ActivityItem): string {
       return words.passwordChanged(actor);
     case "user.password_reset":
       return words.passwordReset(actor, target);
+    case "import.saved":
+      return after.kind === "sales"
+        ? words.importedSales(actor, String(after.file_name), formatNumber(Number(after.new_sales ?? 0)))
+        : words.importedParts(
+            actor,
+            String(after.file_name),
+            formatNumber(Number(after.new_parts ?? 0)),
+            formatNumber(Number(after.updated_parts ?? 0)),
+          );
+    case "part.updated":
+      return words.partEdited(actor, String(after.name), String(after.sku));
     case "user.logged_in":
       return words.loggedIn(actor);
     default:

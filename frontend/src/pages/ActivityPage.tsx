@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
 import { FormField } from "@/components/FormField";
 import { PageHeader } from "@/components/PageHeader";
+import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -36,9 +37,6 @@ export function ActivityPage() {
   }
 
   const data = activity.data;
-  const lastPage = data ? Math.max(1, Math.ceil(data.total / data.page_size)) : 1;
-  const from = data ? (data.page - 1) * data.page_size + 1 : 0;
-  const to = data ? from + data.items.length - 1 : 0;
 
   return (
     <div className="grid gap-8">
@@ -90,7 +88,7 @@ export function ActivityPage() {
             title={filtered ? t.activity.nothingMatches : t.activity.nothingYet}
             action={
               filtered && (
-                <Button onClick={() => setParams(new URLSearchParams())}>{t.activity.clearFilters}</Button>
+                <Button onClick={() => setParams(new URLSearchParams())}>{t.common.clearFilters}</Button>
               )
             }
           />
@@ -98,28 +96,13 @@ export function ActivityPage() {
           <>
             <ActivityList items={data?.items ?? []} loading={activity.isPending} loadingRows={8} />
             {data && (
-              <nav
-                aria-label={t.nav.activity}
-                className="flex items-center justify-between gap-4 border-t px-6 py-3"
-              >
-                <p className="text-sm text-muted-foreground tabular-nums">{t.activity.showing(from, to, data.total)}</p>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    disabled={data.page <= 1}
-                    onClick={() => update({ page: String(data.page - 1) })}
-                  >
-                    {t.common.previous}
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={data.page >= lastPage}
-                    onClick={() => update({ page: String(data.page + 1) })}
-                  >
-                    {t.common.next}
-                  </Button>
-                </div>
-              </nav>
+              <Pagination
+                page={data.page}
+                pageSize={data.page_size}
+                total={data.total}
+                shown={data.items.length}
+                onPage={(page) => update({ page: String(page) })}
+              />
             )}
           </>
         )}

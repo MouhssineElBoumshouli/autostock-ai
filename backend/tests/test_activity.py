@@ -23,8 +23,8 @@ def test_owner_sees_activity_newest_first(browser):
 
     page = browser.get("/api/activity").json()
 
-    assert actions(page)[:3] == ["user.updated", "user.created", "user.created"]
-    assert page["total"] == 4
+    # Setup writes one line ("created the shop"), then adding and changing the person.
+    assert actions(page) == ["user.updated", "user.created", "organization.created"]
     newest = page["items"][0]
     assert newest["actor"]["name"] == "Sara Owner"
     assert newest["target"]["name"] == "staff"
@@ -109,9 +109,9 @@ def test_25_per_page(browser):
     first = browser.get("/api/activity").json()
     second = browser.get("/api/activity?page=2").json()
 
-    assert first["total"] == 32
+    assert first["total"] == 31
     assert len(first["items"]) == 25
-    assert len(second["items"]) == 7
+    assert len(second["items"]) == 6
     assert first["page_size"] == 25
     assert {item["id"] for item in first["items"]}.isdisjoint(item["id"] for item in second["items"])
 

@@ -7,7 +7,7 @@ from app.auth.passwords import hash_password
 from app.config import APP_URL
 from app.db import SessionLocal
 from app.main import app
-from app.models import AuditLog, Organization, User
+from app.models import AuditLog, Branch, Organization, User
 
 OWNER_PASSWORD = "owner-password-1"
 MEMBER_PASSWORD = "member-password-1"
@@ -60,6 +60,7 @@ def create_other_shop() -> User:
         organization = Organization(name="Other Shop")
         db.add(organization)
         db.flush()
+        db.add(Branch(organization_id=organization.id, name="Other Shop"))
         owner = User(
             organization_id=organization.id,
             name="Other Owner",

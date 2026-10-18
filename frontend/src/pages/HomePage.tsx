@@ -2,6 +2,7 @@ import { ArrowRightIcon, HistoryIcon } from "lucide-react";
 import { Link } from "react-router";
 
 import { useActivity } from "@/api/activity";
+import { useStockSummary } from "@/api/stock";
 import { useSignedIn } from "@/components/SignedIn";
 import { ActivityList } from "@/components/ActivityList";
 import { EmptyState } from "@/components/EmptyState";
@@ -10,6 +11,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardHeader, CardTitle } from "@/components/ui/card";
 import { t } from "@/i18n";
+import { LowStockCard } from "@/pages/stock/LowStockCard";
+import { StockStats } from "@/pages/stock/StockStats";
 
 function partOfDay(hour: number) {
   if (hour < 12) return "morning";
@@ -27,8 +30,21 @@ export function HomePage() {
         title={t.home.greeting(partOfDay(new Date().getHours()), me.user.name.split(" ")[0])}
         subtitle={me.organization.name}
       />
+      <StockOverview />
       {canSeeActivity && <RecentActivity />}
     </div>
+  );
+}
+
+// Stat cards and the low stock list, once the shop has parts. Nothing is shown before that.
+function StockOverview() {
+  const summary = useStockSummary();
+  if (!summary.data || summary.data.all === 0) return null;
+  return (
+    <>
+      <StockStats summary={summary.data} loading={false} />
+      <LowStockCard />
+    </>
   );
 }
 

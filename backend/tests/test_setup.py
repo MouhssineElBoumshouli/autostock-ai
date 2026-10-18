@@ -1,3 +1,7 @@
+from sqlalchemy import select
+
+from app.db import SessionLocal
+from app.models import Branch
 from tests.helpers import OWNER_PASSWORD, audit_rows, set_up_shop
 
 
@@ -44,10 +48,21 @@ def test_setup_rejects_invalid_email(browser):
     assert response.status_code == 422
 
 
-def test_setup_writes_audit_rows_without_password(browser):
+def test_setup_writes_one_audit_row_without_password(browser):
     set_up_shop(browser)
 
-    created = audit_rows("user.created")
-    assert len(created) == 1
-    assert created[0].after == {"name": "Sara Owner", "email": "owner@shop.ma", "role": "owner", "is_active": True}
-    assert len(audit_rows("organization.created")) == 1
+    rows = audit_rows("organization.created")
+    assert len(rows) == 1
+    assert rows[0].after == {
+        "name": "Atlas Parts",
+        "currency": "MAD",
+        "owner": {"name": "Sara Owner", "email": "owner@shop.ma", "role": "owner", "is_active": True},
+    }
+    assert audit_rows("user.created") == []
+
+
+def test_setup_creates_a_branch_named_after_the_shop(browser):
+    set_up_shop(browser)
+
+    with SessionLocal() as db:
+        assert db.scalars(select(Branch.name)).all() == ["Atlas Parts"]

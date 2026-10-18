@@ -12,7 +12,7 @@ from app.auth.emails import clean_email
 from app.auth.passwords import check_password_rules, hash_password
 from app.auth.sessions import start_session
 from app.db import get_session, utc_now
-from app.models import Organization, User
+from app.models import Branch, Organization, User
 
 router = APIRouter(prefix="/api/setup")
 
@@ -47,7 +47,7 @@ def run_setup(body: SetupRequest, response: Response, db: Session = Depends(get_
     if anyone_exists(db):
         raise HTTPException(409, "This shop is already set up. Log in instead.")
 
-    organization = Organization(name=body.shop_name)
+    organization = Organization(name=body.shop_name, currency="MAD")
     db.add(organization)
     db.flush()
     owner = User(
@@ -59,9 +59,18 @@ def run_setup(body: SetupRequest, response: Response, db: Session = Depends(get_
         last_login_at=utc_now(),
     )
     db.add(owner)
+    # Every shop starts with one branch, named after the shop.
+    db.add(Branch(organization_id=organization.id, name=organization.name))
     db.flush()
-    record_change(db, owner, "organization.created", "organization", organization.id, after={"name": organization.name})
-    record_change(db, owner, "user.created", "user", owner.id, after=owner.snapshot())
+    # One activity line for the whole setup: "Sara created the shop Atlas Parts."
+    record_change(
+        db,
+        owner,
+        "organization.created",
+        "organization",
+        organization.id,
+        after={"name": organization.name, "currency": organization.currency, "owner": owner.snapshot()},
+    )
     start_session(db, owner, response)
     db.commit()
     return describe_me(db, owner)

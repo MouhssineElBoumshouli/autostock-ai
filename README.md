@@ -58,7 +58,9 @@ If you change `package.json` or `requirements.txt`, run `docker compose up --bui
 
 | Page | Who sees it | What it shows |
 |------|-------------|---------------|
-| Home | everyone | greeting, shop name, last 5 events (owners and managers) |
+| Home | everyone | greeting, stock numbers and low stock (once there are parts), last 5 events (owners and managers) |
+| Stock | everyone (owners and managers can edit) | all parts with search, filters, sorting and a detail panel per part |
+| Import | owners, managers | bring parts, stock and sales in from Excel (.xlsx) or CSV, in 4 steps |
 | Activity | owners, managers | the shop's history in plain sentences, 25 per page, filter by person and type |
 | Team | owners | add people, change roles, reset passwords, deactivate |
 | Settings | owners | shop name and currency (MAD, EUR or USD) |
@@ -72,6 +74,8 @@ docker compose exec api pytest
 ```
 
 Tests use their own database (`autostock_test`), so they never touch your data.
+Example import files (a messy French one and a clean English one per kind) are in `backend/tests/fixtures/`.
+They are only for tests; `python tests/fixtures/make_fixtures.py` (inside the api container) rebuilds them.
 
 ## Database changes
 
