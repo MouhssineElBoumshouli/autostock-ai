@@ -57,16 +57,7 @@ export function StockPage() {
       header: t.stock.columns.part,
       primary: true,
       sortKey: "name",
-      cell: (part) => (
-        <button
-          type="button"
-          onClick={() => update({ part: part.id }, true)}
-          aria-label={t.part.openDetails(part.name)}
-          className="max-w-72 truncate text-start font-medium hover:text-primary hover:underline"
-        >
-          {part.name}
-        </button>
-      ),
+      cell: (part) => <span className="block max-w-72 truncate font-medium">{part.name}</span>,
     },
     { header: t.stock.columns.sku, sortKey: "sku", cell: (part) => <span className="text-on-surface-variant">{part.sku}</span> },
     { header: t.stock.columns.brand, sortKey: "brand", cell: (part) => part.brand ?? "—" },
@@ -106,7 +97,12 @@ export function StockPage() {
   return (
     <div className="grid gap-8">
       <PageHeader title={t.nav.stock} subtitle={t.stock.subtitle} action={importButton} />
-      <StockStats summary={summary.data} loading={summary.isPending} />
+      <StockStats
+        summary={summary.data}
+        loading={summary.isPending}
+        activeStatus={query.status}
+        onFilter={(status) => update({ status })}
+      />
       <div className="grid gap-4">
         <StockFilters values={{ ...query, search: query.search ?? "" }} onChange={update} />
         <Card className="py-0">
@@ -127,6 +123,7 @@ export function StockPage() {
                 loading={parts.isPending}
                 sort={{ key: query.sort, direction: query.direction }}
                 onSort={(sort) => update({ sort: sort.key, direction: sort.direction })}
+                onRowClick={(part) => update({ part: part.id }, true)}
               />
               {parts.data && (
                 <Pagination

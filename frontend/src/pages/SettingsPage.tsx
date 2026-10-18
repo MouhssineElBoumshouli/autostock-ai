@@ -14,7 +14,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { t } from "@/i18n";
 import { requiredError } from "@/lib/validation";
 
-// Owners only: shop name and currency.
+import { BranchesCard } from "./settings/BranchesCard";
+import { SuppliersCard } from "./settings/SuppliersCard";
+
+// Owners only: shop name, currency, branches and suppliers.
 export function SettingsPage() {
   const settings = useSettings();
 
@@ -37,6 +40,8 @@ export function SettingsPage() {
           <SettingsForm key={JSON.stringify(settings.data)} saved={settings.data} />
         )}
       </Card>
+      <BranchesCard />
+      <SuppliersCard />
     </div>
   );
 }

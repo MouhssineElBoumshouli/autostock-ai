@@ -15,6 +15,7 @@ from app.audit import record_change
 from app.auth.permissions import require_role
 from app.db import get_session
 from app.imports.fields import FIELDS, ImportKind, check_mapping
+from app.imports.matching import suggest_field
 from app.imports.parts_import import plan_parts, save_parts
 from app.imports.plan import Summary
 from app.imports.reading import MAX_FILE_BYTES, Table, read_table
@@ -83,12 +84,30 @@ async def preview(
             for i, header in enumerate(table.headers)
         ],
         fields=[FieldOut(key=field.key, required=field.required) for field in FIELDS[kind]],
-        mapping={
-            i: remembered[normalize_header(header)]
-            for i, header in enumerate(table.headers)
-            if normalize_header(header) in remembered
-        },
+        mapping=_suggest_mapping(kind, table.headers, remembered),
     )
+
+
+def _suggest_mapping(kind: ImportKind, headers: list[str], remembered: dict[str, str]) -> dict[int, str]:
+    """Column -> field: from the shop's own last import first, then a free local guess from the
+    header text for whatever is left. The person sees every one of these in the Match step and can
+    change it before anything is checked or saved; nothing here is ever applied by itself.
+    """
+    mapping: dict[int, str] = {}
+    used: set[str] = set()
+    for i, header in enumerate(headers):
+        field = remembered.get(normalize_header(header))
+        if field:
+            mapping[i] = field
+            used.add(field)
+    for i, header in enumerate(headers):
+        if i in mapping:
+            continue
+        field = suggest_field(header, kind)
+        if field and field not in used:
+            mapping[i] = field
+            used.add(field)
+    return mapping
 
 
 @router.post("/check")
@@ -166,14 +185,17 @@ def _plan(db: Session, kind: ImportKind, user: User, table: Table, columns: dict
 
 
 def _remember_mapping(db: Session, user: User, kind: ImportKind, table: Table, by_column: dict[int, str]) -> None:
-    remembered = {normalize_header(table.headers[column]): field for column, field in by_column.items()}
+    """Adds this import's column matching to what is remembered, without losing headers from past imports
+    that aren't in this file (e.g. a supplier's file has different columns than the shop's own export).
+    """
+    this_import = {normalize_header(table.headers[column]): field for column, field in by_column.items()}
     row = db.scalar(
         select(ImportMapping).where(ImportMapping.organization_id == user.organization_id, ImportMapping.kind == kind)
     )
     if row is None:
-        db.add(ImportMapping(organization_id=user.organization_id, kind=kind, mapping=remembered))
+        db.add(ImportMapping(organization_id=user.organization_id, kind=kind, mapping=this_import))
     else:
-        row.mapping = remembered
+        row.mapping = {**row.mapping, **this_import}
 
 
 def _summary_out(file_name: str, summary: Summary) -> SummaryOut:

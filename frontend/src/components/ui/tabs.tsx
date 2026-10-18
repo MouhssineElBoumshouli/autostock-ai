@@ -3,14 +3,16 @@ import { Tabs as TabsPrimitive } from "radix-ui";
 import type * as React from "react";
 
 function Tabs({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Root>) {
-  return <TabsPrimitive.Root data-slot="tabs" className={cn("flex flex-col gap-6", className)} {...props} />;
+  return <TabsPrimitive.Root data-slot="tabs" className={cn("min-w-0 flex flex-col gap-6", className)} {...props} />;
 }
 
+// min-w-0 lets the row's own overflow-x-auto scroll internally when the tabs don't all fit,
+// instead of its minimum content width pushing whatever contains it wider than the screen.
 function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.List>) {
   return (
     <TabsPrimitive.List
       data-slot="tabs-list"
-      className={cn("flex overflow-x-auto border-b border-outline-variant", className)}
+      className={cn("flex min-w-0 overflow-x-auto border-b border-outline-variant", className)}
       {...props}
     />
   );

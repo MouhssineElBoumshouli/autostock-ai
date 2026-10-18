@@ -15,6 +15,8 @@ const iconTones: Record<StatTone, string> = {
 };
 
 // One key number with its label and a short note, e.g. "Low stock · 682 · 18% of all parts".
+// On a phone it is more compact (smaller icon, no note) so the list below shows up sooner.
+// When onClick is given, it also acts as a filter toggle: active shows it pressed in.
 export function StatCard({
   icon: Icon,
   label,
@@ -22,6 +24,8 @@ export function StatCard({
   note,
   tone = "neutral",
   loading = false,
+  active = false,
+  onClick,
 }: {
   icon: LucideIcon;
   label: string;
@@ -29,26 +33,46 @@ export function StatCard({
   note?: string;
   tone?: StatTone;
   loading?: boolean;
+  active?: boolean;
+  onClick?: () => void;
 }) {
-  return (
-    <Card className="gap-4 p-5">
-      <div className="flex items-center gap-3">
-        <span className={cn("flex size-10 items-center justify-center rounded-full", iconTones[tone])}>
-          <Icon aria-hidden="true" className="size-5" />
+  const content = (
+    <>
+      <div className="flex items-center gap-2 sm:gap-3">
+        <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-full sm:size-10", iconTones[tone])}>
+          <Icon aria-hidden="true" className="size-4 sm:size-5" />
         </span>
-        <span className="text-title-small text-on-surface-variant">{label}</span>
+        <span className="truncate text-label-large text-on-surface-variant sm:text-title-small">{label}</span>
       </div>
       {loading ? (
         <div className="grid gap-2 py-1" aria-busy="true">
-          <Skeleton className="h-10 w-24" />
-          <Skeleton className="h-4 w-36" />
+          <Skeleton className="h-8 w-20 sm:h-10 sm:w-24" />
+          <Skeleton className="hidden h-4 w-36 sm:block" />
         </div>
       ) : (
         <div className="grid gap-1">
-          <p className="text-display-small tabular-nums">{value}</p>
-          {note && <p className="text-body-small text-on-surface-variant">{note}</p>}
+          <p className="text-headline-small tabular-nums sm:text-display-small">{value}</p>
+          {note && <p className="hidden text-body-small text-on-surface-variant sm:block">{note}</p>}
         </div>
       )}
-    </Card>
+    </>
   );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        className={cn(
+          "state-layer flex flex-col gap-3 rounded-md bg-surface-container-low p-4 text-start text-on-surface shadow-elevation-1 sm:gap-4 sm:p-5",
+          active && "shadow-[inset_0_0_0_2px_var(--color-primary)]",
+        )}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return <Card className="gap-3 p-4 sm:gap-4 sm:p-5">{content}</Card>;
 }

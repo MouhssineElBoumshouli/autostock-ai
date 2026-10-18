@@ -10,7 +10,10 @@ from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 
 MAX_FILE_BYTES = 10 * 1024 * 1024
+# Above this, a file is more likely broken (wrong sheet, no filters) than a real parts or sales list.
+MAX_ROWS = 20_000
 UNREADABLE = "We couldn't read this file. Check that it opens in Excel, then try again."
+TOO_MANY_ROWS = f"This file has more than {MAX_ROWS:,} rows. Split it into smaller files."
 
 
 @dataclass
@@ -32,7 +35,10 @@ def read_table(content: bytes, file_name: str) -> Table:
         raise HTTPException(422, "This is an old Excel file (.xls). Open it in Excel and save it as .xlsx.")
     else:
         raise HTTPException(422, "Use an Excel file (.xlsx) or a CSV file (.csv).")
-    return _to_table(raw_rows)
+    table = _to_table(raw_rows)
+    if len(table.rows) > MAX_ROWS:
+        raise HTTPException(413, TOO_MANY_ROWS)
+    return table
 
 
 def _xlsx_rows(content: bytes) -> list[list[Any]]:

@@ -1,6 +1,6 @@
 import { cn } from "cn";
 import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -29,6 +29,7 @@ export function DataTable<Row>({
   loading = false,
   sort,
   onSort,
+  onRowClick,
 }: {
   columns: Column<Row>[];
   rows: Row[];
@@ -36,9 +37,26 @@ export function DataTable<Row>({
   loading?: boolean;
   sort?: TableSort;
   onSort?: (sort: TableSort) => void;
+  /** Makes the whole row (or card, on phones) open it, not just one cell. */
+  onRowClick?: (row: Row) => void;
 }) {
   const primary = columns.find((column) => column.primary) ?? columns[0];
   const details = columns.filter((column) => column !== primary);
+
+  // Mouse, tap or keyboard (Enter/Space) on the row opens it, not just one cell inside it.
+  function activation(row: Row) {
+    if (!onRowClick) return {};
+    return {
+      onClick: () => onRowClick(row),
+      onKeyDown: (event: KeyboardEvent) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onRowClick(row);
+        }
+      },
+      tabIndex: 0,
+    };
+  }
 
   return (
     <div aria-busy={loading || undefined}>
@@ -83,7 +101,11 @@ export function DataTable<Row>({
                   </TableRow>
                 ))
               : rows.map((row) => (
-                  <TableRow key={rowKey(row)}>
+                  <TableRow
+                    key={rowKey(row)}
+                    className={cn(onRowClick && "cursor-pointer outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary")}
+                    {...activation(row)}
+                  >
                     {columns.map((column) => (
                       <TableCell key={column.header} className={alignClass(column)}>
                         {column.cell(row)}
@@ -105,7 +127,14 @@ export function DataTable<Row>({
               </li>
             ))
           : rows.map((row) => (
-              <li key={rowKey(row)} className="grid gap-3 px-6 py-4">
+              <li
+                key={rowKey(row)}
+                className={cn(
+                  "grid gap-3 px-6 py-4",
+                  onRowClick && "cursor-pointer outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
+                )}
+                {...activation(row)}
+              >
                 <div className="text-title-medium">{primary.cell(row)}</div>
                 <dl className="grid gap-2">
                   {details.map((column) => (

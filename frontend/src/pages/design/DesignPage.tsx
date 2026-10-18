@@ -37,7 +37,9 @@ export function DesignPage() {
               variant="filled"
               onClick={() => setDirection(direction === "ltr" ? "rtl" : "ltr")}
             >
-              {direction === "ltr" ? "Preview right-to-left" : "Back to left-to-right"}
+              {/* The full label is too wide for a phone screen and would force a sideways scroll. */}
+              <span className="hidden sm:inline">{direction === "ltr" ? "Preview right-to-left" : "Back to left-to-right"}</span>
+              <span className="sm:hidden">{direction === "ltr" ? "Preview RTL" : "Back to LTR"}</span>
             </Button>
           }
         />
