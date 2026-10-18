@@ -1,27 +1,136 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
 
-/* Design colors and font from CLAUDE.md. Use them as Tailwind classes, e.g. bg-page, text-ink. */
-@theme {
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+/*
+ * Design tokens: the only place where colors, sizes, radius and shadows are defined.
+ * Components use them through Tailwind classes, e.g. bg-primary, text-muted-foreground, rounded-xl.
+ * Never write a raw color (#...) in a component.
+ *
+ * Spacing uses Tailwind's 4px scale (p-1 = 4px, p-4 = 16px). Habits that keep screens consistent:
+ *   2 (8px)  between an icon and its text, inside small controls
+ *   4 (16px) between related items, page side gutter on phones
+ *   6 (24px) inside cards, between cards
+ *   8 (32px) between page sections
+ * Use start/end classes (ps-4, me-2, text-start, end-0), never left/right, so Arabic works.
+ */
 
-  --color-page: #f7f8fc;
-  --color-card: #ffffff;
-  --color-line: #e9eaf1;
-  --color-ink: #1b2340;
-  --color-muted: #7d8394;
-  --color-accent: #7847ee;
+:root {
+  /* Surfaces and text */
+  --background: #f7f8fc;
+  --foreground: #1b2340;
+  --card: #ffffff;
+  --card-foreground: #1b2340;
+  --popover: #ffffff;
+  --popover-foreground: #1b2340;
+  --muted: #f1f2f7;
+  /* Slightly darker than #7d8394 from the design notes, so small text passes contrast (4.9:1). */
+  --muted-foreground: #676d80;
 
-  --color-good: #15803d;
-  --color-good-soft: #e7f6ec;
-  --color-low: #b45309;
-  --color-low-soft: #fdf3e2;
-  --color-bad: #c62828;
-  --color-bad-soft: #fdecec;
+  /* The one accent color: main action and active states only */
+  --primary: #7847ee;
+  --primary-hover: #6a3be0;
+  --primary-foreground: #ffffff;
+  --accent: #f3effe;
+  --accent-foreground: #5b2fd0;
 
-  --radius-card: 16px;
+  /* Neutral controls */
+  --secondary: #ffffff;
+  --secondary-foreground: #1b2340;
+  --border: #e9eaf1;
+  --input: #d3d6e2;
+  --ring: #7847ee;
+
+  /* Status: green = healthy, amber = low, red = out or danger. Always shown with a word. */
+  --success: #13723a;
+  --success-soft: #e7f6ec;
+  --warning: #9a4a07;
+  --warning-soft: #fdf3e2;
+  --destructive: #c62828;
+  --destructive-hover: #ad1f1f;
+  --destructive-soft: #fdecec;
+  --destructive-foreground: #ffffff;
+
+  --overlay: rgb(27 35 64 / 0.4);
 }
 
-body {
-  @apply bg-page text-ink font-sans antialiased;
-  font-variant-numeric: tabular-nums;
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-destructive: var(--destructive);
+  --color-destructive-hover: var(--destructive-hover);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-overlay: var(--overlay);
+
+  /* Font sizes (size / line height) */
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 14px;
+  --text-sm--line-height: 20px;
+  --text-base: 16px;
+  --text-base--line-height: 24px;
+  --text-lg: 18px;
+  --text-lg--line-height: 26px;
+  --text-xl: 20px;
+  --text-xl--line-height: 28px;
+  --text-2xl: 24px;
+  --text-2xl--line-height: 32px;
+  --text-3xl: 30px;
+  --text-3xl--line-height: 36px;
+
+  /* Corners: cards 16px, buttons and inputs 10px */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
+
+  /* Almost no shadow: only things that float above the page (menus, dialogs, toasts) */
+  --shadow-xs: 0 1px 2px rgb(27 35 64 / 0.05);
+  --shadow-lg: 0 16px 40px -12px rgb(27 35 64 / 0.18);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-sm text-foreground antialiased;
+    font-variant-numeric: tabular-nums;
+  }
+  /* One visible focus ring for everything reached with the keyboard */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
 }
