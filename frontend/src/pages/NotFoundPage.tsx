@@ -7,17 +7,15 @@ import { t } from "@/i18n";
 
 export function NotFoundPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <EmptyState
-        icon={CompassIcon}
-        title={t.notFound.title}
-        description={t.notFound.description}
-        action={
-          <Button variant="primary" asChild>
-            <Link to="/">{t.common.goHome}</Link>
-          </Button>
-        }
-      />
-    </main>
+    <EmptyState
+      icon={CompassIcon}
+      title={t.notFound.title}
+      description={t.notFound.description}
+      action={
+        <Button variant="primary" asChild>
+          <Link to="/">{t.common.goHome}</Link>
+        </Button>
+      }
+    />
   );
 }

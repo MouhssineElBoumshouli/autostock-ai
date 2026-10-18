@@ -1,8 +1,7 @@
-import { ArrowLeftIcon, UserPlusIcon } from "lucide-react";
+import { UserPlusIcon } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router";
 
-import { useMe } from "@/api/auth";
+import { useSignedIn } from "@/components/SignedIn";
 import { type User, useUsers } from "@/api/users";
 import { type Column, DataTable } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
@@ -21,7 +20,7 @@ import { RoleSelect } from "./RoleSelect";
 // Owners only: everyone who can use AutoStock in this shop.
 export function TeamPage() {
   const users = useUsers();
-  const myId = useMe().data?.user.id;
+  const myId = useSignedIn().user.id;
   const [adding, setAdding] = useState(false);
 
   const columns: Column<User>[] = [
@@ -67,16 +66,9 @@ export function TeamPage() {
   ];
 
   return (
-    <main className="mx-auto grid max-w-6xl gap-8 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-      {/* Until the app layout arrives in Step 1d */}
-      <Button variant="subtle" size="sm" asChild className="-ms-3 w-fit">
-        <Link to="/">
-          <ArrowLeftIcon aria-hidden="true" className="rtl:rotate-180" />
-          {t.common.backHome}
-        </Link>
-      </Button>
+    <div className="grid gap-8">
       <PageHeader
-        title={t.team.title}
+        title={t.nav.team}
         subtitle={t.team.subtitle}
         action={
           <Button variant="primary" onClick={() => setAdding(true)}>
@@ -93,6 +85,6 @@ export function TeamPage() {
         )}
       </Card>
       <AddPersonDialog open={adding} onOpenChange={setAdding} />
-    </main>
+    </div>
   );
 }

@@ -1,50 +1,61 @@
-import { UsersIcon } from "lucide-react";
-import { Link, useNavigate } from "react-router";
+import { ArrowRightIcon, HistoryIcon } from "lucide-react";
+import { Link } from "react-router";
 
-import { useLogout, useMe } from "@/api/auth";
-import { CenteredCard } from "@/components/CenteredCard";
-import { ServerStatus } from "@/components/ServerStatus";
+import { useActivity } from "@/api/activity";
+import { useSignedIn } from "@/components/SignedIn";
+import { ActivityList } from "@/components/ActivityList";
+import { EmptyState } from "@/components/EmptyState";
+import { ErrorState } from "@/components/ErrorState";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import { Card, CardAction, CardHeader, CardTitle } from "@/components/ui/card";
 import { t } from "@/i18n";
 
-// Temporary home until the app layout arrives in Step 1d.
+function partOfDay(hour: number) {
+  if (hour < 12) return "morning";
+  if (hour < 18) return "afternoon";
+  return "evening";
+}
+
 export function HomePage() {
-  const me = useMe().data!;
-  const logout = useLogout();
-  const navigate = useNavigate();
+  const me = useSignedIn();
+  const canSeeActivity = me.user.role !== "staff";
 
   return (
-    <CenteredCard title={t.appName} subtitle={t.tagline}>
-      <div className="grid gap-6">
-        <p className="text-sm text-muted-foreground">
-          {t.home.signedInAs}{" "}
-          <span className="font-medium text-foreground">{me.user.name}</span> ·{" "}
-          {t.roles[me.user.role]} · {me.organization.name}
-        </p>
-        <div className="border-t pt-6">
-          <ServerStatus />
-        </div>
-        <div className="flex flex-wrap gap-3">
-          {me.user.role === "owner" && (
-            <Button variant="primary" asChild>
-              <Link to="/team">
-                <UsersIcon aria-hidden="true" />
-                {t.home.manageTeam}
-              </Link>
-            </Button>
-          )}
-          <Button variant="secondary" asChild>
-            <Link to="/change-password">{t.home.changePassword}</Link>
+    <div className="grid gap-8">
+      <PageHeader
+        title={t.home.greeting(partOfDay(new Date().getHours()), me.user.name.split(" ")[0])}
+        subtitle={me.organization.name}
+      />
+      {canSeeActivity && <RecentActivity />}
+    </div>
+  );
+}
+
+function RecentActivity() {
+  const activity = useActivity({ page: 1 });
+  const items = activity.data?.items.slice(0, 5) ?? [];
+
+  return (
+    <Card className="gap-2 pb-2">
+      <CardHeader>
+        <CardTitle>{t.home.recentActivity}</CardTitle>
+        <CardAction>
+          <Button variant="subtle" size="sm" asChild className="-me-3">
+            <Link to="/activity">
+              {t.home.seeAll}
+              <ArrowRightIcon aria-hidden="true" className="rtl:rotate-180" />
+            </Link>
           </Button>
-          <Button
-            variant="subtle"
-            loading={logout.isPending}
-            onClick={() => logout.mutate(undefined, { onSuccess: () => navigate("/login", { replace: true }) })}
-          >
-            {t.home.logOut}
-          </Button>
-        </div>
-      </div>
-    </CenteredCard>
+        </CardAction>
+      </CardHeader>
+      {activity.isError ? (
+        <ErrorState onRetry={() => activity.refetch()} retrying={activity.isFetching} />
+      ) : !activity.isPending && items.length === 0 ? (
+        <EmptyState icon={HistoryIcon} title={t.activity.nothingYet} />
+      ) : (
+        <ActivityList items={items} loading={activity.isPending} />
+      )}
+    </Card>
   );
 }

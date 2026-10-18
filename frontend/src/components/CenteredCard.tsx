@@ -1,7 +1,13 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
+
+import { t } from "@/i18n";
 
 // A single card in the middle of the screen, with the logo. Used for setup, login and home.
 export function CenteredCard({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+  useEffect(() => {
+    document.title = title === t.appName ? title : `${title} · ${t.appName}`;
+  }, [title]);
+
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-12">
       <section className="w-full max-w-md rounded-xl border bg-card p-6 sm:p-10">

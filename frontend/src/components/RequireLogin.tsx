@@ -1,20 +1,17 @@
-import { ShieldIcon } from "lucide-react";
-import { Link, Navigate, Outlet, useLocation } from "react-router";
+import { Navigate, Outlet, useLocation } from "react-router";
 
 import { useMe } from "@/api/auth";
-import type { Role } from "@/api/users";
 import { CenteredCard } from "@/components/CenteredCard";
-import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
-import { Button } from "@/components/ui/button";
+import { SignedInContext } from "@/components/SignedIn";
 import { Skeleton } from "@/components/ui/skeleton";
 import { t } from "@/i18n";
 
 // Wraps every private page. Not logged in: go to login, then come back here.
-// With `roles`: people with another role see a "no access" message (the server blocks them too).
-export function RequireLogin({ roles }: { roles?: Role[] }) {
+export function RequireLogin() {
   const me = useMe();
   const location = useLocation();
+  const here = encodeURIComponent(location.pathname + location.search);
 
   if (me.isPending) {
     return (
@@ -30,28 +27,15 @@ export function RequireLogin({ roles }: { roles?: Role[] }) {
     return <ErrorState onRetry={() => me.refetch()} retrying={me.isFetching} />;
   }
   if (me.data === null) {
-    const next = encodeURIComponent(location.pathname + location.search);
-    return <Navigate to={`/login?next=${next}`} replace />;
+    return <Navigate to={`/login?next=${here}`} replace />;
   }
   // The owner set this person's password: they must choose their own before anything else.
   if (me.data.user.must_change_password && location.pathname !== "/change-password") {
-    const next = encodeURIComponent(location.pathname + location.search);
-    return <Navigate to={`/change-password?next=${next}`} replace />;
+    return <Navigate to={`/change-password?next=${here}`} replace />;
   }
-  if (roles && !roles.includes(me.data.user.role)) {
-    return (
-      <main className="flex min-h-screen items-center justify-center px-4">
-        <EmptyState
-          icon={ShieldIcon}
-          title={t.team.noAccess}
-          action={
-            <Button variant="primary" asChild>
-              <Link to="/">{t.common.goHome}</Link>
-            </Button>
-          }
-        />
-      </main>
-    );
-  }
-  return <Outlet />;
+  return (
+    <SignedInContext value={me.data}>
+      <Outlet />
+    </SignedInContext>
+  );
 }
