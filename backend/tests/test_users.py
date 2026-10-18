@@ -111,7 +111,7 @@ def test_deactivated_person_is_logged_out_and_cannot_log_in(browser):
     assert staff.get("/api/auth/me").status_code == 401
     response = new_browser().post("/api/auth/login", json={"email": "staff@shop.ma", "password": MEMBER_PASSWORD})
     assert response.status_code == 403
-    assert response.json()["detail"] == "This account is turned off. Ask your shop owner."
+    assert response.json()["detail"] == "This account is deactivated. Ask your shop owner."
 
 
 def test_reactivated_person_can_log_in_again(browser):

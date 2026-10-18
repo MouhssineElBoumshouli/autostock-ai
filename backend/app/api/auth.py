@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/auth")
 
 WRONG_LOGIN = "Wrong email or password."
 TOO_MANY_TRIES = "Too many tries. Wait 15 minutes."
-ACCOUNT_OFF = "This account is turned off. Ask your shop owner."
+ACCOUNT_OFF = "This account is deactivated. Ask your shop owner."
 
 
 class LoginRequest(BaseModel):
