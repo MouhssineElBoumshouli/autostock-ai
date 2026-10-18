@@ -10,6 +10,7 @@ import re
 import unicodedata
 from functools import lru_cache
 
+from app.imports import blind_test_headers
 from app.imports.fields import FIELDS, ImportKind
 from app.imports.header_examples import PARTS_HEADER_SETS, SALES_HEADER_SETS
 
@@ -41,13 +42,15 @@ _KEYWORDS: dict[ImportKind, dict[str, list[str]]] = {
         ],
         "min_stock": [
             "stock mini", "stock min", "min stock", "min qty", "minimum", "seuil", "reorder", "safety stock",
-            "mini", "الحد الأدنى", "ادنى", "أدنى",
+            "mini", "alerte", "alert", "الحد الأدنى", "ادنى", "أدنى",
         ],
         "unit_cost": ["achat", "cost", "buy price", "purchase price", "purchase", "cout", "سعر الشراء", "تكلفة", "الشراء"],
-        "sale_price": ["vente", "sale", "sell", "retail", "pv ttc", "price", "سعر البيع", "سعر"],
+        # Bare "vente" is left out on purpose: alone it just means "a sale" (e.g. "Dernière vente",
+        # last sale date), not a price. "prix" and "price" need a word of their own to be this sure.
+        "sale_price": ["sale", "sell", "retail", "pv ttc", "prix de vente", "prix vente", "prix", "price", "سعر البيع", "سعر"],
         "sku": [
-            "sku", "ref", "réf", "reference", "référence", "code", "part no", "item code", "product code", "رمز",
-            "كود", "مرجع",
+            "sku", "ref", "réf", "reference", "référence", "part no", "item code", "product code", "رمز", "كود",
+            "مرجع",
         ],
         "quantity": [
             "quantity", "qty", "qte", "qté", "stock", "on hand", "disponible", "dispo", "الكمية", "متوفر",
@@ -67,8 +70,8 @@ _KEYWORDS: dict[ImportKind, dict[str, list[str]]] = {
     "sales": {
         "date": ["date", "jour", "day", "التاريخ", "تاريخ", "يوم"],
         "sku": [
-            "sku", "ref", "réf", "reference", "référence", "code", "part no", "item code", "product code", "رمز",
-            "كود", "مرجع",
+            "sku", "ref", "réf", "reference", "référence", "part no", "item code", "product code", "رمز", "كود",
+            "مرجع",
         ],
         "unit_price": ["unit price", "price per unit", "prix unitaire", "pu ttc", "prix", "price", "ثمن", "سعر"],
         "quantity": [
@@ -82,13 +85,38 @@ _KEYWORDS: dict[ImportKind, dict[str, list[str]]] = {
 }
 _ORDERS: dict[ImportKind, list[str]] = {"parts": _PARTS_ORDER, "sales": _SALES_ORDER}
 
+# "code" on its own is the only sane way to write "SKU" in some shops, but as soon as it's part
+# of a longer header ("Code postal client", "Code barre") it almost never means the part's code.
+# Rather than guess, it's only trusted when it is the whole header, nothing else.
+_EXACT_ONLY: dict[ImportKind, dict[str, str]] = {"parts": {"code": "sku"}, "sales": {"code": "sku"}}
+
+
+def _is_arabic(text: str) -> bool:
+    return any("؀" <= char <= "ۿ" for char in text)
+
+
+def _matches(keyword: str, text: str, tokens: set[str]) -> bool:
+    """A short, single word (4 letters or less, like "cat" or "ref") must be a whole word of the
+    header, so it doesn't match inside an unrelated longer word (e.g. "cat" inside "Catalogue").
+    Longer, more specific phrases are safe to match anywhere in the header. Arabic is exempt: its
+    "the" (ال) attaches straight onto the next word with no space ("المرجع", not "ال مرجع"), so a
+    whole-word rule would miss exactly the headers it should match.
+    """
+    if len(keyword) <= 4 and " " not in keyword and not _is_arabic(keyword):
+        return keyword in tokens
+    return keyword in text
+
 
 def keyword_match(header: str, kind: ImportKind) -> str | None:
     """The simple, explainable baseline: does the header contain a word we know for this field?"""
     text = normalize_for_matching(header)
+    exact = _EXACT_ONLY[kind].get(text)
+    if exact:
+        return exact
+    tokens = set(text.split())
     keywords = _KEYWORDS[kind]
     for field in _ORDERS[kind]:
-        if any(word in text for word in keywords[field]):
+        if any(_matches(word, text, tokens) for word in keywords[field]):
             return field
     return None
 
@@ -143,20 +171,25 @@ def model_match(header: str, kind: ImportKind) -> str | None:
     return label
 
 
+def _score(kind: ImportKind, sets: list[list[tuple[str, str | None]]]) -> dict[str, float]:
+    examples = _flat_examples(kind, sets)
+    keyword_correct = sum(1 for header, field in examples if (keyword_match(header, kind) or "ignore") == field)
+    model_correct = sum(1 for header, field in examples if (model_match(header, kind) or "ignore") == field)
+    total = len(examples)
+    return {"keyword_rule": keyword_correct / total, "scikit_learn": model_correct / total, "examples": total}
+
+
 def evaluate_matchers() -> dict[ImportKind, dict[str, float]]:
     """Accuracy of each matcher on the held-out test headers of each kind, as a fraction correct."""
-    results: dict[ImportKind, dict[str, float]] = {}
-    for kind, (_, test_sets) in _TRAIN_TEST.items():
-        examples = _flat_examples(kind, test_sets)
-        keyword_correct = sum(1 for header, field in examples if (keyword_match(header, kind) or "ignore") == field)
-        model_correct = sum(1 for header, field in examples if (model_match(header, kind) or "ignore") == field)
-        total = len(examples)
-        results[kind] = {
-            "keyword_rule": keyword_correct / total,
-            "scikit_learn": model_correct / total,
-            "examples": total,
-        }
-    return results
+    return {kind: _score(kind, test_sets) for kind, (_, test_sets) in _TRAIN_TEST.items()}
+
+
+def evaluate_on_blind_set() -> dict[ImportKind, dict[str, float]]:
+    """Accuracy on blind_test_headers.py: headers neither matcher was built or trained from."""
+    return {
+        "parts": _score("parts", blind_test_headers.PARTS_HEADER_SETS),
+        "sales": _score("sales", blind_test_headers.SALES_HEADER_SETS),
+    }
 
 
 # Measured once with evaluate_matchers() and written to docs/journey.md; whichever scored better
