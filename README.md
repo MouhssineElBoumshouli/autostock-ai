@@ -35,6 +35,10 @@ Your data stays in a Docker volume. `docker compose down -v` deletes it.
 
 Server API docs: http://localhost:5173/api/docs
 
+Design system (every button, card, table… in one page): http://localhost:5173/design
+It only exists while developing. New screens are built from these pieces.
+Colors, sizes and corners are defined once, in `frontend/src/index.css`.
+
 Code changes reload by themselves: save a file in `frontend/` or `backend/` and the page or server updates.
 If you change `package.json` or `requirements.txt`, run `docker compose up --build`.
 
