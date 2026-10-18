@@ -41,7 +41,7 @@ export const en = {
       outNote: "Nothing left on the shelf",
     },
     searchLabel: "Search parts",
-    searchPlaceholder: "Search by name, SKU or OEM reference",
+    searchPlaceholder: "Search parts",
     filters: {
       status: "Status",
       allStatuses: "All statuses",
@@ -288,12 +288,12 @@ export const en = {
     branches: {
       title: "Branches",
       description: "Where stock is kept. Rename one, merge two that mean the same place, or remove one you added by mistake.",
-      usedNote: "Has stock or sales",
+      usedNote: "Has stock or sales, merge it instead",
     },
     suppliers: {
       title: "Suppliers",
       description: "Who you order parts from. Rename one, merge a duplicate into another, or remove one no part uses.",
-      usedNote: "Used by some parts",
+      usedNote: "Used by some parts, merge it instead",
     },
     entities: {
       rename: "Rename",
@@ -307,7 +307,6 @@ export const en = {
       merged: (from: string, into: string) => `${from} was merged into ${into}.`,
       removeTitle: (name: string) => `Remove ${name}?`,
       removeText: "This can't be undone.",
-      removeBlockedText: "This is in use, so it can't be removed. Merge it into another one first.",
       removed: (name: string) => `${name} was removed.`,
     },
   },

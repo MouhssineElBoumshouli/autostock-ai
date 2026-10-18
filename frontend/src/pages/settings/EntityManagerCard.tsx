@@ -81,7 +81,9 @@ export function EntityManagerCard({
                   <div className="flex gap-1">
                     <RenameButton item={item} rename={rename} />
                     {items!.length > 1 && <MergeButton item={item} items={items!} merge={merge} />}
-                    <RemoveButton item={item} remove={remove} />
+                    {/* Removing something in use would just fail on the server, for a reason the
+                        badge above already explains, so the button isn't offered at all. */}
+                    {!item.in_use && <RemoveButton item={item} remove={remove} />}
                   </div>
                 </li>
               ))}
@@ -224,6 +226,7 @@ function MergeButton({
   );
 }
 
+// Only rendered for an item that isn't in use (see the check where this is used).
 function RemoveButton({ item, remove }: { item: ManagedEntity; remove: UseMutationResult<void, Error, string> }) {
   function confirmed() {
     remove.mutate(item.id, {
@@ -242,16 +245,14 @@ function RemoveButton({ item, remove }: { item: ManagedEntity; remove: UseMutati
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t.settings.entities.removeTitle(item.name)}</DialogTitle>
-          <DialogDescription>
-            {item.in_use ? t.settings.entities.removeBlockedText : t.settings.entities.removeText}
-          </DialogDescription>
+          <DialogDescription>{t.settings.entities.removeText}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <DialogClose asChild>
             <Button variant="text">{t.common.cancel}</Button>
           </DialogClose>
           <DialogClose asChild>
-            <Button variant="danger" onClick={confirmed} disabled={item.in_use}>
+            <Button variant="danger" onClick={confirmed}>
               {t.common.remove}
             </Button>
           </DialogClose>
