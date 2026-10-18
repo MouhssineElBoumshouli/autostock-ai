@@ -40,7 +40,7 @@ Ask before adding any new library. Every dependency must earn its place.
 - Money stored as integers in centimes. Default currency MAD, configurable. Quantities shown as whole numbers.
 - All user-facing text lives in one place per language (`frontend/src/i18n/`), so French and Arabic can be added later. Start in English.
 - Tests: every backend endpoint and every calculation gets a pytest test. Run tests before saying a task is done.
-- Keep docs short: `README.md` (how to run), `PLAN.md` (what's next). No QA report files, no screenshot folders in git.
+- Keep docs short: `README.md` (how to run), `PLAN.md` (what's next), `docs/journey.md` (the project story). No QA report files, no screenshot folders in git.
 
 ## AI rules
 
@@ -70,5 +70,6 @@ Reference image: `design/dashboard-concept.png` (a concept, not real data).
 
 - One step of `PLAN.md` at a time. Do not start the next step until the owner approves.
 - Work on a branch, commit in small pieces with clear messages.
-- Never delete the `archive/odoo-v0` branch.
+- Never delete or change the `archive/odoo-v0` branch. It is the Odoo version, kept for the presentation.
+- Never delete `design/dashboard-concept.png` or `docs/journey.md`. When a PLAN.md step is finished, add one line to the "Version 2" section of `docs/journey.md`.
 - Never put secrets in git. Use `.env` (ignored) and keep `.env.example` up to date.
