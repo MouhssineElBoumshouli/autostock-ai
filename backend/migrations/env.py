@@ -2,6 +2,7 @@
 
 from alembic import context
 
+import app.models  # noqa: F401  (registers every table)
 from app.db import Base, engine
 
 target_metadata = Base.metadata

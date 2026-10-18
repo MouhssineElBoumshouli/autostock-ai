@@ -23,6 +23,8 @@ services:
     build: ./backend
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-autostock}:${POSTGRES_PASSWORD:-autostock}@db:5432/${POSTGRES_DB:-autostock}
+      # The address people type to open the website. Used to reject requests from other sites.
+      APP_URL: ${APP_URL:-http://localhost:5173}
       # Docker Desktop on Windows does not always pass file-change events into containers,
       # so the server checks for changes regularly instead. This keeps auto-reload working.
       WATCHFILES_FORCE_POLLING: "true"
