@@ -30,7 +30,7 @@ export type PartsQuery = {
   category?: string;
   branch?: string;
   supplier?: string;
-  sort: SortKey;
+  sort?: SortKey;
   direction: "asc" | "desc";
   page: number;
 };

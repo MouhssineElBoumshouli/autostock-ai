@@ -30,7 +30,8 @@ export function StockPage() {
     category: params.get("category") ?? undefined,
     branch: params.get("branch") ?? undefined,
     supplier: params.get("supplier") ?? undefined,
-    sort: (params.get("sort") as SortKey | null) ?? "name",
+    // While searching, the best match comes first unless a column was picked.
+    sort: (params.get("sort") as SortKey | null) ?? (params.get("search") ? undefined : "name"),
     direction: params.get("direction") === "desc" ? ("desc" as const) : ("asc" as const),
     page: Math.max(1, Number(params.get("page")) || 1),
   };
@@ -121,7 +122,7 @@ export function StockPage() {
                 rows={parts.data?.items ?? []}
                 rowKey={(part) => part.id}
                 loading={parts.isPending}
-                sort={{ key: query.sort, direction: query.direction }}
+                sort={query.sort && { key: query.sort, direction: query.direction }}
                 onSort={(sort) => update({ sort: sort.key, direction: sort.direction })}
                 onRowClick={(part) => update({ part: part.id }, true)}
               />

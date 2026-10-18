@@ -5,12 +5,13 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.auth.permissions import require_role
 from app.db import get_session
 from app.models import Branch, Part, Supplier, User
+from app.search.part_search import as_table, find_parts
 from app.stock_status import StockStatus, is_dead, quantity_on_hand, status_of
 
 router = APIRouter(prefix="/api/stock")
@@ -103,7 +104,7 @@ def list_parts(
     category: str | None = None,
     branch: uuid.UUID | None = None,
     supplier: uuid.UUID | None = None,
-    sort: SortKey = "name",
+    sort: SortKey | None = None,
     direction: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
     user: User = Depends(anyone),
@@ -114,9 +115,7 @@ def list_parts(
     part_status = status_of(quantity)
 
     filters = [Part.organization_id == user.organization_id]
-    if search and search.strip():
-        term = f"%{_escape_like(search.strip())}%"
-        filters.append(or_(Part.name.ilike(term), Part.sku.ilike(term), Part.oem_reference.ilike(term)))
+    matches = as_table(find_parts(db, user.organization_id, search)) if search and search.strip() else None
     if status == "dead":
         filters.append(is_dead(quantity, branch))
     elif status:
@@ -132,19 +131,25 @@ def list_parts(
         .outerjoin(Supplier, Supplier.id == Part.supplier_id)
         .where(*filters)
     )
+    if matches is not None:
+        base = base.join(matches, matches.c.part_id == Part.id)
     total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
 
-    order = {
-        "name": Part.name,
-        "sku": Part.sku,
-        "brand": Part.brand,
-        "quantity": quantity,
-        "min_stock": Part.min_stock,
-        "status": _status_rank(part_status),
-        "supplier": Supplier.name,
-    }[sort]
-    ordered = order.desc().nulls_last() if direction == "desc" else order.asc().nulls_last()
-    rows = db.execute(base.order_by(ordered, Part.sku).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)).all()
+    if sort is None and matches is not None:
+        # While searching, the best match comes first unless the person picked a column to sort by.
+        ordered = matches.c.score.desc()
+    else:
+        order = {
+            "name": Part.name,
+            "sku": Part.sku,
+            "brand": Part.brand,
+            "quantity": quantity,
+            "min_stock": Part.min_stock,
+            "status": _status_rank(part_status),
+            "supplier": Supplier.name,
+        }[sort or "name"]
+        ordered = order.desc().nulls_last() if direction == "desc" else order.asc().nulls_last()
+    rows = db.execute(base.order_by(ordered, Part.name, Part.sku).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)).all()
 
     return PartsPage(
         items=[
@@ -165,10 +170,6 @@ def list_parts(
         page=page,
         page_size=PAGE_SIZE,
     )
-
-
-def _escape_like(text: str) -> str:
-    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _status_rank(status):
