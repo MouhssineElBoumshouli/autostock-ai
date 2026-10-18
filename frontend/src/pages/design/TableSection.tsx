@@ -19,7 +19,7 @@ const exampleParts: ExamplePart[] = [
 
 const columns: Column<ExamplePart>[] = [
   { header: "Part", cell: (part) => part.name, primary: true },
-  { header: "SKU", cell: (part) => <span className="text-muted-foreground">{part.sku}</span> },
+  { header: "SKU", cell: (part) => <span className="text-on-surface-variant">{part.sku}</span> },
   { header: "In stock", cell: (part) => formatNumber(part.inStock), align: "end" },
   { header: "Sold (30 days)", cell: (part) => formatNumber(part.soldLast30Days), align: "end" },
   { header: "Status", cell: (part) => <StockBadge status={part.status} /> },

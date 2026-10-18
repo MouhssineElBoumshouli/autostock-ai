@@ -15,10 +15,10 @@ export function ErrorState({
 }) {
   return (
     <div role="alert" className="flex flex-col items-center gap-4 px-6 py-12 text-center">
-      <span className="flex size-12 items-center justify-center rounded-full bg-destructive-soft text-destructive">
+      <span className="flex size-14 items-center justify-center rounded-full bg-error-container text-on-error-container">
         <TriangleAlertIcon aria-hidden="true" className="size-6" />
       </span>
-      <p className="max-w-sm text-sm text-foreground">{message}</p>
+      <p className="max-w-sm text-body-medium text-on-surface">{message}</p>
       <Button onClick={onRetry} loading={retrying}>
         <RotateCwIcon aria-hidden="true" />
         {t.common.tryAgain}

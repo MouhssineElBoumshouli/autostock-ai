@@ -65,7 +65,7 @@ export function CheckStep({
             </TableBody>
           </Table>
           {hidden > 0 && (
-            <p className="border-t px-6 py-3 text-sm text-muted-foreground">
+            <p className="border-t px-6 py-3 text-body-medium text-on-surface-variant">
               {t.importFile.moreProblems(formatNumber(hidden))}
             </p>
           )}
@@ -74,12 +74,12 @@ export function CheckStep({
 
       <Card className="py-4">
         <CardFooter className="flex-wrap justify-between gap-3">
-          <Button variant="subtle" onClick={onBack}>
+          <Button variant="text" onClick={onBack}>
             {t.common.back}
           </Button>
           <div className="flex flex-wrap items-center justify-end gap-3">
-            {!somethingToSave && <p className="text-sm text-muted-foreground">{t.importFile.nothingToSave}</p>}
-            <Button variant="primary" disabled={!somethingToSave} loading={saving} onClick={onSave}>
+            {!somethingToSave && <p className="text-body-medium text-on-surface-variant">{t.importFile.nothingToSave}</p>}
+            <Button variant="filled" disabled={!somethingToSave} loading={saving} onClick={onSave}>
               {t.importFile.save}
             </Button>
           </div>

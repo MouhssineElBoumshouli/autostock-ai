@@ -3,28 +3,26 @@ import { Tabs as TabsPrimitive } from "radix-ui";
 import type * as React from "react";
 
 function Tabs({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Root>) {
-  return (
-    <TabsPrimitive.Root data-slot="tabs" className={cn("flex flex-col gap-6", className)} {...props} />
-  );
+  return <TabsPrimitive.Root data-slot="tabs" className={cn("flex flex-col gap-6", className)} {...props} />;
 }
 
 function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.List>) {
   return (
     <TabsPrimitive.List
       data-slot="tabs-list"
-      className={cn("flex gap-6 overflow-x-auto border-b", className)}
+      className={cn("flex overflow-x-auto border-b border-outline-variant", className)}
       {...props}
     />
   );
 }
 
-// The active tab is violet with an underline (an "active state", so the accent color is allowed).
+// Material 3 primary tabs: the active tab is violet with a 3px rounded indicator under its label.
 function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
   return (
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "-mb-px inline-flex h-10 shrink-0 items-center gap-2 border-b-2 border-transparent text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-offset-0 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:border-primary data-[state=active]:text-primary [&_svg]:size-4",
+        "state-layer relative inline-flex h-12 shrink-0 items-center gap-2 px-4 text-title-small whitespace-nowrap text-on-surface-variant focus-visible:outline-offset-[-2px] disabled:pointer-events-none disabled:opacity-38 data-[state=active]:text-primary data-[state=active]:after:absolute data-[state=active]:after:inset-x-4 data-[state=active]:after:bottom-0 data-[state=active]:after:h-[3px] data-[state=active]:after:rounded-t-full data-[state=active]:after:bg-primary [&_svg]:size-5",
         className,
       )}
       {...props}

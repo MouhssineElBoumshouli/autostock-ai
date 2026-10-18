@@ -5,15 +5,13 @@ import { type ActivityKind, activityKinds, useActivity, useActivityPeople } from
 import { ActivityList } from "@/components/ActivityList";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
-import { FormField } from "@/components/FormField";
+import { ALL, FilterChip } from "@/components/FilterChip";
 import { PageHeader } from "@/components/PageHeader";
 import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { t } from "@/i18n";
 
-const ALL = "all";
 
 // The full history, 25 per page. Filters live in the address, so the back button and links keep them.
 export function ActivityPage() {
@@ -42,41 +40,21 @@ export function ActivityPage() {
     <div className="grid gap-8">
       <PageHeader title={t.nav.activity} subtitle={t.activity.subtitle} />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:max-w-2xl">
-        <FormField label={t.activity.person}>
-          {(field) => (
-            <Select value={filters.person ?? ALL} onValueChange={(person) => update({ person, page: undefined })}>
-              <SelectTrigger {...field}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>{t.activity.allPeople}</SelectItem>
-                {people.data?.map((person) => (
-                  <SelectItem key={person.id} value={person.id}>
-                    {person.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </FormField>
-        <FormField label={t.activity.kind}>
-          {(field) => (
-            <Select value={filters.kind ?? ALL} onValueChange={(kind) => update({ kind, page: undefined })}>
-              <SelectTrigger {...field}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>{t.activity.kinds.all}</SelectItem>
-                {activityKinds.map((kind) => (
-                  <SelectItem key={kind} value={kind}>
-                    {t.activity.kinds[kind]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </FormField>
+      <div className="flex flex-wrap gap-2">
+        <FilterChip
+          label={t.activity.person}
+          value={filters.person}
+          allLabel={t.activity.allPeople}
+          options={(people.data ?? []).map((person) => ({ value: person.id, label: person.name }))}
+          onChange={(person) => update({ person, page: undefined })}
+        />
+        <FilterChip
+          label={t.activity.kind}
+          value={filters.kind}
+          allLabel={t.activity.kinds.all}
+          options={activityKinds.map((kind) => ({ value: kind, label: t.activity.kinds[kind] }))}
+          onChange={(kind) => update({ kind, page: undefined })}
+        />
       </div>
 
       <Card className="py-0">

@@ -19,14 +19,14 @@ export function StepList({ current }: { current: Step }) {
           <li
             key={step}
             aria-current={active ? "step" : undefined}
-            className={cn("flex items-center gap-2 text-sm", active ? "font-semibold text-primary" : "text-muted-foreground")}
+            className={cn("flex items-center gap-2 text-body-medium", active ? "font-medium text-primary" : "text-on-surface-variant")}
           >
             <span
               className={cn(
-                "flex size-6 items-center justify-center rounded-full text-xs font-semibold",
-                active && "bg-primary text-primary-foreground",
-                done && "bg-success-soft text-success",
-                !active && !done && "bg-muted",
+                "flex size-6 items-center justify-center rounded-full text-body-small font-medium",
+                active && "bg-primary text-on-primary",
+                done && "bg-success-container text-on-success-container",
+                !active && !done && "bg-surface-container-high",
               )}
             >
               {done ? <CheckIcon aria-hidden="true" className="size-3.5" /> : index + 1}

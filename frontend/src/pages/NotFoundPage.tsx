@@ -12,7 +12,7 @@ export function NotFoundPage() {
       title={t.notFound.title}
       description={t.notFound.description}
       action={
-        <Button variant="primary" asChild>
+        <Button variant="filled" asChild>
           <Link to="/">{t.common.goHome}</Link>
         </Button>
       }

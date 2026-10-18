@@ -106,11 +106,11 @@ export function DataTable<Row>({
             ))
           : rows.map((row) => (
               <li key={rowKey(row)} className="grid gap-3 px-6 py-4">
-                <div className="font-medium">{primary.cell(row)}</div>
+                <div className="text-title-medium">{primary.cell(row)}</div>
                 <dl className="grid gap-2">
                   {details.map((column) => (
                     <div key={column.header} className="flex items-center justify-between gap-4">
-                      <dt className="text-xs text-muted-foreground">{column.header}</dt>
+                      <dt className="text-body-small text-on-surface-variant">{column.header}</dt>
                       <dd className={cn("text-end", column.align === "end" && "tabular-nums")}>{column.cell(row)}</dd>
                     </div>
                   ))}
@@ -141,8 +141,8 @@ function SortButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "-mx-1 inline-flex items-center gap-1 rounded-sm px-1 py-0.5 hover:text-foreground",
-        direction && "text-foreground",
+        "-mx-1 inline-flex items-center gap-1 rounded-xs px-1 py-0.5 hover:text-on-surface",
+        direction && "text-on-surface",
         alignEnd && "flex-row-reverse",
       )}
     >

@@ -23,7 +23,7 @@ export function LowStockCard() {
       <CardHeader>
         <CardTitle>{t.stock.lowStockTitle}</CardTitle>
         <CardAction>
-          <Button variant="subtle" size="sm" asChild className="-me-3">
+          <Button variant="text" size="sm" asChild className="-me-3">
             <Link to="/stock?status=low">
               {t.stock.seeAllLow}
               <ArrowRightIcon aria-hidden="true" className="rtl:rotate-180" />
@@ -47,16 +47,16 @@ export function LowStockCard() {
             <li key={part.id}>
               <Link
                 to={`/stock?part=${part.id}`}
-                className="flex items-center justify-between gap-4 px-6 py-3 hover:bg-muted/50"
+                className="flex items-center justify-between gap-4 px-6 py-3 hover:bg-on-surface/8"
               >
                 <span className="grid min-w-0">
-                  <span className="truncate text-sm font-medium">{part.name}</span>
-                  <span className="text-xs text-muted-foreground">{part.sku}</span>
+                  <span className="truncate text-title-small">{part.name}</span>
+                  <span className="text-body-small text-on-surface-variant">{part.sku}</span>
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
-                  <span className="text-sm tabular-nums">
+                  <span className="text-body-medium tabular-nums">
                     {formatNumber(part.quantity)}
-                    <span className="text-muted-foreground"> / {formatNumber(part.min_stock)}</span>
+                    <span className="text-on-surface-variant"> / {formatNumber(part.min_stock)}</span>
                   </span>
                   <StockBadge status={part.status} />
                 </span>

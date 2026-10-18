@@ -34,7 +34,7 @@ export function DesignPage() {
           subtitle="Every building block of AutoStock AI. New screens use these pieces, nothing else."
           action={
             <Button
-              variant="primary"
+              variant="filled"
               onClick={() => setDirection(direction === "ltr" ? "rtl" : "ltr")}
             >
               {direction === "ltr" ? "Preview right-to-left" : "Back to left-to-right"}

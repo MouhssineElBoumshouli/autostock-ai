@@ -8,9 +8,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ExampleLabel, Section } from "./Section";
 
 const variants = [
-  { variant: "primary", label: "Save order" },
-  { variant: "secondary", label: "Export" },
-  { variant: "subtle", label: "Cancel" },
+  { variant: "filled", label: "Save order" },
+  { variant: "tonal", label: "Reorder" },
+  { variant: "outlined", label: "Export" },
+  { variant: "text", label: "Cancel" },
   { variant: "danger", label: "Delete" },
 ] as const;
 
@@ -29,13 +30,13 @@ export function ButtonsSection() {
     <Section
       id="buttons"
       title="Buttons"
-      description="Primary (violet) is the one main action of a screen. Secondary for other actions, subtle for quiet ones, danger for deleting."
+      description="Pill-shaped. Filled (violet) is the one main action of a screen, tonal for strong second actions, outlined for other actions, text for quiet ones, danger for deleting. Hover or press to see the state layer."
     >
       <Card>
         <CardContent className="grid gap-6">
           {(["md", "sm"] as const).map((size) => (
             <div key={size} className="grid gap-3">
-              <ExampleLabel>{size === "md" ? "Normal size" : "Small size"}</ExampleLabel>
+              <ExampleLabel>{size === "md" ? "Normal size (40px)" : "Small size (32px)"}</ExampleLabel>
               <div className="flex flex-wrap gap-3">
                 {variants.map(({ variant, label }) => (
                   <Button key={variant} variant={variant} size={size}>
@@ -47,19 +48,19 @@ export function ButtonsSection() {
           ))}
 
           <div className="grid gap-3">
-            <ExampleLabel>With icon · loading (click Save) · disabled</ExampleLabel>
+            <ExampleLabel>With icon · loading (click Save) · disabled · icon button</ExampleLabel>
             <div className="flex flex-wrap gap-3">
-              <Button variant="secondary">
+              <Button variant="tonal">
                 <PlusIcon aria-hidden="true" />
                 Add part
               </Button>
-              <Button variant="primary" loading={saving} onClick={save}>
+              <Button variant="filled" loading={saving} onClick={save}>
                 Save
               </Button>
-              <Button variant="secondary" disabled>
+              <Button variant="filled" disabled>
                 Disabled
               </Button>
-              <Button variant="subtle" size="icon" aria-label="Delete part">
+              <Button variant="text" size="icon" aria-label="Delete part">
                 <Trash2Icon aria-hidden="true" />
               </Button>
             </div>

@@ -68,7 +68,7 @@ export function StockPage() {
         </button>
       ),
     },
-    { header: t.stock.columns.sku, sortKey: "sku", cell: (part) => <span className="text-muted-foreground">{part.sku}</span> },
+    { header: t.stock.columns.sku, sortKey: "sku", cell: (part) => <span className="text-on-surface-variant">{part.sku}</span> },
     { header: t.stock.columns.brand, sortKey: "brand", cell: (part) => part.brand ?? "—" },
     { header: t.stock.columns.inStock, sortKey: "quantity", align: "end", cell: (part) => formatNumber(part.quantity) },
     { header: t.stock.columns.minimum, sortKey: "min_stock", align: "end", cell: (part) => formatNumber(part.min_stock) },
@@ -79,7 +79,7 @@ export function StockPage() {
   const filtered = Boolean(query.search || query.status || query.category || query.branch || query.supplier);
   const noPartsAtAll = summary.data !== undefined && summary.data.all === 0 && parts.data?.total === 0 && !filtered;
   const importButton = canEdit && (
-    <Button variant="primary" asChild>
+    <Button variant="filled" asChild>
       <Link to="/stock/import">
         <UploadIcon aria-hidden="true" />
         {t.stock.importButton}

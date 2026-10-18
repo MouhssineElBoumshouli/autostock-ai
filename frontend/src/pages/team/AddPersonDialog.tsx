@@ -110,10 +110,10 @@ export function AddPersonDialog({ open, onOpenChange }: { open: boolean; onOpenC
           </FormField>
           <FormError message={addUser.error?.message} />
           <DialogFooter>
-            <Button type="button" variant="subtle" onClick={() => close(false)}>
+            <Button type="button" variant="text" onClick={() => close(false)}>
               {t.common.cancel}
             </Button>
-            <Button type="submit" variant="primary" loading={addUser.isPending}>
+            <Button type="submit" variant="filled" loading={addUser.isPending}>
               {t.team.addPerson}
             </Button>
           </DialogFooter>

@@ -39,7 +39,7 @@ export function AccessButton({ user }: { user: User }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button size="sm" variant="subtle" disabled={changeUser.isPending}>
+        <Button size="sm" variant="text" disabled={changeUser.isPending}>
           {t.team.deactivate}
         </Button>
       </DialogTrigger>
@@ -50,7 +50,7 @@ export function AccessButton({ user }: { user: User }) {
         </DialogHeader>
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="subtle">{t.common.cancel}</Button>
+            <Button variant="text">{t.common.cancel}</Button>
           </DialogClose>
           <DialogClose asChild>
             <Button variant="danger" onClick={() => setActive(false)}>

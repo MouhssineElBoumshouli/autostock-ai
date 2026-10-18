@@ -43,7 +43,7 @@ export function StatesSection() {
               title="No parts yet"
               description="Import your stock from an Excel or CSV file to get started."
               action={
-                <Button variant="primary">
+                <Button variant="filled">
                   <UploadIcon aria-hidden="true" />
                   Import parts
                 </Button>

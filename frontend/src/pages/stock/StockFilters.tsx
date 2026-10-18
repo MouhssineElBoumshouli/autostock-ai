@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 
 import { type StatusFilter, statusFilters, useStockFilterChoices } from "@/api/stock";
+import { FilterChip } from "@/components/FilterChip";
 import { SearchInput } from "@/components/SearchInput";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { t } from "@/i18n";
-
-export const ALL = "all";
 
 export type StockFilterValues = {
   search: string;
@@ -23,7 +21,7 @@ const statusLabels: Record<StatusFilter, string> = {
   inactive: t.stock.inactive,
 };
 
-// Search plus four filters. Typing waits a moment before searching, so each key press doesn't reload.
+// A search bar and four filter chips. Typing waits a moment before searching, so each key press doesn't reload.
 export function StockFilters({
   values,
   onChange,
@@ -42,8 +40,8 @@ export function StockFilters({
   }, [search, values.search, onChange]);
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(16rem,2fr)_repeat(4,minmax(0,1fr))]">
-      <div className="md:col-span-2 xl:col-span-1">
+    <div className="grid gap-3">
+      <div className="max-w-xl">
         <SearchInput
           label={t.stock.searchLabel}
           placeholder={t.stock.searchPlaceholder}
@@ -51,67 +49,36 @@ export function StockFilters({
           onChange={(event) => setSearch(event.target.value)}
         />
       </div>
-      <FilterSelect
-        label={t.stock.filters.status}
-        value={values.status}
-        allLabel={t.stock.filters.allStatuses}
-        options={statusFilters.map((status) => ({ value: status, label: statusLabels[status] }))}
-        onChange={(status) => onChange({ status })}
-      />
-      <FilterSelect
-        label={t.stock.filters.category}
-        value={values.category}
-        allLabel={t.stock.filters.allCategories}
-        options={(choices?.categories ?? []).map((category) => ({ value: category, label: category }))}
-        onChange={(category) => onChange({ category })}
-      />
-      <FilterSelect
-        label={t.stock.filters.branch}
-        value={values.branch}
-        allLabel={t.stock.filters.allBranches}
-        options={(choices?.branches ?? []).map((branch) => ({ value: branch.id, label: branch.name }))}
-        onChange={(branch) => onChange({ branch })}
-      />
-      <FilterSelect
-        label={t.stock.filters.supplier}
-        value={values.supplier}
-        allLabel={t.stock.filters.allSuppliers}
-        options={(choices?.suppliers ?? []).map((supplier) => ({ value: supplier.id, label: supplier.name }))}
-        onChange={(supplier) => onChange({ supplier })}
-      />
-    </div>
-  );
-}
-
-// A compact filter without a visible label: screen readers hear `label`, and "All …" says what it filters.
-function FilterSelect({
-  label,
-  value,
-  allLabel,
-  options,
-  onChange,
-}: {
-  label: string;
-  value?: string;
-  allLabel: string;
-  options: { value: string; label: string }[];
-  onChange: (value: string | undefined) => void;
-}) {
-  return (
-    <div>
-      <Select value={value ?? ALL} onValueChange={(next) => onChange(next === ALL ? undefined : next)}>
-        <SelectTrigger aria-label={label}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>{allLabel}</SelectItem>
-          {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className="flex flex-wrap gap-2">
+        <FilterChip
+          label={t.stock.filters.status}
+          value={values.status}
+          allLabel={t.stock.filters.allStatuses}
+          options={statusFilters.map((status) => ({ value: status, label: statusLabels[status] }))}
+          onChange={(status) => onChange({ status })}
+        />
+        <FilterChip
+          label={t.stock.filters.category}
+          value={values.category}
+          allLabel={t.stock.filters.allCategories}
+          options={(choices?.categories ?? []).map((category) => ({ value: category, label: category }))}
+          onChange={(category) => onChange({ category })}
+        />
+        <FilterChip
+          label={t.stock.filters.branch}
+          value={values.branch}
+          allLabel={t.stock.filters.allBranches}
+          options={(choices?.branches ?? []).map((branch) => ({ value: branch.id, label: branch.name }))}
+          onChange={(branch) => onChange({ branch })}
+        />
+        <FilterChip
+          label={t.stock.filters.supplier}
+          value={values.supplier}
+          allLabel={t.stock.filters.allSuppliers}
+          options={(choices?.suppliers ?? []).map((supplier) => ({ value: supplier.id, label: supplier.name }))}
+          onChange={(supplier) => onChange({ supplier })}
+        />
+      </div>
     </div>
   );
 }

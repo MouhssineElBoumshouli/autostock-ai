@@ -1,12 +1,14 @@
 import { cn } from "cn";
 import type * as React from "react";
 
+// Material 3 elevated card: tinted surface, 12px corners, level 1 shadow.
+// --field-bg lets outlined field labels inside it cut the border in the card's own color.
 function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card"
       className={cn(
-        "flex flex-col gap-6 rounded-xl border bg-card py-6 text-card-foreground",
+        "flex flex-col gap-6 rounded-md bg-surface-container-low py-6 text-on-surface shadow-elevation-1 [--field-bg:var(--color-surface-container-low)]",
         className,
       )}
       {...props}
@@ -28,22 +30,12 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function CardTitle({ className, ...props }: React.ComponentProps<"h3">) {
-  return (
-    <h3
-      data-slot="card-title"
-      className={cn("text-base font-semibold", className)}
-      {...props}
-    />
-  );
+  return <h3 data-slot="card-title" className={cn("text-title-medium", className)} {...props} />;
 }
 
 function CardDescription({ className, ...props }: React.ComponentProps<"p">) {
   return (
-    <p
-      data-slot="card-description"
-      className={cn("text-sm text-muted-foreground", className)}
-      {...props}
-    />
+    <p data-slot="card-description" className={cn("text-body-medium text-on-surface-variant", className)} {...props} />
   );
 }
 
@@ -62,13 +54,7 @@ function CardContent({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-footer"
-      className={cn("flex items-center gap-2 px-6", className)}
-      {...props}
-    />
-  );
+  return <div data-slot="card-footer" className={cn("flex items-center gap-2 px-6", className)} {...props} />;
 }
 
 export { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle };

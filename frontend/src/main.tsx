@@ -8,7 +8,7 @@ import { RouterProvider } from "react-router/dom";
 
 import { meQueryKey } from "@/api/auth";
 import { ApiError } from "@/api/client";
-import { Toaster } from "@/components/ui/sonner";
+import { Snackbar } from "@/components/ui/snackbar";
 import { direction, locale } from "@/i18n";
 import { router } from "@/router";
 
@@ -37,7 +37,7 @@ createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <Direction.Provider dir={direction}>
         <RouterProvider router={router} />
-        <Toaster />
+        <Snackbar />
       </Direction.Provider>
     </QueryClientProvider>
   </StrictMode>,

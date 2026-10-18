@@ -52,7 +52,7 @@ export function ResetPasswordDialog({ user }: { user: User }) {
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="subtle">
+        <Button size="sm" variant="text">
           {t.team.resetPassword}
         </Button>
       </DialogTrigger>
@@ -78,7 +78,7 @@ export function ResetPasswordDialog({ user }: { user: User }) {
           </FormField>
           <FormError message={resetPassword.error?.message} />
           <DialogFooter>
-            <Button type="button" variant="subtle" onClick={() => changeOpen(false)}>
+            <Button type="button" variant="text" onClick={() => changeOpen(false)}>
               {t.common.cancel}
             </Button>
             <Button type="submit" variant="danger" loading={resetPassword.isPending}>

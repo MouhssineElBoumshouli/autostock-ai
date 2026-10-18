@@ -30,7 +30,7 @@ export function CheckboxField({
       <div className="grid gap-1">
         <Label htmlFor={id}>{label}</Label>
         {help && (
-          <p id={helpId} className="text-xs text-muted-foreground">
+          <p id={helpId} className="text-body-small text-on-surface-variant">
             {help}
           </p>
         )}

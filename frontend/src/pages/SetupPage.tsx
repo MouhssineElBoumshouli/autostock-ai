@@ -91,7 +91,7 @@ export function SetupPage() {
           )}
         </FormField>
         <FormError message={setup.error?.message} />
-        <Button type="submit" variant="primary" loading={setup.isPending} className="w-full">
+        <Button type="submit" variant="filled" loading={setup.isPending} className="w-full">
           {t.setup.submit}
         </Button>
       </form>

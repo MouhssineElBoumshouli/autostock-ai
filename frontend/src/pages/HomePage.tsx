@@ -57,7 +57,7 @@ function RecentActivity() {
       <CardHeader>
         <CardTitle>{t.home.recentActivity}</CardTitle>
         <CardAction>
-          <Button variant="subtle" size="sm" asChild className="-me-3">
+          <Button variant="text" size="sm" asChild className="-me-3">
             <Link to="/activity">
               {t.home.seeAll}
               <ArrowRightIcon aria-hidden="true" className="rtl:rotate-180" />

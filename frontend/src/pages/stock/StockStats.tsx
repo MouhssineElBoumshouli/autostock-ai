@@ -30,7 +30,7 @@ export function StockStats({ summary, loading }: { summary?: StockSummary; loadi
       />
       <StatCard
         icon={PackageXIcon}
-        tone="destructive"
+        tone="error"
         label={t.stock.out}
         value={value(summary?.out)}
         note={t.stock.stats.outNote}

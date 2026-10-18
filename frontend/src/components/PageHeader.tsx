@@ -13,8 +13,8 @@ export function PageHeader({
   return (
     <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="grid gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
-        {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+        <h1 className="text-headline-small sm:text-headline-medium">{title}</h1>
+        {subtitle && <p className="text-body-medium text-on-surface-variant">{subtitle}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </header>

@@ -31,9 +31,9 @@ export function TeamPage() {
         <div className="grid">
           <span className="font-medium">
             {user.name}
-            {user.id === myId && <span className="font-normal text-muted-foreground"> ({t.common.you})</span>}
+            {user.id === myId && <span className="font-normal text-on-surface-variant"> ({t.common.you})</span>}
           </span>
-          <span className="text-xs text-muted-foreground">{user.email}</span>
+          <span className="text-body-small text-on-surface-variant">{user.email}</span>
         </div>
       ),
     },
@@ -71,7 +71,7 @@ export function TeamPage() {
         title={t.nav.team}
         subtitle={t.team.subtitle}
         action={
-          <Button variant="primary" onClick={() => setAdding(true)}>
+          <Button variant="filled" onClick={() => setAdding(true)}>
             <UserPlusIcon aria-hidden="true" />
             {t.team.addPerson}
           </Button>

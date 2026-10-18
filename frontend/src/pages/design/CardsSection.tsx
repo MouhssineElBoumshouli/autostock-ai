@@ -20,7 +20,7 @@ export function CardsSection() {
     <Section
       id="cards"
       title="Cards"
-      description="White box with a thin border and 16px corners. Stat cards show one big number with a label and a short note."
+      description="Material elevated cards: a tinted surface, 12px corners and a soft level 1 shadow. Stat cards show one big number with a label and a short note."
     >
       <div className="grid gap-3">
         <ExampleLabel>Stat cards (example numbers)</ExampleLabel>
@@ -40,7 +40,7 @@ export function CardsSection() {
             value={formatNumber(682)}
             note="18% of all parts"
           />
-          <StatCard icon={PackageXIcon} tone="destructive" label="Out of stock" value="" loading />
+          <StatCard icon={PackageXIcon} tone="error" label="Out of stock" value="" loading />
         </div>
       </div>
 
@@ -51,17 +51,17 @@ export function CardsSection() {
             <CardTitle>Supplier</CardTitle>
             <CardDescription>Who you order brake parts from.</CardDescription>
             <CardAction>
-              <Button variant="subtle" size="sm">
+              <Button variant="text" size="sm">
                 Edit
               </Button>
             </CardAction>
           </CardHeader>
-          <CardContent className="grid gap-1 text-sm">
+          <CardContent className="grid gap-1 text-body-medium">
             <p className="font-medium">Atlas Auto Parts</p>
-            <p className="text-muted-foreground">Delivers in 3 days · Casablanca</p>
+            <p className="text-on-surface-variant">Delivers in 3 days · Casablanca</p>
           </CardContent>
           <CardFooter className="border-t pt-6">
-            <Button variant="secondary" size="sm">
+            <Button variant="outlined" size="sm">
               View orders
             </Button>
           </CardFooter>

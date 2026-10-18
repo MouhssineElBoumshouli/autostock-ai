@@ -15,10 +15,10 @@ export function Section({
   return (
     <section aria-labelledby={id} className="grid gap-4 scroll-mt-8">
       <div className="grid gap-1">
-        <h2 id={id} className="text-xl font-semibold">
+        <h2 id={id} className="text-title-large font-medium">
           {title}
         </h2>
-        <p className="text-sm text-muted-foreground">{description}</p>
+        <p className="text-body-medium text-on-surface-variant">{description}</p>
       </div>
       {children}
     </section>
@@ -27,5 +27,5 @@ export function Section({
 
 // A small caption above an example inside a section.
 export function ExampleLabel({ children }: { children: ReactNode }) {
-  return <p className="text-xs font-medium text-muted-foreground">{children}</p>;
+  return <p className="text-body-small font-medium text-on-surface-variant">{children}</p>;
 }

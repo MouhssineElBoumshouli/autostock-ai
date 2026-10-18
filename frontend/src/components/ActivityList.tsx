@@ -17,8 +17,8 @@ export function ActivityList({
     return (
       <ul aria-busy="true" className="divide-y">
         {Array.from({ length: loadingRows }, (_, index) => (
-          <li key={index} className="flex items-center gap-3 px-6 py-4">
-            <Skeleton className="size-9 shrink-0 rounded-full" />
+          <li key={index} className="flex min-h-18 items-center gap-4 px-6 py-3">
+            <Skeleton className="size-10 shrink-0 rounded-full" />
             <div className="grid flex-1 gap-2">
               <Skeleton className="h-4 w-3/4" />
               <Skeleton className="h-3 w-24" />
@@ -32,16 +32,16 @@ export function ActivityList({
   return (
     <ul className="divide-y">
       {items.map((item) => (
-        <li key={item.id} className="flex items-start gap-3 px-6 py-4">
+        <li key={item.id} className="flex min-h-18 items-center gap-4 px-6 py-3">
           <span
             aria-hidden="true"
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary-container text-title-small text-on-secondary-container"
           >
             {initials(item.actor?.name ?? "?")}
           </span>
           <div className="grid min-w-0 gap-0.5">
-            <p className="text-sm">{activitySentence(item)}</p>
-            <time dateTime={item.created_at} title={formatDateTime(item.created_at)} className="w-fit text-xs text-muted-foreground">
+            <p className="text-body-large">{activitySentence(item)}</p>
+            <time dateTime={item.created_at} title={formatDateTime(item.created_at)} className="w-fit text-body-small text-on-surface-variant">
               {formatTimeAgo(item.created_at)}
             </time>
           </div>

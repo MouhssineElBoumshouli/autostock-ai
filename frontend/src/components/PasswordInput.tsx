@@ -16,9 +16,9 @@ export function PasswordInput(props: Omit<React.ComponentProps<"input">, "type">
       <Input {...props} type={visible ? "text" : "password"} className="pe-11" />
       <Button
         type="button"
-        variant="subtle"
+        variant="text"
         size="icon-sm"
-        className="absolute end-1 top-1/2 -translate-y-1/2 text-muted-foreground"
+        className="absolute end-1 top-1/2 -translate-y-1/2 text-on-surface-variant"
         aria-label={visible ? t.common.hidePassword : t.common.showPassword}
         aria-controls={props.id}
         // Keeps the cursor in the field when the button is clicked with the mouse.

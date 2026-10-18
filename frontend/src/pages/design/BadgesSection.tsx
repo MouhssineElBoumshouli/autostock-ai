@@ -9,7 +9,7 @@ export function BadgesSection() {
     <Section
       id="badges"
       title="Status badges"
-      description="A colored dot plus a word. Color is never the only signal."
+      description="A tonal label with a dot and a word: green healthy, amber low, red out. Color is never the only signal."
     >
       <Card>
         <CardContent className="flex flex-wrap gap-3">

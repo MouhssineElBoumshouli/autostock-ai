@@ -22,7 +22,7 @@ export function Pagination({
 
   return (
     <nav aria-label={t.common.pages} className="flex items-center justify-between gap-4 border-t px-6 py-3">
-      <p className="text-sm text-muted-foreground tabular-nums">
+      <p className="text-body-medium text-on-surface-variant tabular-nums">
         {t.common.showing(formatNumber(from), formatNumber(Math.max(from, to)), formatNumber(total))}
       </p>
       <div className="flex gap-2">

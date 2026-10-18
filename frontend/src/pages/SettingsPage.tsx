@@ -79,7 +79,7 @@ function SettingsForm({ saved }: { saved: ShopSettings }) {
         <FormError message={save.error?.message} />
       </CardContent>
       <CardFooter className="border-t pt-6">
-        <Button type="submit" variant="primary" loading={save.isPending}>
+        <Button type="submit" variant="filled" loading={save.isPending}>
           {t.common.save}
         </Button>
       </CardFooter>

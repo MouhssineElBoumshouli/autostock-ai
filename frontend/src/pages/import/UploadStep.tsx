@@ -44,14 +44,14 @@ export function UploadStep({
     <Card>
       <CardContent className="grid gap-6">
         <fieldset className="grid gap-3">
-          <legend className="mb-1 text-sm font-medium">{t.importFile.kindLabel}</legend>
+          <legend className="mb-1 text-title-small">{t.importFile.kindLabel}</legend>
           <div className="grid gap-3 sm:grid-cols-2">
             {kinds.map((option) => (
               <label
                 key={option}
                 className={cn(
-                  "flex cursor-pointer gap-3 rounded-lg border p-4 transition-colors has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ring",
-                  kind === option ? "border-primary bg-accent" : "hover:bg-muted",
+                  "flex cursor-pointer gap-3 rounded-md border p-4 transition-colors has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-primary",
+                  kind === option ? "border-primary bg-primary/8 shadow-[inset_0_0_0_1px_var(--color-primary)]" : "hover:bg-on-surface/8",
                 )}
               >
                 <input
@@ -63,8 +63,8 @@ export function UploadStep({
                   className="mt-1 size-4 accent-primary"
                 />
                 <span className="grid gap-1">
-                  <span className="text-sm font-semibold">{t.importFile.kinds[option].title}</span>
-                  <span className="text-sm text-muted-foreground">{t.importFile.kinds[option].text}</span>
+                  <span className="text-title-small">{t.importFile.kinds[option].title}</span>
+                  <span className="text-body-medium text-on-surface-variant">{t.importFile.kinds[option].text}</span>
                 </span>
               </label>
             ))}
@@ -72,23 +72,23 @@ export function UploadStep({
         </fieldset>
 
         <div className="grid gap-2">
-          <span className="text-sm font-medium">{t.importFile.fileLabel}</span>
+          <span className="text-title-small">{t.importFile.fileLabel}</span>
           <label
             htmlFor={inputId}
-            className="flex cursor-pointer flex-col items-center gap-3 rounded-lg border border-dashed border-input px-6 py-8 text-center transition-colors hover:bg-muted has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ring"
+            className="flex cursor-pointer flex-col items-center gap-3 rounded-md border border-dashed border-outline px-6 py-8 text-center transition-colors hover:bg-on-surface/8 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-primary"
           >
-            <FileSpreadsheetIcon aria-hidden="true" className="size-8 text-muted-foreground" />
+            <FileSpreadsheetIcon aria-hidden="true" className="size-8 text-on-surface-variant" />
             {file ? (
               <span className="grid gap-0.5">
-                <span className="text-sm font-medium break-all">{file.name}</span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-title-small break-all">{file.name}</span>
+                <span className="text-body-small text-on-surface-variant">
                   {formatNumber(Math.ceil(file.size / 1024))} KB · {t.importFile.changeFile}
                 </span>
               </span>
             ) : (
-              <span className="text-sm font-medium text-primary">{t.importFile.chooseFile}</span>
+              <span className="text-title-small text-primary">{t.importFile.chooseFile}</span>
             )}
-            <span className="text-xs text-muted-foreground">{t.importFile.fileHelp}</span>
+            <span className="text-body-small text-on-surface-variant">{t.importFile.fileHelp}</span>
             <input
               id={inputId}
               type="file"
@@ -105,7 +105,7 @@ export function UploadStep({
       </CardContent>
       <CardFooter className="justify-end border-t pt-6">
         <Button
-          variant="primary"
+          variant="filled"
           loading={reading}
           onClick={() => {
             setShowProblem(true);

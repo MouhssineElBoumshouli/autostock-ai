@@ -59,7 +59,7 @@ export function LoginPage() {
           )}
         </FormField>
         <FormError message={login.error?.message} />
-        <Button type="submit" variant="primary" loading={login.isPending} className="w-full">
+        <Button type="submit" variant="filled" loading={login.isPending} className="w-full">
           {t.login.submit}
         </Button>
       </form>

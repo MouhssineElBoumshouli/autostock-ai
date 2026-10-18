@@ -15,8 +15,8 @@ export function ImportSummaryList({ summary }: { summary: ImportSummary }) {
   return (
     <ul className="grid gap-2">
       {lines.map((line) => (
-        <li key={line} className="flex gap-2 text-sm">
-          <span aria-hidden="true" className="mt-2 size-1.5 shrink-0 rounded-full bg-foreground" />
+        <li key={line} className="flex gap-2 text-body-medium">
+          <span aria-hidden="true" className="mt-2 size-1.5 shrink-0 rounded-full bg-on-surface" />
           {line}
         </li>
       ))}

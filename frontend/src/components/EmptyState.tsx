@@ -15,12 +15,12 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center gap-4 px-6 py-12 text-center">
-      <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+      <span className="flex size-14 items-center justify-center rounded-full bg-secondary-container text-on-secondary-container">
         <Icon aria-hidden="true" className="size-6" />
       </span>
       <div className="grid max-w-sm gap-1">
-        <p className="text-base font-semibold">{title}</p>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+        <p className="text-title-medium">{title}</p>
+        {description && <p className="text-body-medium text-on-surface-variant">{description}</p>}
       </div>
       {action}
     </div>

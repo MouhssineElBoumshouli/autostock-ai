@@ -84,14 +84,14 @@ export function ChangePasswordPage() {
         </FormField>
         <FormError message={changePassword.error?.message} />
         <div className="grid gap-2">
-          <Button type="submit" variant="primary" loading={changePassword.isPending} className="w-full">
+          <Button type="submit" variant="filled" loading={changePassword.isPending} className="w-full">
             {t.changePassword.submit}
           </Button>
           {forced ? (
             // Not you, or not now: the only other way out of this screen.
             <Button
               type="button"
-              variant="subtle"
+              variant="text"
               className="w-full"
               loading={logout.isPending}
               onClick={() => logout.mutate(undefined, { onSuccess: () => navigate("/login", { replace: true }) })}
@@ -99,7 +99,7 @@ export function ChangePasswordPage() {
               {t.account.logOut}
             </Button>
           ) : (
-            <Button variant="subtle" asChild className="w-full">
+            <Button variant="text" asChild className="w-full">
               <Link to="/">{t.common.cancel}</Link>
             </Button>
           )}

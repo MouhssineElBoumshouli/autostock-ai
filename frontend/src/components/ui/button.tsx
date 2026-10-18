@@ -4,25 +4,33 @@ import { Loader2Icon } from "lucide-react";
 import { Slot } from "radix-ui";
 import type * as React from "react";
 
+// Material 3 buttons: pill-shaped, with a state layer for hover and press.
 const buttonVariants = cva(
-  "relative inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-transparent font-medium whitespace-nowrap transition-colors select-none disabled:pointer-events-none disabled:not-aria-busy:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "state-layer inline-flex shrink-0 items-center justify-center gap-2 rounded-full text-label-large whitespace-nowrap transition-[box-shadow,background-color] select-none disabled:pointer-events-none disabled:not-aria-busy:opacity-38 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[18px]",
   {
     variants: {
       variant: {
         // The one main action of a screen.
-        primary: "bg-primary text-primary-foreground shadow-xs hover:bg-primary-hover",
-        secondary: "border-input bg-secondary text-secondary-foreground shadow-xs hover:bg-muted",
-        subtle: "text-foreground hover:bg-muted",
-        danger: "bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive-hover",
+        filled: "bg-primary text-on-primary hover:shadow-elevation-1",
+        // A strong action that is not the main one.
+        tonal: "bg-secondary-container text-on-secondary-container hover:shadow-elevation-1",
+        outlined: "border border-outline text-primary",
+        text: "text-primary",
+        // Deleting or turning something off.
+        danger: "bg-error text-on-error hover:shadow-elevation-1",
       },
       size: {
-        sm: "h-8 px-3 text-sm",
-        md: "h-10 px-4 text-sm",
+        sm: "h-8 px-4",
+        md: "h-10 px-6",
         icon: "size-10",
         "icon-sm": "size-8",
       },
     },
-    defaultVariants: { variant: "secondary", size: "md" },
+    compoundVariants: [
+      { variant: "text", size: ["sm", "md"], class: "px-3" },
+      { variant: ["text", "outlined"], size: ["icon", "icon-sm"], class: "border-0 text-on-surface-variant" },
+    ],
+    defaultVariants: { variant: "outlined", size: "md" },
   },
 );
 
@@ -63,9 +71,7 @@ function Button({
       {...props}
     >
       {loading && <Loader2Icon aria-hidden="true" className="absolute animate-spin" />}
-      <span className={cn("inline-flex items-center gap-2", loading && "opacity-0")}>
-        {children}
-      </span>
+      <span className={cn("inline-flex items-center gap-2", loading && "opacity-0")}>{children}</span>
     </button>
   );
 }

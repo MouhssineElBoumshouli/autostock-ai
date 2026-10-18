@@ -6,13 +6,15 @@ import { t } from "@/i18n";
 
 import { navItems } from "./navigation";
 
-// The menu links. On tablets (md to xl) only icons show; the label stays for screen readers and as a tooltip.
+// The menu links, in two Material 3 shapes:
+// - navigation drawer (desktop, and the phone menu): a row with icon and label, a pill when active;
+// - navigation rail (tablets, md to xl): the icon in a small pill with the label under it.
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const role = useSignedIn().user.role;
 
   return (
     <nav aria-label={t.nav.mainMenu}>
-      <ul className="grid gap-1">
+      <ul className="grid gap-1 md:max-xl:gap-3">
         {navItems
           .filter((item) => item.roles.includes(role))
           .map(({ to, label, icon: Icon }) => (
@@ -20,19 +22,32 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
               <NavLink
                 to={to}
                 end={to === "/"}
-                title={label}
                 onClick={onNavigate}
                 className={({ isActive }) =>
                   cn(
-                    "relative flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors md:max-xl:justify-center md:max-xl:px-0",
+                    "group flex h-14 items-center gap-3 rounded-full px-4 text-label-large transition-colors",
+                    "md:max-xl:h-auto md:max-xl:flex-col md:max-xl:gap-1 md:max-xl:rounded-none md:max-xl:px-0 md:max-xl:text-label-medium",
                     isActive
-                      ? "bg-accent text-accent-foreground before:absolute before:inset-y-2.5 before:start-0 before:w-1 before:rounded-full before:bg-primary"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      ? "text-on-secondary-container max-md:bg-secondary-container xl:bg-secondary-container md:max-xl:text-on-surface"
+                      : "text-on-surface-variant max-md:hover:bg-on-surface/8 xl:hover:bg-on-surface/8",
                   )
                 }
               >
-                <Icon aria-hidden="true" className="size-5 shrink-0" />
-                <span className="md:max-xl:sr-only">{label}</span>
+                {({ isActive }) => (
+                  <>
+                    <span
+                      className={cn(
+                        "flex shrink-0 items-center justify-center transition-colors md:max-xl:h-8 md:max-xl:w-14 md:max-xl:rounded-full",
+                        isActive
+                          ? "md:max-xl:bg-secondary-container md:max-xl:text-on-secondary-container"
+                          : "md:max-xl:group-hover:bg-on-surface/8",
+                      )}
+                    >
+                      <Icon aria-hidden="true" className="size-6" />
+                    </span>
+                    <span>{label}</span>
+                  </>
+                )}
               </NavLink>
             </li>
           ))}

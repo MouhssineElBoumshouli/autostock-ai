@@ -17,7 +17,7 @@ export function RequireRole({ roles }: { roles: Role[] }) {
         icon={ShieldIcon}
         title={t.common.noAccess}
         action={
-          <Button variant="primary" asChild>
+          <Button variant="filled" asChild>
             <Link to="/">{t.common.goHome}</Link>
           </Button>
         }

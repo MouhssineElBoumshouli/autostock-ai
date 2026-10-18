@@ -86,8 +86,8 @@ export function PartEditForm({ part, onDone }: { part: PartDetail; onDone: () =>
   return (
     <form noValidate onSubmit={submit} className="flex min-h-full flex-col">
       <header className="border-b p-6">
-        <SheetTitle className="text-lg font-semibold">{t.part.editTitle(part.name)}</SheetTitle>
-        <p className="text-sm text-muted-foreground">{part.sku}</p>
+        <SheetTitle className="text-headline-small">{t.part.editTitle(part.name)}</SheetTitle>
+        <p className="text-body-medium text-on-surface-variant">{part.sku}</p>
       </header>
 
       <div className="grid flex-1 content-start gap-5 p-6">
@@ -160,7 +160,7 @@ export function PartEditForm({ part, onDone }: { part: PartDetail; onDone: () =>
         </FormField>
 
         <fieldset className="grid gap-3">
-          <legend className="mb-2 text-sm font-semibold">{t.part.stockPerBranch}</legend>
+          <legend className="mb-2 text-title-small">{t.part.stockPerBranch}</legend>
           {part.stock.map((row) => (
             <FormField key={row.branch_id} label={row.branch} error={shown(errors.stock[row.branch_id])}>
               {(field) => (
@@ -184,11 +184,11 @@ export function PartEditForm({ part, onDone }: { part: PartDetail; onDone: () =>
         <FormError message={changePart.error?.message} />
       </div>
 
-      <footer className="sticky bottom-0 flex justify-end gap-2 border-t bg-card p-4">
-        <Button type="button" variant="subtle" onClick={onDone}>
+      <footer className="sticky bottom-0 flex justify-end gap-2 border-t bg-surface-container-low p-4">
+        <Button type="button" variant="text" onClick={onDone}>
           {t.common.cancel}
         </Button>
-        <Button type="submit" variant="primary" loading={changePart.isPending}>
+        <Button type="submit" variant="filled" loading={changePart.isPending}>
           {t.part.save}
         </Button>
       </footer>

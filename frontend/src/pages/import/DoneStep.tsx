@@ -14,21 +14,21 @@ export function DoneStep({ kind, summary, onAnother }: { kind: ImportKind; summa
     <Card>
       <CardContent className="grid gap-6">
         <div className="flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-full bg-success-soft text-success">
+          <span className="flex size-10 items-center justify-center rounded-full bg-success-container text-on-success-container">
             <CircleCheckIcon aria-hidden="true" className="size-5" />
           </span>
           <div>
-            <h2 className="text-lg font-semibold" role="status">
+            <h2 className="text-headline-small" role="status">
               {t.importFile.doneTitle}
             </h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body-medium text-on-surface-variant">
               {summary.file_name} · {t.importFile.kinds[kind].title}
             </p>
           </div>
         </div>
         <ImportSummaryList summary={summary} />
         <div className="flex flex-wrap gap-3">
-          <Button variant="primary" asChild>
+          <Button variant="filled" asChild>
             <Link to="/stock">{t.importFile.goToStock}</Link>
           </Button>
           <Button onClick={onAnother}>{t.importFile.importAnother}</Button>

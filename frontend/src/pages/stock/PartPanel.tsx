@@ -53,8 +53,8 @@ function PartDetails({ part, canEdit, onEdit }: { part: PartDetail; canEdit: boo
     <div className="flex min-h-full flex-col">
       <header className="flex items-start gap-3 border-b p-6">
         <div className="grid min-w-0 flex-1 gap-1">
-          <SheetTitle className="text-lg font-semibold">{part.name}</SheetTitle>
-          <p className="text-sm text-muted-foreground">
+          <SheetTitle className="text-headline-small">{part.name}</SheetTitle>
+          <p className="text-body-medium text-on-surface-variant">
             {[part.sku, part.brand].filter(Boolean).join(" · ")}
           </p>
           <div className="mt-1">
@@ -62,7 +62,7 @@ function PartDetails({ part, canEdit, onEdit }: { part: PartDetail; canEdit: boo
           </div>
         </div>
         <SheetClose asChild>
-          <Button variant="subtle" size="icon-sm" aria-label={t.common.close}>
+          <Button variant="text" size="icon-sm" aria-label={t.common.close}>
             <XIcon aria-hidden="true" />
           </Button>
         </SheetClose>
@@ -70,7 +70,7 @@ function PartDetails({ part, canEdit, onEdit }: { part: PartDetail; canEdit: boo
 
       <div className="grid flex-1 content-start gap-6 p-6">
         <Section title={t.part.stockPerBranch}>
-          <dl className="divide-y rounded-lg border">
+          <dl className="divide-y rounded-md border">
             {part.stock.map((row) => (
               <Line key={row.branch_id} label={row.branch} value={formatNumber(row.quantity)} />
             ))}
@@ -79,7 +79,7 @@ function PartDetails({ part, canEdit, onEdit }: { part: PartDetail; canEdit: boo
         </Section>
 
         <Section title={t.part.prices}>
-          <dl className="divide-y rounded-lg border">
+          <dl className="divide-y rounded-md border">
             <Line label={t.part.unitCost} value={formatMoney(part.unit_cost, currency)} />
             <Line label={t.part.salePrice} value={formatMoney(part.sale_price, currency)} />
             <Line label={t.part.minStock} value={formatNumber(part.min_stock)} />
@@ -87,7 +87,7 @@ function PartDetails({ part, canEdit, onEdit }: { part: PartDetail; canEdit: boo
         </Section>
 
         <Section title={t.part.details}>
-          <dl className="divide-y rounded-lg border">
+          <dl className="divide-y rounded-md border">
             <Line label={t.part.category} value={part.category ?? t.common.notSet} />
             <Line label={t.part.oem} value={part.oem_reference ?? t.common.notSet} />
           </dl>
@@ -95,42 +95,42 @@ function PartDetails({ part, canEdit, onEdit }: { part: PartDetail; canEdit: boo
 
         <Section title={t.part.supplier}>
           {part.supplier ? (
-            <div className="grid gap-1 rounded-lg border px-4 py-3 text-sm">
+            <div className="grid gap-1 rounded-md border px-4 py-3 text-body-medium">
               <p className="font-medium">{part.supplier.name}</p>
               {part.supplier.phone && (
-                <a href={`tel:${part.supplier.phone}`} className="w-fit text-muted-foreground hover:text-foreground">
+                <a href={`tel:${part.supplier.phone}`} className="w-fit text-on-surface-variant hover:text-on-surface">
                   {part.supplier.phone}
                 </a>
               )}
               {part.supplier.email && (
-                <a href={`mailto:${part.supplier.email}`} className="w-fit text-muted-foreground hover:text-foreground">
+                <a href={`mailto:${part.supplier.email}`} className="w-fit text-on-surface-variant hover:text-on-surface">
                   {part.supplier.email}
                 </a>
               )}
               {part.supplier.delivery_days !== null && (
-                <p className="text-muted-foreground">{t.part.deliveryDays(part.supplier.delivery_days)}</p>
+                <p className="text-on-surface-variant">{t.part.deliveryDays(part.supplier.delivery_days)}</p>
               )}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">{t.part.noSupplier}</p>
+            <p className="text-body-medium text-on-surface-variant">{t.part.noSupplier}</p>
           )}
         </Section>
 
         <Section title={t.part.lastSales}>
           {part.last_sales.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t.part.noSales}</p>
+            <p className="text-body-medium text-on-surface-variant">{t.part.noSales}</p>
           ) : (
-            <ul className="divide-y rounded-lg border">
+            <ul className="divide-y rounded-md border">
               {part.last_sales.map((sale, index) => (
-                <li key={index} className="flex items-center justify-between gap-4 px-4 py-2.5 text-sm">
+                <li key={index} className="flex items-center justify-between gap-4 px-4 py-2.5 text-body-medium">
                   <span>
                     {formatDay(sale.sold_on)}
-                    <span className="text-muted-foreground"> · {sale.branch}</span>
+                    <span className="text-on-surface-variant"> · {sale.branch}</span>
                   </span>
                   <span className="text-end tabular-nums">
                     {t.part.sold(formatNumber(sale.quantity))}
                     {sale.unit_price !== null && (
-                      <span className="block text-xs text-muted-foreground">{formatMoney(sale.unit_price, currency)}</span>
+                      <span className="block text-body-small text-on-surface-variant">{formatMoney(sale.unit_price, currency)}</span>
                     )}
                   </span>
                 </li>
@@ -141,8 +141,8 @@ function PartDetails({ part, canEdit, onEdit }: { part: PartDetail; canEdit: boo
       </div>
 
       {canEdit && (
-        <footer className="sticky bottom-0 border-t bg-card p-4">
-          <Button variant="primary" className="w-full" onClick={onEdit}>
+        <footer className="sticky bottom-0 border-t bg-surface-container-low p-4">
+          <Button variant="filled" className="w-full" onClick={onEdit}>
             <PencilIcon aria-hidden="true" />
             {t.part.edit}
           </Button>
@@ -155,7 +155,7 @@ function PartDetails({ part, canEdit, onEdit }: { part: PartDetail; canEdit: boo
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="grid gap-2">
-      <h3 className="text-sm font-semibold">{title}</h3>
+      <h3 className="text-title-small">{title}</h3>
       {children}
     </section>
   );
@@ -163,9 +163,9 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function Line({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-4 px-4 py-2.5 text-sm">
-      <dt className={strong ? "font-medium" : "text-muted-foreground"}>{label}</dt>
-      <dd className={strong ? "font-semibold tabular-nums" : "tabular-nums"}>{value}</dd>
+    <div className="flex items-center justify-between gap-4 px-4 py-2.5 text-body-medium">
+      <dt className={strong ? "font-medium" : "text-on-surface-variant"}>{label}</dt>
+      <dd className={strong ? "font-medium tabular-nums" : "tabular-nums"}>{value}</dd>
     </div>
   );
 }

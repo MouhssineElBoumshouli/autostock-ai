@@ -13,7 +13,8 @@ import {
 import { t } from "@/i18n";
 import { initials } from "@/lib/format";
 
-// The logged-in person at the bottom of the sidebar, with Change password and Log out.
+// The logged-in person at the bottom of the menu, with Change password and Log out.
+// On the tablet rail only the round avatar shows.
 export function UserMenu({ onNavigate }: { onNavigate?: () => void }) {
   const user = useSignedIn().user;
   const logout = useLogout();
@@ -23,19 +24,19 @@ export function UserMenu({ onNavigate }: { onNavigate?: () => void }) {
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={t.account.menuLabel(user.name)}
-        className="flex w-full items-center gap-3 rounded-lg p-2 text-start transition-colors hover:bg-muted md:max-xl:justify-center"
+        className="state-layer flex w-full items-center gap-3 rounded-full p-2 text-start md:max-xl:w-auto"
       >
         <span
           aria-hidden="true"
-          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground"
+          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-container text-title-small text-on-primary-container"
         >
           {initials(user.name)}
         </span>
         <span className="grid min-w-0 flex-1 md:max-xl:hidden">
-          <span className="truncate text-sm font-medium">{user.name}</span>
-          <span className="truncate text-xs text-muted-foreground">{t.roles[user.role]}</span>
+          <span className="truncate text-label-large">{user.name}</span>
+          <span className="truncate text-body-small text-on-surface-variant">{t.roles[user.role]}</span>
         </span>
-        <ChevronsUpDownIcon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground md:max-xl:hidden" />
+        <ChevronsUpDownIcon aria-hidden="true" className="me-2 size-5 shrink-0 text-on-surface-variant md:max-xl:hidden" />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start">
         <DropdownMenuItem asChild>
