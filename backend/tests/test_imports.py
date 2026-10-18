@@ -29,7 +29,9 @@ def test_preview_shows_columns_with_first_5_rows(browser):
     assert preview["columns"][0]["samples"] == ["bp-001", "BP-002", "DS-110", "FL-200", "FL-205"]
     assert {"key": "sku", "required": True} in preview["fields"]
     assert {"key": "brand", "required": False} in preview["fields"]
-    assert preview["mapping"] == {}
+    # Nobody has imported into this shop yet, so this comes from the free local column guesser,
+    # not from memory.
+    assert {int(k): v for k, v in preview["mapping"].items()} == PARTS_MAPPING
 
 
 def test_preview_reads_french_csv_with_semicolons_and_windows_encoding(browser):
@@ -48,7 +50,9 @@ def test_column_matching_is_remembered_for_next_time(browser):
     preview = send(browser, "preview", "parts", "parts_fr_messy.xlsx").json()
 
     assert {int(k): v for k, v in preview["mapping"].items()} == PARTS_MAPPING
-    assert send(browser, "preview", "sales", "sales_fr_messy.csv").json()["mapping"] == {}
+    # A different kind of file: nothing remembered yet, but the column guesser still gets it right.
+    sales_preview = send(browser, "preview", "sales", "sales_fr_messy.csv").json()
+    assert {int(k): v for k, v in sales_preview["mapping"].items()} == SALES_MAPPING
 
 
 # Step 3: check (nothing is saved)
@@ -151,6 +155,16 @@ def test_file_problems(browser):
     assert header_only.json()["detail"] == "The file has a header row but no data under it."
 
 
+def test_file_with_too_many_rows_is_refused(browser):
+    set_up_shop(browser)
+    content = b"SKU;Name\n" + b"A;B\n" * 20_001
+
+    response = send(browser, "preview", "parts", "huge.csv", content=content)
+
+    assert response.status_code == 413
+    assert response.json()["detail"] == "This file has more than 20,000 rows. Split it into smaller files."
+
+
 # Step 4: save
 
 
@@ -200,6 +214,22 @@ def test_update_keeps_values_the_file_leaves_empty(browser):
         part = db.scalar(select(Part).where(Part.sku == "BP-001"))
         assert part.name == "Plaquettes de frein avant"
         assert part.sale_price == 32000
+
+
+def test_column_memory_adds_to_what_is_remembered_instead_of_replacing_it(browser):
+    set_up_shop(browser)
+    import_parts(browser)  # remembers all 11 headers of parts_fr_messy.xlsx
+
+    # A different file (e.g. a quick supplier export) with headers never seen before.
+    content = "Code;Qty\nBP-001;9\n".encode()
+    send(browser, "save", "parts", "stock.csv", {0: "sku", 1: "quantity"}, content=content)
+
+    # The first file's headers are still remembered, not wiped out by the second import.
+    first_preview = send(browser, "preview", "parts", "parts_fr_messy.xlsx").json()
+    assert {int(k): v for k, v in first_preview["mapping"].items()} == PARTS_MAPPING
+    # And the new file's own headers are now remembered too.
+    second_preview = send(browser, "preview", "parts", "stock.csv", content=content).json()
+    assert {int(k): v for k, v in second_preview["mapping"].items()} == {0: "sku", 1: "quantity"}
 
 
 def test_save_sales_and_import_again_without_doubling(browser):
