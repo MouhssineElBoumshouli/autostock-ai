@@ -87,6 +87,7 @@ docker compose exec api python -m app.demo.demo_shop
 docker compose exec api python -m app.demo.check_forecasts
 ```
 
+The first command prints a login for the demo shop (a new password each time).
 The second command remakes the demo shop's forecasts and scores them against the true demand the demo was made from.
 Forecasts are remade by themselves after every sales import, or with `POST /api/forecasts/run` (owners and managers).
 
