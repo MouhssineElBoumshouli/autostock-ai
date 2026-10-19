@@ -11,7 +11,17 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from app.ordering.suggest import RECENT_DAYS, REVIEW_DAYS, SLOW_LOOKBACK_DAYS, HorizonForecast, Position, round_up_to_pack, suggest
+from app.ordering.suggest import (
+    RECENT_DAYS,
+    REVIEW_DAYS,
+    SERVICE_TARGET,
+    SLOW_LOOKBACK_DAYS,
+    Z_90,
+    HorizonForecast,
+    Position,
+    round_up_to_pack,
+    suggest,
+)
 
 
 @dataclass
@@ -75,35 +85,54 @@ def replay(
     return ReplayResult(days_out, lost, lost_money, stock_value / days if days else 0.0, orders)
 
 
-def minimum_rule(minimums: np.ndarray, pack_sizes: np.ndarray) -> Rule:
+def minimum_rule(minimums: np.ndarray, pack_sizes: np.ndarray, up_to: float = 2.0) -> Rule:
     """The usual rule, checked every day: when stock (counting what is on its way) is below the
-    minimum, order back up to twice the minimum, in whole packs."""
+    minimum, order back up to `up_to` times the minimum, in whole packs."""
+    targets = np.ceil(up_to * minimums)
 
     def decide(today: Today) -> np.ndarray:
         position = today.on_hand + today.on_order
-        wanted = np.where(position < minimums, 2 * minimums - position, 0)
+        wanted = np.where(position < minimums, targets - position, 0)
         return np.array([round_up_to_pack(int(q), int(p)) for q, p in zip(wanted, pack_sizes)])
 
     return decide
 
 
-Forecaster = Callable[[np.ndarray], list[tuple[HorizonForecast, ...]]]  # seen history -> forecasts per row
+Forecaster = Callable[[Today], list[tuple[HorizonForecast, ...]]]  # forecasts per row, on a review day
 
 
-def autostock_rule(forecaster: Forecaster, pack_sizes: np.ndarray, delivery_days: np.ndarray) -> Rule:
-    """AutoStock's suggestions, made once every REVIEW_DAYS with forecasts remade from what was seen,
-    and every suggested line approved as is."""
+def weekly_rule(forecaster: Forecaster, pack_sizes: np.ndarray, delivery_days: np.ndarray, target: float = SERVICE_TARGET) -> Rule:
+    """AutoStock's suggestion math, once every REVIEW_DAYS, every suggested line approved as is.
+    With AutoStock's forecasts it is AutoStock; with four_week_forecasts it is the textbook reorder point."""
 
     def decide(today: Today) -> np.ndarray | None:
         if today.day % REVIEW_DAYS:
             return None
-        forecasts = forecaster(today.seen)
+        forecasts = forecaster(today)
         recent = np.nansum(today.seen[:, -RECENT_DAYS:], axis=1)
         lookback = np.nansum(today.seen[:, -SLOW_LOOKBACK_DAYS:], axis=1)
         return np.array([
             suggest(Position(int(today.on_hand[i]), int(today.on_order[i]), int(pack_sizes[i]), int(delivery_days[i]),
-                             int(recent[i]), int(lookback[i]), forecasts[i])).quantity
+                             int(recent[i]), int(lookback[i]), forecasts[i]), target).quantity
             for i in range(len(forecasts))
         ])
 
     return decide
+
+
+def four_week_forecasts(seen: np.ndarray, weeks_for_spread: int = 12) -> list[tuple[HorizonForecast, ...]]:
+    """The textbook, no AI: expected = average of the last 4 weeks; spread = how much weekly sales
+    varied over the last `weeks_for_spread` weeks, growing with the square root of time. Written as
+    forecasts so the same order math turns them into "4-week average x days + z x spread".
+    Unknown (empty-shelf) days count at the row's 4-week daily average."""
+    last_4 = seen[:, -28:]
+    known = (~np.isnan(last_4)).sum(axis=1)
+    daily = np.where(known > 0, np.nansum(last_4, axis=1) / np.maximum(known, 1), 0.0)
+    recent = seen[:, -7 * weeks_for_spread :]
+    recent = np.where(np.isnan(recent), daily[:, None], recent)
+    weekly = recent[:, recent.shape[1] % 7 :].reshape(len(seen), -1, 7).sum(axis=2)
+    weekly_spread = weekly.std(axis=1, ddof=1) if weekly.shape[1] > 1 else np.zeros(len(seen))
+    return [
+        tuple(HorizonForecast(h, d * h, d * h + Z_90 * w * np.sqrt(h / 7)) for h in (7, 30, 60))
+        for d, w in zip(daily, weekly_spread)
+    ]

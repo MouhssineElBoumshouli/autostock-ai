@@ -11,7 +11,7 @@ from app.audit import record_change
 from app.models import Forecast, OrderRun, OrderSuggestion, Part, SaleLine, StockLevel, Supplier, User
 from app.ordering.budget import BudgetLine, apply_budget, line_value, missed_sales_prevented, value_per_dirham
 from app.ordering.reasons import reason
-from app.ordering.suggest import RECENT_DAYS, SLOW_LOOKBACK_DAYS, Z_90, HorizonForecast, Position, suggest
+from app.ordering.suggest import RECENT_DAYS, SLOW_LOOKBACK_DAYS, HorizonForecast, Position, spread, suggest
 
 DEFAULT_DELIVERY_DAYS = 7  # when the supplier's delivery time is not filled in
 
@@ -73,7 +73,7 @@ def _line(run: OrderRun, key: Key, part: Part, delivery: int | None, forecasts: 
     s = suggest(position)
     if s.quantity <= 0:
         return None
-    prevented = missed_sales_prevented(s.expected, s.cushion / Z_90, on_hand + on_order, s.quantity)
+    prevented = missed_sales_prevented(s.expected, spread(forecasts, s.days_covered), on_hand + on_order, s.quantity)
     text = reason(s, delivery_days, on_hand, on_order, part.pack_size, sold_90)
     if delivery is None:
         text += f" (Supplier delivery time not set: {DEFAULT_DELIVERY_DAYS} days assumed.)"

@@ -1,19 +1,23 @@
 """How many of one part to order for one branch. Pure math: no database, no language model.
 
 Need  = expected sales while we wait (supplier delivery time + REVIEW_DAYS until the next order)
-      + a safety cushion, sized so the shelf runs empty in only 1 period out of 10.
+      + a safety cushion, sized for the service target: at 90%, the shelf runs empty in only 1
+        period out of 10.
 Order = need - on hand - already ordered, rounded up to whole packs, never below zero.
 
 The cushion comes from the forecast's own range: its "high" end is the 90th percentile of past
 misses, so (high - expected) is already a 90% cushion for that horizon. Uncertainty grows with the
 square root of time, so it is scaled by sqrt(days / horizon) for the days we actually need.
+Another service target scales it by z(target) / z(90%).
 """
 
 import math
 from dataclasses import dataclass
+from statistics import NormalDist
 
 REVIEW_DAYS = 7  # suggestions are made once a week
-Z_90 = 1.2816  # 90% of a normal curve lies below mean + 1.2816 x spread
+SERVICE_TARGET = 0.9  # chance of not running out before the next delivery
+Z_90 = NormalDist().inv_cdf(0.9)  # 90% of a normal curve lies below mean + 1.2816 x spread
 RECENT_DAYS = 28  # no sale in this many days = no recent sales
 SLOW_LOOKBACK_DAYS = 90
 
@@ -58,16 +62,21 @@ def pick_horizon(forecasts: tuple[HorizonForecast, ...], days: int) -> HorizonFo
     return next((f for f in ordered if f.horizon >= days), ordered[-1])
 
 
-def expected_and_cushion(forecasts: tuple[HorizonForecast, ...], days: int) -> tuple[float, float]:
+def z_for(target: float) -> float:
+    """How many spreads above the mean demand stays below `target` of the time (0.9 -> 1.28)."""
+    return NormalDist().inv_cdf(target)
+
+
+def expected_and_cushion(forecasts: tuple[HorizonForecast, ...], days: int, target: float = SERVICE_TARGET) -> tuple[float, float]:
     f = pick_horizon(forecasts, days)
     expected = f.quantity * days / f.horizon
-    cushion = max(f.high - f.quantity, 0.0) * math.sqrt(days / f.horizon)
+    cushion = max(f.high - f.quantity, 0.0) * math.sqrt(days / f.horizon) * z_for(target) / Z_90
     return expected, cushion
 
 
 def spread(forecasts: tuple[HorizonForecast, ...], days: int) -> float:
-    """One standard deviation of demand over `days` (the cushion is Z_90 of them)."""
-    return expected_and_cushion(forecasts, days)[1] / Z_90
+    """One standard deviation of demand over `days` (the 90% cushion is Z_90 of them)."""
+    return expected_and_cushion(forecasts, days)[1] / Z_90 if forecasts else 0.0
 
 
 def whole_need(expected: float, cushion: float) -> int:
@@ -83,9 +92,9 @@ def order_quantity(need: int, on_hand: int, on_order: int, pack_size: int) -> in
     return round_up_to_pack(need - on_hand - on_order, pack_size)
 
 
-def suggest(position: Position) -> Suggestion:
+def suggest(position: Position, target: float = SERVICE_TARGET) -> Suggestion:
     days = days_covered(position.delivery_days)
-    expected, cushion = expected_and_cushion(position.forecasts, days) if position.forecasts else (0.0, 0.0)
+    expected, cushion = expected_and_cushion(position.forecasts, days, target) if position.forecasts else (0.0, 0.0)
     need = whole_need(expected, cushion)
     if position.sold_last_28_days > 0:
         rule = "forecast"
