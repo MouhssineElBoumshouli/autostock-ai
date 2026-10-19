@@ -79,3 +79,9 @@ def test_evaluate_on_blind_set_scores_both_approaches():
         assert 0.0 <= result["scikit_learn"] <= 1.0
     assert scores["parts"]["keyword_rule"] > scores["parts"]["scikit_learn"]
     assert scores["sales"]["keyword_rule"] > scores["sales"]["scikit_learn"]
+
+
+def test_pack_size_headers_are_recognised():
+    assert keyword_match("Colisage", "parts") == "pack_size"
+    assert keyword_match("Qty per pack", "parts") == "pack_size"
+    assert keyword_match("Conditionnement", "parts") == "pack_size"

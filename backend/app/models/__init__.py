@@ -6,6 +6,7 @@ from app.models.demo_true_demand import DemoTrueDemand
 from app.models.forecast import Forecast, ForecastRun
 from app.models.import_mapping import ImportMapping
 from app.models.login_failure import LoginFailure
+from app.models.order_suggestion import OrderRun, OrderSuggestion
 from app.models.organization import Organization
 from app.models.part import Part
 from app.models.part_equivalent import EQUIVALENT_SOURCES, EquivalentSource, PartEquivalent
@@ -28,6 +29,8 @@ __all__ = [
     "EquivalentSource",
     "ImportMapping",
     "LoginFailure",
+    "OrderRun",
+    "OrderSuggestion",
     "Organization",
     "Part",
     "PartEquivalent",

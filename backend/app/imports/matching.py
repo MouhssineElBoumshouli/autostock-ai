@@ -29,7 +29,7 @@ def normalize_for_matching(header: str) -> str:
 # fields (an OEM reference, a minimum stock level) are checked before the generic ones they could
 # be mistaken for (a SKU, a quantity).
 _PARTS_ORDER = [
-    "oem_reference", "min_stock", "unit_cost", "sale_price", "sku", "quantity", "branch", "supplier",
+    "oem_reference", "min_stock", "unit_cost", "sale_price", "pack_size", "sku", "quantity", "branch", "supplier",
     "brand", "category", "name",
 ]
 _SALES_ORDER = ["date", "sku", "unit_price", "quantity", "branch"]
@@ -49,6 +49,7 @@ _KEYWORDS: dict[ImportKind, dict[str, list[str]]] = {
         # Bare "vente" is left out on purpose: alone it just means "a sale" (e.g. "Dernière vente",
         # last sale date), not a price. "prix" and "price" need a word of their own to be this sure.
         "sale_price": ["sale", "sell", "retail", "pv ttc", "prix de vente", "prix vente", "prix", "price", "سعر البيع", "سعر"],
+        "pack_size": ["pack", "colisage", "conditionnement", "carton", "per box", "par boite", "العبوة", "تعبئة"],
         "sku": [
             "sku", "ref", "réf", "reference", "référence", "part no", "item code", "product code", "رمز", "كود",
             "مرجع",
