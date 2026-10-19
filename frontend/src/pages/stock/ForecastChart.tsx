@@ -4,11 +4,12 @@ import type { HorizonForecast } from "@/api/forecasts";
 import { t } from "@/i18n";
 import { formatMonthDay, formatNumber } from "@/lib/format";
 
-type ChartRow = { label: string; actual?: number; base?: number; range?: number; tooltip: string };
+type ChartRow = { label: string; actual?: number; base?: number; belowPoint?: number; abovePoint?: number; tooltip: string };
 
-// The last 12 weeks actually sold, as solid bars, then the forecast as one light band
-// (low to high). Weekly totals only: the forecast itself is one number for its whole horizon,
-// so it gets one bar, not a fake weekly breakdown.
+// The last 12 weeks actually sold, as solid violet bars, then the forecast as one bar in the
+// same violet: solid from "low" up to the point estimate, lighter from there up to "high" — so
+// the likely range is drawn, not just said in text, and never the amber/orange used for warnings.
+// Weekly totals only: the forecast itself is one number for its whole horizon, so it gets one bar.
 export function ForecastChart({ weeks, horizon }: { weeks: { week_start: string; quantity: number }[]; horizon: HorizonForecast }) {
   const rows: ChartRow[] = [
     ...weeks.map((week) => ({
@@ -19,14 +20,15 @@ export function ForecastChart({ weeks, horizon }: { weeks: { week_start: string;
     {
       label: t.part.forecast.chartForecast,
       base: horizon.low,
-      range: Math.max(horizon.high - horizon.low, 0),
+      belowPoint: Math.max(horizon.quantity - horizon.low, 0),
+      abovePoint: Math.max(horizon.high - horizon.quantity, 0),
       tooltip: t.part.forecast.likelyBetween(formatNumber(horizon.low), formatNumber(horizon.high)),
     },
   ];
 
   return (
     <ResponsiveContainer width="100%" height={160}>
-      <BarChart data={rows} margin={{ top: 4, right: 4, bottom: 0, left: 4 }} barCategoryGap={4}>
+      <BarChart data={rows} margin={{ top: 4, right: 28, bottom: 0, left: 4 }} barCategoryGap={4}>
         <XAxis
           dataKey="label"
           tickLine={false}
@@ -38,7 +40,8 @@ export function ForecastChart({ weeks, horizon }: { weeks: { week_start: string;
         <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--color-on-surface)", opacity: 0.06 }} />
         <Bar dataKey="actual" fill="var(--color-primary)" radius={[2, 2, 0, 0]} maxBarSize={20} />
         <Bar dataKey="base" stackId="forecast" fill="transparent" />
-        <Bar dataKey="range" stackId="forecast" fill="var(--color-tertiary-container)" radius={[2, 2, 0, 0]} maxBarSize={20} />
+        <Bar dataKey="belowPoint" stackId="forecast" fill="var(--color-primary)" fillOpacity={0.55} maxBarSize={20} />
+        <Bar dataKey="abovePoint" stackId="forecast" fill="var(--color-primary)" fillOpacity={0.2} radius={[2, 2, 0, 0]} maxBarSize={20} />
       </BarChart>
     </ResponsiveContainer>
   );

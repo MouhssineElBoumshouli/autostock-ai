@@ -219,11 +219,13 @@ def test_cannot_use_another_shops_branch_or_supplier(browser):
     assert response.status_code == 422
 
 
-def add_part_with_forecast(organization_id: uuid.UUID, sku: str, quantity: int, expected_30d: float | None) -> uuid.UUID:
+def add_part_with_forecast(
+    organization_id: uuid.UUID, sku: str, quantity: int, expected_30d: float | None, min_stock: int = 0
+) -> uuid.UUID:
     """A part with `quantity` on hand and, when `expected_30d` is given, a 30-day forecast for it."""
     with SessionLocal() as db:
         branch = db.scalar(select(Branch).where(Branch.organization_id == organization_id))
-        part = Part(organization_id=organization_id, sku=sku, name=f"Part {sku}", min_stock=0, is_active=True)
+        part = Part(organization_id=organization_id, sku=sku, name=f"Part {sku}", min_stock=min_stock, is_active=True)
         db.add(part)
         db.flush()
         db.add(StockLevel(organization_id=organization_id, part_id=part.id, branch_id=branch.id, quantity=quantity))
@@ -276,6 +278,18 @@ def test_running_out_filter_and_stat(browser):
 
     assert browser.get("/api/stock/summary").json()["running_out"] == 1
     assert skus(parts(browser, running_out=True)) == ["SOON-1"]
+
+
+def test_running_out_leaves_out_parts_already_flagged_low_or_out(browser):
+    """A short runway is only worth a separate flag when the minimum stock didn't already catch it."""
+    set_up_shop(browser)
+    shop = browser.get("/api/auth/me").json()["organization"]["id"]
+    add_part_with_forecast(shop, "LOW-SOON", quantity=9, expected_30d=30, min_stock=10)  # 9 <= 10: already "low"
+    add_part_with_forecast(shop, "OUT-SOON", quantity=0, expected_30d=30)  # already "out"
+    add_part_with_forecast(shop, "HEALTHY-SOON", quantity=9, expected_30d=30, min_stock=2)  # 9 > 2: "healthy"
+
+    assert browser.get("/api/stock/summary").json()["running_out"] == 1
+    assert skus(parts(browser, running_out=True)) == ["HEALTHY-SOON"]
 
 
 def test_sort_by_runs_out_days_puts_the_soonest_first(browser):

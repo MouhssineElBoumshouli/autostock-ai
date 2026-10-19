@@ -94,7 +94,8 @@ def stock_summary(user: User = Depends(anyone), db: Session = Depends(get_sessio
         .select_from(Part)
         .outerjoin(on_hand, on_hand.c.part_id == Part.id)
         .outerjoin(expected, expected.c.part_id == Part.id)
-        .where(Part.organization_id == user.organization_id, Part.is_active, quantity > 0, runs_out <= RUNNING_OUT_WITHIN_DAYS)
+        # Already healthy, not already flagged low or out: the minimum didn't catch this one.
+        .where(Part.organization_id == user.organization_id, Part.is_active, status == "healthy", runs_out <= RUNNING_OUT_WITHIN_DAYS)
     )
     return StockSummary(
         all=sum(counts.values()),
@@ -153,7 +154,8 @@ def list_parts(
     if supplier:
         filters.append(Part.supplier_id == supplier)
     if running_out:
-        filters.append(quantity > 0)
+        # Already healthy, not already flagged low or out: the minimum didn't catch this one.
+        filters.append(part_status == "healthy")
         filters.append(runs_out <= RUNNING_OUT_WITHIN_DAYS)
 
     base = (
