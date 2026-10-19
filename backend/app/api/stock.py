@@ -12,7 +12,13 @@ from app.auth.permissions import require_role
 from app.db import get_session
 from app.equivalents import groups_of
 from app.models import Branch, Part, Supplier, User
-from app.runs_out import RUNNING_OUT_WITHIN_DAYS, expected_30d_subquery, runs_out_days_expr, shown_runs_out_days
+from app.runs_out import (
+    RUNNING_OUT_WITHIN_DAYS,
+    expected_30d_subquery,
+    running_out_status_expr,
+    runs_out_days_expr,
+    shown_runs_out_days,
+)
 from app.search.part_search import as_table, find_parts
 from app.stock_status import StockStatus, is_dead, quantity_on_hand, status_of
 
@@ -22,7 +28,7 @@ anyone = require_role()
 PAGE_SIZE = 50
 StatusFilter = Literal["healthy", "low", "out", "inactive", "dead"]
 SortKey = Literal["name", "sku", "brand", "quantity", "min_stock", "status", "supplier", "expected_30d", "runs_out_days"]
-STATUS_ORDER = {"out": 0, "low": 1, "healthy": 2, "inactive": 3}
+STATUS_ORDER = {"out": 0, "low": 1, "running_out": 2, "healthy": 3, "inactive": 4}
 
 
 class StockSummary(BaseModel):
@@ -96,13 +102,13 @@ def stock_summary(user: User = Depends(anyone), db: Session = Depends(get_sessio
         .outerjoin(expected, expected.c.part_id == Part.id)
         # Already healthy, not already flagged low or out: the minimum didn't catch this one.
         .where(Part.organization_id == user.organization_id, Part.is_active, status == "healthy", runs_out <= RUNNING_OUT_WITHIN_DAYS)
-    )
+    ) or 0
     return StockSummary(
         all=sum(counts.values()),
-        healthy=counts.get("healthy", 0),
+        healthy=counts.get("healthy", 0) - running_out,  # some of "healthy" now reads "Running out" instead
         low=counts.get("low", 0),
         out=counts.get("out", 0),
-        running_out=running_out or 0,
+        running_out=running_out,
     )
 
 
@@ -141,6 +147,7 @@ def list_parts(
     expected = expected_30d_subquery(user.organization_id, branch)
     expected_30d = func.coalesce(expected.c.expected_30d, 0)
     runs_out = case((expected_30d > 0, runs_out_days_expr(quantity, expected_30d)), else_=null())
+    final_status = running_out_status_expr(part_status, runs_out)
 
     filters = [Part.organization_id == user.organization_id]
     found = find_parts(db, user.organization_id, search) if search and search.strip() else None
@@ -148,7 +155,7 @@ def list_parts(
     if status == "dead":
         filters.append(is_dead(quantity, branch))
     elif status:
-        filters.append(part_status == status)
+        filters.append(final_status == status)
     if category:
         filters.append(Part.category == category)
     if supplier:
@@ -162,7 +169,7 @@ def list_parts(
         select(
             Part,
             quantity.label("quantity"),
-            part_status.label("status"),
+            final_status.label("status"),
             Supplier.name.label("supplier"),
             expected_30d.label("expected_30d"),
             runs_out.label("runs_out_days"),
@@ -186,7 +193,7 @@ def list_parts(
             "brand": Part.brand,
             "quantity": quantity,
             "min_stock": Part.min_stock,
-            "status": _status_rank(part_status),
+            "status": _status_rank(final_status),
             "supplier": Supplier.name,
             "expected_30d": expected_30d,
             "runs_out_days": runs_out,

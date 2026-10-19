@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.schemas import NameText
@@ -14,7 +14,8 @@ from app.audit import record_change
 from app.auth.permissions import require_role
 from app.db import get_session
 from app.equivalents import reachable_from
-from app.models import Branch, Part, PartEquivalent, SaleLine, StockLevel, Supplier, User
+from app.models import Branch, Forecast, Part, PartEquivalent, SaleLine, StockLevel, Supplier, User
+from app.runs_out import HORIZON_DAYS, running_out_status
 from app.stock_status import StockStatus, status_for
 
 router = APIRouter(prefix="/api/parts")
@@ -276,6 +277,12 @@ def describe(db: Session, part: Part) -> PartDetail:
         .order_by(SaleLine.sold_on.desc(), SaleLine.created_at.desc())
         .limit(SALES_SHOWN)
     ).all()
+    status = status_for(part.is_active, quantity, part.min_stock)
+    expected_30d = db.scalar(
+        select(func.sum(Forecast.quantity)).where(
+            Forecast.organization_id == part.organization_id, Forecast.part_id == part.id, Forecast.horizon_days == HORIZON_DAYS
+        )
+    ) or 0
     return PartDetail(
         id=part.id,
         sku=part.sku,
@@ -288,7 +295,7 @@ def describe(db: Session, part: Part) -> PartDetail:
         min_stock=part.min_stock,
         is_active=part.is_active,
         quantity=quantity,
-        status=status_for(part.is_active, quantity, part.min_stock),
+        status=running_out_status(status, quantity, expected_30d),
         supplier=SupplierOut.model_validate(supplier, from_attributes=True) if supplier else None,
         stock=stock,
         last_sales=[SaleOut(sold_on=s.sold_on, branch=s.name, quantity=s.quantity, unit_price=s.unit_price) for s in sales],

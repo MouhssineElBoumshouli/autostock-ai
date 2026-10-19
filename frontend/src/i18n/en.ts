@@ -31,6 +31,7 @@ export const en = {
     low: "Low stock",
     out: "Out of stock",
     inactive: "Inactive",
+    running_out: "Running out",
     subtitle: "Every part, how many you have, and what needs attention.",
     importButton: "Import from Excel",
     stats: {

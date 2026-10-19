@@ -268,6 +268,7 @@ def test_runs_out_in_and_next_30_days(browser):
     assert (soon["expected_30d"], soon["runs_out_days"]) == (30, 9)
     assert (safe["expected_30d"], safe["runs_out_days"]) == (10, None)
     assert (no_demand["expected_30d"], no_demand["runs_out_days"]) == (0, None)
+    assert (soon["status"], safe["status"], no_demand["status"]) == ("running_out", "healthy", "healthy")
 
 
 def test_running_out_filter_and_stat(browser):
@@ -290,6 +291,25 @@ def test_running_out_leaves_out_parts_already_flagged_low_or_out(browser):
 
     assert browser.get("/api/stock/summary").json()["running_out"] == 1
     assert skus(parts(browser, running_out=True)) == ["HEALTHY-SOON"]
+
+    items = {item["sku"]: item for item in parts(browser)["items"]}
+    assert items["LOW-SOON"]["status"] == "low"  # out of stock and low stock still win
+    assert items["OUT-SOON"]["status"] == "out"
+    assert items["HEALTHY-SOON"]["status"] == "running_out"  # amber, not green, even though it's above its minimum
+
+
+def test_running_out_status_shows_on_the_part_panel_and_outranks_healthy_in_sort(browser):
+    set_up_shop(browser)
+    shop = browser.get("/api/auth/me").json()["organization"]["id"]
+    running_out_id = add_part_with_forecast(shop, "SOON-1", quantity=9, expected_30d=30, min_stock=2)
+    add_part_with_forecast(shop, "SAFE-1", quantity=100, expected_30d=10, min_stock=2)
+
+    detail = browser.get(f"/api/parts/{running_out_id}").json()
+    assert detail["status"] == "running_out"
+
+    ordered = parts(browser, sort="status")["items"]
+    statuses = [item["status"] for item in ordered if item["sku"] in ("SOON-1", "SAFE-1")]
+    assert statuses == ["running_out", "healthy"]  # running_out is more urgent than healthy
 
 
 def test_sort_by_runs_out_days_puts_the_soonest_first(browser):

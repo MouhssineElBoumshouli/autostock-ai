@@ -5,7 +5,7 @@ None means "over 60 days" (including parts with no expected sales at all)."""
 
 import uuid
 
-from sqlalchemy import ColumnElement, func, select
+from sqlalchemy import ColumnElement, and_, case, func, select
 from sqlalchemy.sql import Select
 
 from app.models import Forecast
@@ -35,3 +35,17 @@ def shown_runs_out_days(raw_days: float | None) -> int | None:
     if raw_days is None or raw_days > SHOWN_UP_TO_DAYS:
         return None
     return max(round(raw_days), 1)
+
+
+def running_out_status_expr(status: ColumnElement, runs_out_days: ColumnElement) -> ColumnElement:
+    """"Healthy" becomes "running_out" when cover is short. Out of stock and low stock still win:
+    only a part that would otherwise read "Healthy" is affected (SQL version, for a list of parts)."""
+    return case((and_(status == "healthy", runs_out_days <= RUNNING_OUT_WITHIN_DAYS), "running_out"), else_=status)
+
+
+def running_out_status(status: str, quantity: int, expected_30d: float) -> str:
+    """Same rule, in plain Python, for one part."""
+    if status != "healthy" or expected_30d <= 0:
+        return status
+    days = quantity * HORIZON_DAYS / expected_30d
+    return "running_out" if days <= RUNNING_OUT_WITHIN_DAYS else status
