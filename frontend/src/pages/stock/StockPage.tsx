@@ -117,6 +117,7 @@ export function StockPage() {
             />
           ) : (
             <>
+              {parts.data?.closest && <p className="text-body-medium text-on-surface-variant">{t.stock.closestParts}</p>}
               <DataTable
                 columns={columns}
                 rows={parts.data?.items ?? []}

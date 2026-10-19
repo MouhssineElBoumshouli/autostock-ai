@@ -58,6 +58,7 @@ class PartsPage(BaseModel):
     total: int
     page: int
     page_size: int
+    closest: bool = False  # the search matched nothing well; these are the closest parts
 
 
 @router.get("/summary")
@@ -115,7 +116,8 @@ def list_parts(
     part_status = status_of(quantity)
 
     filters = [Part.organization_id == user.organization_id]
-    matches = as_table(find_parts(db, user.organization_id, search)) if search and search.strip() else None
+    found = find_parts(db, user.organization_id, search) if search and search.strip() else None
+    matches = as_table(found.matches) if found else None
     if status == "dead":
         filters.append(is_dead(quantity, branch))
     elif status:
@@ -169,6 +171,7 @@ def list_parts(
         total=total,
         page=page,
         page_size=PAGE_SIZE,
+        closest=bool(found and found.closest),
     )
 
 

@@ -204,3 +204,81 @@ def test_only_owners_can_see_or_edit_the_list(browser):
 
     assert manager.get("/api/synonyms").status_code == 403
     assert manager.put("/api/synonyms", json={"groups": []}).status_code == 403
+
+
+# Review examples: typos reach the word list, word-list matches count fully, closest guesses
+
+
+def test_typos_reach_the_word_list():
+    groups = [["plaquettes de frein", "brake pads"], ["demarreur", "starter"]]
+
+    pads = concepts_of(["plaquete", "frein"], groups)
+    starter = concepts_of(["demareur"], groups)
+
+    assert len(pads) == 1 and "brake pads" in pads[0].words
+    assert "starter" in starter[0].words
+
+
+def test_a_word_starting_a_phrase_brings_its_group():
+    concepts = concepts_of(["plaquettes", "avant"], [["plaquettes de frein", "brake pads"], ["avant", "front"]])
+
+    assert [concept.words for concept in concepts] == [
+        ["plaquettes", "plaquettes de frein", "brake pads"],
+        ["avant", "front"],
+    ]
+
+
+def test_typo_finds_parts_named_in_both_languages(browser):
+    shop_with_parts(browser)
+
+    assert set(found(browser, "plaquete frein")[:2]) == {"BP-001", "BP-002"}  # Front brake pads, Plaquettes … arrière
+    assert found(browser, "demareur")[0] == "ST-500"  # Starter motor
+
+
+def test_word_list_match_counts_as_much_as_a_literal_match(browser):
+    shop_with_parts(browser)
+
+    assert found(browser, "plaquettes avant")[0] == "BP-001"  # Front brake pads, not the front shock absorbers
+
+
+def test_closest_parts_are_shown_when_nothing_matches_well(browser):
+    shop_with_parts(browser)
+
+    words = browser.get("/api/stock/parts", params={"search": "courroie scooter velo"}).json()
+    code = browser.get("/api/stock/parts", params={"search": "bp009"}).json()
+
+    assert words["closest"] is True
+    assert {"CR-450", "CR-451"} <= {item["sku"] for item in words["items"]}
+    assert code["closest"] is True
+    assert {"BP-001", "BP-002"} <= {item["sku"] for item in code["items"]}
+
+
+def test_good_matches_are_not_marked_as_closest(browser):
+    shop_with_parts(browser)
+
+    response = browser.get("/api/stock/parts", params={"search": "courroie"}).json()
+
+    assert response["closest"] is False
+
+
+def test_no_closest_parts_when_nothing_is_similar(browser):
+    shop_with_parts(browser)
+
+    response = browser.get("/api/stock/parts", params={"search": "zzzzqqq"}).json()
+
+    assert (response["items"], response["closest"]) == ([], False)
+
+
+def test_default_word_list_covers_review_words(browser):
+    shop_with_parts(browser)
+
+    assert set(found(browser, "roulement")[:2]) == {"WB-410", "WB-411"}
+    assert set(found(browser, "wheel bearing")[:2]) == {"WB-410", "WB-411"}
+    assert found(browser, "démarreur")[0] == "ST-500"
+    assert found(browser, "starter")[0] == "ST-500"
+    for word in ("dynamo", "dinamo", "alternateur", "alternator"):
+        assert found(browser, word)[0] == "AL-510", word
+    for word in ("antigel", "liquide de refroidissement", "coolant"):
+        assert found(browser, word)[0] == "HL-901", word
+    assert found(browser, "bougie d'allumage")[0] == "SP-104"  # Spark plug iridium
+    assert found(browser, "bougie de préchauffage")[0] == "SP-105"  # glow plug

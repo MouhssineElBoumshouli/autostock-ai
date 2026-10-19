@@ -42,6 +42,7 @@ export const en = {
     },
     searchLabel: "Search parts",
     searchPlaceholder: "Search parts",
+    closestParts: "No exact match. Closest parts:",
     filters: {
       status: "Status",
       allStatuses: "All statuses",
