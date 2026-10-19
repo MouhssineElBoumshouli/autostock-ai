@@ -44,6 +44,8 @@ SUPPLIERS = [
 # "running_out" parts are above their minimum (so they still read as "Healthy") but have little
 # cover left at their own selling rate — exactly what the forecast is meant to catch.
 STOCK_BUCKETS = [("out", 0.04), ("low", 0.10), ("running_out", 0.08), ("healthy", 0.78)]
+# Families the suppliers sell by the box; everything else comes one at a time.
+PACK_SIZES = {"Oil filter": 5, "Engine oil 5W30 5L": 4, "Coolant 5L": 6, "Headlight bulb H7": 10, "Wiper blades (pair)": 5}
 CARS = [
     "Dacia Logan 1.5 dCi", "Dacia Sandero 1.0", "Renault Clio 4 1.5 dCi", "Peugeot 208 1.6 HDi",
     "Peugeot 301 1.6", "Hyundai i10 1.1", "Fiat Uno 1.4", "VW Golf 7 2.0 TDI", "Toyota Corolla 1.6",
@@ -243,6 +245,7 @@ def _make_parts(organization_id: uuid.UUID, parts_count: int | None, rng: np.ran
                 brand=brands[i % len(brands)],
                 category=category,
                 unit_cost=price * 70,  # centimes: cost is 70% of the sale price
+                pack_size=PACK_SIZES.get(name, 1),
                 sale_price=price * 100,
                 supplier_id=supplier.id,
             )
