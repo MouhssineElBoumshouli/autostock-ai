@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.audit import record_change
 from app.auth.permissions import require_role
 from app.db import get_session
+from app.imports.equivalents_import import plan_equivalents, save_equivalents
 from app.imports.fields import FIELDS, ImportKind, check_mapping
 from app.imports.matching import suggest_field
 from app.imports.parts_import import plan_parts, save_parts
@@ -142,8 +143,10 @@ async def save(
     plan = _plan(db, kind, user, table, columns)
     if kind == "parts":
         save_parts(db, user.organization_id, plan)
-    else:
+    elif kind == "sales":
         save_sales(db, user.organization_id, plan)
+    else:
+        save_equivalents(db, user.organization_id, user.id, plan)
 
     _remember_mapping(db, user, kind, table, by_column)
     record_change(
@@ -181,7 +184,9 @@ def _parse_mapping(raw: str) -> dict[int, str]:
 def _plan(db: Session, kind: ImportKind, user: User, table: Table, columns: dict[str, int]):
     if kind == "parts":
         return plan_parts(db, user.organization_id, table, columns)
-    return plan_sales(db, user.organization_id, table, columns)
+    if kind == "sales":
+        return plan_sales(db, user.organization_id, table, columns)
+    return plan_equivalents(db, user.organization_id, table, columns)
 
 
 def _remember_mapping(db: Session, user: User, kind: ImportKind, table: Table, by_column: dict[int, str]) -> None:

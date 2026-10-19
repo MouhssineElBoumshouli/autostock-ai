@@ -5,7 +5,7 @@ from typing import Literal
 
 from fastapi import HTTPException
 
-ImportKind = Literal["parts", "sales"]
+ImportKind = Literal["parts", "sales", "equivalents"]
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,10 @@ FIELDS: dict[str, list[Field]] = {
         Field("quantity", "Quantity", required=True),
         Field("unit_price", "Unit price"),
         Field("branch", "Branch"),
+    ],
+    "equivalents": [
+        Field("our_code", "Our code", required=True),
+        Field("equivalent_code", "Equivalent code", required=True),
     ],
 }
 

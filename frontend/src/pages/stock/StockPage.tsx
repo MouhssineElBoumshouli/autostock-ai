@@ -1,4 +1,4 @@
-import { PackageIcon, UploadIcon } from "lucide-react";
+import { PackageIcon, ReplaceIcon, UploadIcon } from "lucide-react";
 import { useCallback } from "react";
 import { Link, useSearchParams } from "react-router";
 
@@ -58,7 +58,19 @@ export function StockPage() {
       header: t.stock.columns.part,
       primary: true,
       sortKey: "name",
-      cell: (part) => <span className="block max-w-72 truncate font-medium">{part.name}</span>,
+      cell: (part) => (
+        <span className="block max-w-72">
+          <span className="block truncate font-medium">{part.name}</span>
+          {part.equivalent_note && (
+            <span className="mt-0.5 flex items-center gap-1 text-body-small font-medium text-primary">
+              <ReplaceIcon aria-hidden="true" className="size-3.5 shrink-0" />
+              <span className="truncate">
+                {t.stock.outOfStockEquivalent(formatNumber(part.equivalent_note.quantity), part.equivalent_note.brand)}
+              </span>
+            </span>
+          )}
+        </span>
+      ),
     },
     { header: t.stock.columns.sku, sortKey: "sku", cell: (part) => <span className="text-on-surface-variant">{part.sku}</span> },
     { header: t.stock.columns.brand, sortKey: "brand", cell: (part) => part.brand ?? "—" },

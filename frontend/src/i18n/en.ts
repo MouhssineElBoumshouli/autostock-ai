@@ -43,6 +43,7 @@ export const en = {
     searchLabel: "Search parts",
     searchPlaceholder: "Search parts",
     closestParts: "No exact match. Closest parts:",
+    outOfStockEquivalent: (quantity: string, brand: string) => `Out of stock. ${quantity} available from ${brand}.`,
     filters: {
       status: "Status",
       allStatuses: "All statuses",
@@ -105,6 +106,25 @@ export const en = {
     moneyHelp: (currency: string) => `In ${currency}, e.g. 12,50`,
     moneyError: "Enter an amount, e.g. 12,50",
     quantityError: "Enter a whole number, 0 or more",
+    equivalents: {
+      title: "Same part, other brands",
+      none: "No equivalent parts found yet.",
+      inStock: "In stock",
+      outOfStock: "Out of stock",
+      reasonOem: "Same OEM number",
+      reasonManual: (name: string) => `Added by ${name}`,
+      reasonSupplierFile: "From supplier file",
+      link: "Link a part",
+      linkTitle: "Link an equivalent part",
+      linkHelp: "Search for the same part, sold under another brand.",
+      searchPlaceholder: "Search by name, SKU or OEM reference",
+      searching: "Searching…",
+      noResults: "No parts found.",
+      linked: (name: string) => `Linked to ${name}.`,
+      removeTitle: "Remove this link?",
+      removeText: "The two parts will no longer show as the same part.",
+      removed: "Link removed.",
+    },
   },
   importFile: {
     subtitle: "Bring your parts, stock and sales in from Excel or CSV.",
@@ -113,6 +133,10 @@ export const en = {
     kinds: {
       parts: { title: "Parts and stock", text: "Your parts list with prices and how many you have." },
       sales: { title: "Sales history", text: "Past sales: date, part and quantity. Forecasts will learn from it." },
+      equivalents: {
+        title: "Equivalent parts",
+        text: "A supplier's cross-reference file: which of your parts are the same part under another brand.",
+      },
     },
     fileLabel: "File",
     fileHelp: "Excel (.xlsx) or CSV, up to 10 MB.",
@@ -152,7 +176,11 @@ export const en = {
         unit_price: "Unit price",
         branch: "Branch",
       },
-    } as Record<"parts" | "sales", Record<string, string>>,
+      equivalents: {
+        our_code: "Our code",
+        equivalent_code: "Equivalent code",
+      },
+    } as Record<"parts" | "sales" | "equivalents", Record<string, string>>,
     nothingSaved: "Nothing is saved yet. This is what will happen:",
     counts: {
       new_parts: (n: string) => `${n} new parts`,
@@ -161,6 +189,8 @@ export const en = {
       new_sales: (n: string) => `${n} new sales lines`,
       already_imported: (n: string) => `${n} sales lines already imported (skipped)`,
       problem_rows: (n: string) => `${n} rows with problems (skipped)`,
+      new_equivalents: (n: string) => `${n} new equivalent parts linked`,
+      already_linked: (n: string) => `${n} already linked (skipped)`,
     } as Record<string, (n: string) => string>,
     newBranches: (names: string) => `New branches: ${names}`,
     newSuppliers: (count: string, names: string) => `${count} new suppliers: ${names}`,
@@ -271,7 +301,11 @@ export const en = {
       importedParts: (actor: string, file: string, created: string, updated: string) =>
         `${actor} imported ${file}: ${created} new parts, ${updated} updated.`,
       importedSales: (actor: string, file: string, lines: string) => `${actor} imported ${file}: ${lines} sales lines.`,
+      importedEquivalents: (actor: string, file: string, linked: string) =>
+        `${actor} imported ${file}: ${linked} new equivalent parts linked.`,
       partEdited: (actor: string, part: string, sku: string) => `${actor} edited ${part} (${sku}).`,
+      partsLinked: (actor: string, part: string, other: string) => `${actor} linked ${part} to ${other}.`,
+      partsUnlinked: (actor: string, part: string, other: string) => `${actor} removed the link between ${part} and ${other}.`,
       otherChange: (actor: string) => `${actor} made a change.`,
     },
   },

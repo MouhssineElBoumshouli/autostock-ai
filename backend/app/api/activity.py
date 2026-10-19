@@ -25,7 +25,7 @@ ACTIONS_BY_KIND: dict[str, list[str]] = {
     "passwords": ["user.password_changed", "user.password_reset"],
     "logins": ["user.logged_in"],
     "settings": ["organization.created", "organization.updated", "synonyms.updated"],
-    "stock": ["import.saved", "part.updated"],
+    "stock": ["import.saved", "part.updated", "part_equivalent.linked", "part_equivalent.removed"],
 }
 
 # Only these fields of before/after are ever sent to the website (never anything secret).
@@ -36,7 +36,9 @@ SHOWN_FIELDS = {
     "sku",
     # imports
     "kind", "file_name", "new_parts", "updated_parts", "unchanged_parts", "new_sales", "already_imported",
-    "problem_rows", "new_suppliers", "new_branches",
+    "problem_rows", "new_suppliers", "new_branches", "new_equivalents", "already_linked",
+    # equivalent part links
+    "part", "other_part", "source",
 }
 
 

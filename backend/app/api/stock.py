@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.permissions import require_role
 from app.db import get_session
+from app.equivalents import groups_of
 from app.models import Branch, Part, Supplier, User
 from app.search.part_search import as_table, find_parts
 from app.stock_status import StockStatus, is_dead, quantity_on_hand, status_of
@@ -41,6 +42,11 @@ class StockFilters(BaseModel):
     suppliers: list[Choice]
 
 
+class EquivalentNote(BaseModel):
+    quantity: int
+    brand: str  # the other part's brand, or its name when it has none
+
+
 class PartRow(BaseModel):
     id: uuid.UUID
     sku: str
@@ -51,6 +57,7 @@ class PartRow(BaseModel):
     min_stock: int
     status: StockStatus
     supplier: str | None
+    equivalent_note: EquivalentNote | None = None  # out of stock, but an equivalent from another brand isn't
 
 
 class PartsPage(BaseModel):
@@ -152,6 +159,7 @@ def list_parts(
         }[sort or "name"]
         ordered = order.desc().nulls_last() if direction == "desc" else order.asc().nulls_last()
     rows = db.execute(base.order_by(ordered, Part.name, Part.sku).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)).all()
+    notes = _equivalent_notes(db, user.organization_id, branch, [row.Part.id for row in rows if row.status == "out"])
 
     return PartsPage(
         items=[
@@ -165,6 +173,7 @@ def list_parts(
                 min_stock=row.Part.min_stock,
                 status=row.status,
                 supplier=row.supplier,
+                equivalent_note=notes.get(row.Part.id),
             )
             for row in rows
         ],
@@ -173,6 +182,36 @@ def list_parts(
         page_size=PAGE_SIZE,
         closest=bool(found and found.closest),
     )
+
+
+def _equivalent_notes(
+    db: Session, organization_id: uuid.UUID, branch: uuid.UUID | None, out_of_stock_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, EquivalentNote]:
+    """For each out-of-stock part shown, the best equivalent that IS in stock (most on hand), so the
+    person doesn't have to open the part to find out another brand has it. Only expands from the
+    parts actually on screen, so this never slows down as the shop's catalog grows."""
+    if not out_of_stock_ids:
+        return {}
+    groups = groups_of(db, organization_id, out_of_stock_ids)
+    candidate_ids = {pid for part_id in out_of_stock_ids for pid in groups.get(part_id, set()) if pid != part_id}
+    if not candidate_ids:
+        return {}
+
+    on_hand = quantity_on_hand(organization_id, branch)
+    quantities = dict(
+        db.execute(select(on_hand.c.part_id, on_hand.c.quantity).where(on_hand.c.part_id.in_(candidate_ids))).all()
+    )
+    names = dict(db.execute(select(Part.id, func.coalesce(Part.brand, Part.name)).where(Part.id.in_(candidate_ids))).all())
+
+    notes: dict[uuid.UUID, EquivalentNote] = {}
+    for part_id in out_of_stock_ids:
+        others = groups.get(part_id, set()) - {part_id}
+        in_stock = [(quantities.get(other) or 0, other) for other in others]
+        in_stock = [(qty, other) for qty, other in in_stock if qty > 0]
+        if in_stock:
+            quantity, best_id = max(in_stock)
+            notes[part_id] = EquivalentNote(quantity=quantity, brand=names[best_id])
+    return notes
 
 
 def _status_rank(status):

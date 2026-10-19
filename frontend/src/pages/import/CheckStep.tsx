@@ -27,7 +27,9 @@ export function CheckStep({
   const somethingToSave =
     kind === "parts"
       ? summary.counts.new_parts + summary.counts.updated_parts > 0
-      : summary.counts.new_sales > 0;
+      : kind === "sales"
+        ? summary.counts.new_sales > 0
+        : summary.counts.new_equivalents > 0;
   const hidden = summary.problem_count - summary.problems.length;
 
   return (

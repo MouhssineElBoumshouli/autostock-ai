@@ -55,14 +55,20 @@ export function activitySentence(item: ActivityItem): string {
     case "import.saved":
       return after.kind === "sales"
         ? words.importedSales(actor, String(after.file_name), formatNumber(Number(after.new_sales ?? 0)))
-        : words.importedParts(
-            actor,
-            String(after.file_name),
-            formatNumber(Number(after.new_parts ?? 0)),
-            formatNumber(Number(after.updated_parts ?? 0)),
-          );
+        : after.kind === "equivalents"
+          ? words.importedEquivalents(actor, String(after.file_name), formatNumber(Number(after.new_equivalents ?? 0)))
+          : words.importedParts(
+              actor,
+              String(after.file_name),
+              formatNumber(Number(after.new_parts ?? 0)),
+              formatNumber(Number(after.updated_parts ?? 0)),
+            );
     case "part.updated":
       return words.partEdited(actor, String(after.name), String(after.sku));
+    case "part_equivalent.linked":
+      return words.partsLinked(actor, String(after.part), String(after.other_part));
+    case "part_equivalent.removed":
+      return words.partsUnlinked(actor, String(before.part), String(before.other_part));
     case "user.logged_in":
       return words.loggedIn(actor);
     default:

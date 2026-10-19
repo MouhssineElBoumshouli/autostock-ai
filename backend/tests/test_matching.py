@@ -16,6 +16,12 @@ def test_keyword_rule_understands_french_english_and_arabic():
     assert keyword_match("Unit price", "sales") == "unit_price"
 
 
+def test_keyword_rule_understands_equivalent_part_files():
+    assert keyword_match("Our code", "equivalents") == "our_code"
+    assert keyword_match("Cross reference", "equivalents") == "equivalent_code"
+    assert keyword_match("Code", "equivalents") == "our_code"
+
+
 def test_keyword_rule_ignores_columns_that_are_not_a_known_field():
     assert keyword_match("Notes", "parts") is None
     assert keyword_match("Image", "parts") is None
