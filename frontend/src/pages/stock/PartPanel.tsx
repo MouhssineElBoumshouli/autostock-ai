@@ -69,6 +69,24 @@ export function PartPanel({ partId, canEdit, onClose }: { partId: string | null;
 
 function PartDetails({ part, canEdit, onEdit }: { part: PartDetail; canEdit: boolean; onEdit: () => void }) {
   const currency = useSignedIn().organization.currency;
+  const outOfStock = part.status === "out";
+
+  const equivalentsSection = (
+    <Section title={t.part.equivalents.title}>
+      <div className="grid gap-3">
+        {part.equivalents.length === 0 ? (
+          <p className="text-body-medium text-on-surface-variant">{t.part.equivalents.none}</p>
+        ) : (
+          <ul className="divide-y rounded-md border">
+            {part.equivalents.map((equivalent) => (
+              <EquivalentRow key={equivalent.part_id} partId={part.id} equivalent={equivalent} canEdit={canEdit} currency={currency} />
+            ))}
+          </ul>
+        )}
+        {canEdit && <AddEquivalentButton part={part} />}
+      </div>
+    </Section>
+  );
 
   return (
     <div className="flex min-h-full flex-col">
@@ -90,6 +108,10 @@ function PartDetails({ part, canEdit, onEdit }: { part: PartDetail; canEdit: boo
       </header>
 
       <div className="grid flex-1 content-start gap-6 p-6">
+        {/* Out of stock: the employee's next question is "what else can I sell them", so the
+            same-part-other-brands section comes first. In stock, it stays further down. */}
+        {outOfStock && equivalentsSection}
+
         <Section title={t.part.stockPerBranch}>
           <dl className="divide-y rounded-md border">
             {part.stock.map((row) => (
@@ -114,20 +136,7 @@ function PartDetails({ part, canEdit, onEdit }: { part: PartDetail; canEdit: boo
           </dl>
         </Section>
 
-        <Section title={t.part.equivalents.title}>
-          <div className="grid gap-3">
-            {part.equivalents.length === 0 ? (
-              <p className="text-body-medium text-on-surface-variant">{t.part.equivalents.none}</p>
-            ) : (
-              <ul className="divide-y rounded-md border">
-                {part.equivalents.map((equivalent) => (
-                  <EquivalentRow key={equivalent.part_id} partId={part.id} equivalent={equivalent} canEdit={canEdit} currency={currency} />
-                ))}
-              </ul>
-            )}
-            {canEdit && <AddEquivalentButton part={part} />}
-          </div>
-        </Section>
+        {!outOfStock && equivalentsSection}
 
         <Section title={t.part.supplier}>
           {part.supplier ? (
