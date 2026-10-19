@@ -15,6 +15,7 @@ import { Card } from "@/components/ui/card";
 import { t } from "@/i18n";
 import { formatNumber } from "@/lib/format";
 
+import { ForecastStatusBar } from "./ForecastStatusBar";
 import { PartPanel } from "./PartPanel";
 import { StockFilters } from "./StockFilters";
 import { StockStats } from "./StockStats";
@@ -30,6 +31,7 @@ export function StockPage() {
     category: params.get("category") ?? undefined,
     branch: params.get("branch") ?? undefined,
     supplier: params.get("supplier") ?? undefined,
+    running_out: params.get("running_out") === "true" ? true : undefined,
     // While searching, the best match comes first unless a column was picked.
     sort: (params.get("sort") as SortKey | null) ?? (params.get("search") ? undefined : "name"),
     direction: params.get("direction") === "desc" ? ("desc" as const) : ("asc" as const),
@@ -59,7 +61,7 @@ export function StockPage() {
       primary: true,
       sortKey: "name",
       cell: (part) => (
-        <span className="block max-w-72">
+        <span className="block max-w-48 xl:max-w-72">
           <span className="block truncate font-medium">{part.name}</span>
           {part.equivalent_note && (
             <span className="mt-0.5 flex items-center gap-1 text-body-small font-medium text-primary">
@@ -73,14 +75,39 @@ export function StockPage() {
       ),
     },
     { header: t.stock.columns.sku, sortKey: "sku", cell: (part) => <span className="text-on-surface-variant">{part.sku}</span> },
-    { header: t.stock.columns.brand, sortKey: "brand", cell: (part) => part.brand ?? "—" },
+    {
+      header: t.stock.columns.brand,
+      sortKey: "brand",
+      className: "hidden xl:table-cell",
+      cell: (part) => part.brand ?? "—",
+    },
     { header: t.stock.columns.inStock, sortKey: "quantity", align: "end", cell: (part) => formatNumber(part.quantity) },
-    { header: t.stock.columns.minimum, sortKey: "min_stock", align: "end", cell: (part) => formatNumber(part.min_stock) },
+    {
+      header: t.stock.columns.minimum,
+      sortKey: "min_stock",
+      align: "end",
+      className: "hidden 2xl:table-cell",
+      cell: (part) => formatNumber(part.min_stock),
+    },
     { header: t.stock.columns.status, sortKey: "status", cell: (part) => <StockBadge status={part.status} /> },
-    { header: t.stock.columns.supplier, sortKey: "supplier", cell: (part) => part.supplier ?? "—" },
+    {
+      header: t.stock.columns.supplier,
+      sortKey: "supplier",
+      className: "hidden 2xl:table-cell",
+      cell: (part) => part.supplier ?? "—",
+    },
+    {
+      header: t.stock.columns.next30Days,
+      sortKey: "expected_30d",
+      align: "end",
+      cell: (part) => formatNumber(part.expected_30d),
+    },
+    { header: t.stock.columns.runsOutIn, sortKey: "runs_out_days", cell: (part) => runsOutLabel(part) },
   ];
 
-  const filtered = Boolean(query.search || query.status || query.category || query.branch || query.supplier);
+  const filtered = Boolean(
+    query.search || query.status || query.category || query.branch || query.supplier || query.running_out,
+  );
   const noPartsAtAll = summary.data !== undefined && summary.data.all === 0 && parts.data?.total === 0 && !filtered;
   const importButton = canEdit && (
     <Button variant="filled" asChild>
@@ -110,15 +137,18 @@ export function StockPage() {
   return (
     <div className="grid gap-8">
       <PageHeader title={t.nav.stock} subtitle={t.stock.subtitle} action={importButton} />
+      <ForecastStatusBar />
       <StockStats
         summary={summary.data}
         loading={summary.isPending}
         activeStatus={query.status}
         onFilter={(status) => update({ status })}
+        runningOut={query.running_out}
+        onToggleRunningOut={(value) => update({ running_out: value ? "true" : undefined })}
       />
-      <div className="grid gap-4">
+      <div className="grid min-w-0 gap-4">
         <StockFilters values={{ ...query, search: query.search ?? "" }} onChange={update} />
-        <Card className="py-0">
+        <Card className="min-w-0 py-0">
           {parts.isError ? (
             <ErrorState onRetry={() => parts.refetch()} retrying={parts.isFetching} />
           ) : parts.data?.total === 0 ? (
@@ -152,7 +182,13 @@ export function StockPage() {
           )}
         </Card>
       </div>
-      <PartPanel partId={openPart} canEdit={canEdit} onClose={() => update({ part: undefined }, true)} />
+      <PartPanel partId={openPart} canEdit={canEdit} branch={query.branch} onClose={() => update({ part: undefined }, true)} />
     </div>
   );
+}
+
+function runsOutLabel(part: PartRow): string {
+  if (part.status === "out") return t.stock.runsOut.alreadyOut;
+  if (part.runs_out_days === null) return t.stock.runsOut.overSixty;
+  return t.stock.runsOut.aboutDays(formatNumber(part.runs_out_days));
 }

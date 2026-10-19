@@ -5,13 +5,20 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, null, select
 from sqlalchemy.orm import Session
 
 from app.auth.permissions import require_role
 from app.db import get_session
 from app.equivalents import groups_of
 from app.models import Branch, Part, Supplier, User
+from app.runs_out import (
+    RUNNING_OUT_WITHIN_DAYS,
+    expected_30d_subquery,
+    running_out_status_expr,
+    runs_out_days_expr,
+    shown_runs_out_days,
+)
 from app.search.part_search import as_table, find_parts
 from app.stock_status import StockStatus, is_dead, quantity_on_hand, status_of
 
@@ -20,8 +27,8 @@ anyone = require_role()
 
 PAGE_SIZE = 50
 StatusFilter = Literal["healthy", "low", "out", "inactive", "dead"]
-SortKey = Literal["name", "sku", "brand", "quantity", "min_stock", "status", "supplier"]
-STATUS_ORDER = {"out": 0, "low": 1, "healthy": 2, "inactive": 3}
+SortKey = Literal["name", "sku", "brand", "quantity", "min_stock", "status", "supplier", "expected_30d", "runs_out_days"]
+STATUS_ORDER = {"out": 0, "low": 1, "running_out": 2, "healthy": 3, "inactive": 4}
 
 
 class StockSummary(BaseModel):
@@ -29,6 +36,7 @@ class StockSummary(BaseModel):
     healthy: int
     low: int
     out: int
+    running_out: int  # has stock, but expected to run out within RUNNING_OUT_WITHIN_DAYS
 
 
 class Choice(BaseModel):
@@ -57,6 +65,8 @@ class PartRow(BaseModel):
     min_stock: int
     status: StockStatus
     supplier: str | None
+    expected_30d: int  # pieces expected to sell over the next 30 days
+    runs_out_days: int | None  # None means "over 60 days" (or no expected sales at all)
     equivalent_note: EquivalentNote | None = None  # out of stock, but an equivalent from another brand isn't
 
 
@@ -72,7 +82,8 @@ class PartsPage(BaseModel):
 def stock_summary(user: User = Depends(anyone), db: Session = Depends(get_session)) -> StockSummary:
     """Counts for the stat cards. Only active parts are counted."""
     on_hand = quantity_on_hand(user.organization_id)
-    status = status_of(func.coalesce(on_hand.c.quantity, 0))
+    quantity = func.coalesce(on_hand.c.quantity, 0)
+    status = status_of(quantity)
     counts = dict(
         db.execute(
             select(status, func.count())
@@ -82,11 +93,22 @@ def stock_summary(user: User = Depends(anyone), db: Session = Depends(get_sessio
             .group_by(status)
         ).all()
     )
+    expected = expected_30d_subquery(user.organization_id)
+    runs_out = case((expected.c.expected_30d > 0, runs_out_days_expr(quantity, expected.c.expected_30d)), else_=null())
+    running_out = db.scalar(
+        select(func.count())
+        .select_from(Part)
+        .outerjoin(on_hand, on_hand.c.part_id == Part.id)
+        .outerjoin(expected, expected.c.part_id == Part.id)
+        # Already healthy, not already flagged low or out: the minimum didn't catch this one.
+        .where(Part.organization_id == user.organization_id, Part.is_active, status == "healthy", runs_out <= RUNNING_OUT_WITHIN_DAYS)
+    ) or 0
     return StockSummary(
         all=sum(counts.values()),
-        healthy=counts.get("healthy", 0),
+        healthy=counts.get("healthy", 0) - running_out,  # some of "healthy" now reads "Running out" instead
         low=counts.get("low", 0),
         out=counts.get("out", 0),
+        running_out=running_out,
     )
 
 
@@ -112,6 +134,7 @@ def list_parts(
     category: str | None = None,
     branch: uuid.UUID | None = None,
     supplier: uuid.UUID | None = None,
+    running_out: bool = False,
     sort: SortKey | None = None,
     direction: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
@@ -121,6 +144,10 @@ def list_parts(
     on_hand = quantity_on_hand(user.organization_id, branch)
     quantity = func.coalesce(on_hand.c.quantity, 0)
     part_status = status_of(quantity)
+    expected = expected_30d_subquery(user.organization_id, branch)
+    expected_30d = func.coalesce(expected.c.expected_30d, 0)
+    runs_out = case((expected_30d > 0, runs_out_days_expr(quantity, expected_30d)), else_=null())
+    final_status = running_out_status_expr(part_status, runs_out)
 
     filters = [Part.organization_id == user.organization_id]
     found = find_parts(db, user.organization_id, search) if search and search.strip() else None
@@ -128,16 +155,28 @@ def list_parts(
     if status == "dead":
         filters.append(is_dead(quantity, branch))
     elif status:
-        filters.append(part_status == status)
+        filters.append(final_status == status)
     if category:
         filters.append(Part.category == category)
     if supplier:
         filters.append(Part.supplier_id == supplier)
+    if running_out:
+        # Already healthy, not already flagged low or out: the minimum didn't catch this one.
+        filters.append(part_status == "healthy")
+        filters.append(runs_out <= RUNNING_OUT_WITHIN_DAYS)
 
     base = (
-        select(Part, quantity.label("quantity"), part_status.label("status"), Supplier.name.label("supplier"))
+        select(
+            Part,
+            quantity.label("quantity"),
+            final_status.label("status"),
+            Supplier.name.label("supplier"),
+            expected_30d.label("expected_30d"),
+            runs_out.label("runs_out_days"),
+        )
         .outerjoin(on_hand, on_hand.c.part_id == Part.id)
         .outerjoin(Supplier, Supplier.id == Part.supplier_id)
+        .outerjoin(expected, expected.c.part_id == Part.id)
         .where(*filters)
     )
     if matches is not None:
@@ -154,8 +193,10 @@ def list_parts(
             "brand": Part.brand,
             "quantity": quantity,
             "min_stock": Part.min_stock,
-            "status": _status_rank(part_status),
+            "status": _status_rank(final_status),
             "supplier": Supplier.name,
+            "expected_30d": expected_30d,
+            "runs_out_days": runs_out,
         }[sort or "name"]
         ordered = order.desc().nulls_last() if direction == "desc" else order.asc().nulls_last()
     rows = db.execute(base.order_by(ordered, Part.name, Part.sku).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)).all()
@@ -173,6 +214,8 @@ def list_parts(
                 min_stock=row.Part.min_stock,
                 status=row.status,
                 supplier=row.supplier,
+                expected_30d=round(row.expected_30d),
+                runs_out_days=shown_runs_out_days(row.runs_out_days),
                 equivalent_note=notes.get(row.Part.id),
             )
             for row in rows

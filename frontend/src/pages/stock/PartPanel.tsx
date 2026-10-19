@@ -33,9 +33,21 @@ import { t } from "@/i18n";
 import { formatDay, formatMoney, formatNumber } from "@/lib/format";
 
 import { PartEditForm } from "./PartEditForm";
+import { PartForecastSection } from "./PartForecastSection";
 
 // Everything about one part, sliding in from the end side. Owners and managers can edit it here.
-export function PartPanel({ partId, canEdit, onClose }: { partId: string | null; canEdit: boolean; onClose: () => void }) {
+// `branch`, when the Stock list is filtered to one branch, shows forecasts for that branch only.
+export function PartPanel({
+  partId,
+  canEdit,
+  branch,
+  onClose,
+}: {
+  partId: string | null;
+  canEdit: boolean;
+  branch?: string;
+  onClose: () => void;
+}) {
   const part = usePart(partId);
   const [editing, setEditing] = useState(false);
 
@@ -60,14 +72,24 @@ export function PartPanel({ partId, canEdit, onClose }: { partId: string | null;
         ) : editing ? (
           <PartEditForm part={part.data} onDone={() => setEditing(false)} />
         ) : (
-          <PartDetails part={part.data} canEdit={canEdit} onEdit={() => setEditing(true)} />
+          <PartDetails part={part.data} canEdit={canEdit} branch={branch} onEdit={() => setEditing(true)} />
         )}
       </SheetContent>
     </Sheet>
   );
 }
 
-function PartDetails({ part, canEdit, onEdit }: { part: PartDetail; canEdit: boolean; onEdit: () => void }) {
+function PartDetails({
+  part,
+  canEdit,
+  branch,
+  onEdit,
+}: {
+  part: PartDetail;
+  canEdit: boolean;
+  branch?: string;
+  onEdit: () => void;
+}) {
   const currency = useSignedIn().organization.currency;
   const outOfStock = part.status === "out";
 
@@ -119,6 +141,10 @@ function PartDetails({ part, canEdit, onEdit }: { part: PartDetail; canEdit: boo
             ))}
             <Line label={t.part.total} value={formatNumber(part.quantity)} strong />
           </dl>
+        </Section>
+
+        <Section title={t.part.forecast.title}>
+          <PartForecastSection partId={part.id} branch={branch} />
         </Section>
 
         <Section title={t.part.prices}>

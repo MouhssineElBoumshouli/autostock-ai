@@ -54,6 +54,13 @@ export function formatDay(value: string): string {
   return dateOnly.format(new Date(`${value}T00:00:00`));
 }
 
+const monthDay = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" });
+
+// "2026-03-15" -> "Mar 15". For chart axis ticks, where the year would just be noise.
+export function formatMonthDay(value: string): string {
+  return monthDay.format(new Date(`${value}T00:00:00`));
+}
+
 // What someone types in a money field -> centimes. "12,50" and "12.50" -> 1250. Empty -> null.
 export function parseMoneyInput(text: string): number | null | "invalid" {
   const cleaned = text.replace(/\s/g, "").replace(",", ".");

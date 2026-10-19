@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import date, timedelta
 
 import numpy as np
@@ -10,6 +11,7 @@ from app.demo.demo_shop import (
     DEMO_SHOP_NAME,
     FUTURE_DAYS,
     SUMMER,
+    SUPPLIERS,
     WINTER,
     add_demo_owner,
     create_demo_shop,
@@ -17,7 +19,8 @@ from app.demo.demo_shop import (
     true_demand,
 )
 from app.forecast.calendar import is_ramadan
-from app.models import Branch, DemoTrueDemand, Organization, Part, SaleLine, StockOut, User
+from app.models import Branch, DemoTrueDemand, Organization, Part, SaleLine, StockLevel, StockOut, Supplier, User
+from app.stock_status import status_for
 from tests.helpers import new_browser, set_up_shop
 
 LAST_DAY = date(2026, 6, 30)
@@ -26,7 +29,7 @@ HISTORY_DAYS = 200
 
 def make_small_demo(seed: int = 7) -> Organization:
     with SessionLocal() as db:
-        shop = create_demo_shop(db, LAST_DAY, parts_count=8, history_days=HISTORY_DAYS, seed=seed)
+        shop, _counts = create_demo_shop(db, LAST_DAY, parts_count=8, history_days=HISTORY_DAYS, seed=seed)
         db.commit()
         return shop
 
@@ -95,7 +98,7 @@ def test_ramadan_lowers_demand():
 
 def test_the_demo_owner_can_log_in_and_a_real_shop_can_still_be_set_up(browser):
     with SessionLocal() as db:
-        shop = create_demo_shop(db, LAST_DAY, parts_count=2, history_days=60)
+        shop, _counts = create_demo_shop(db, LAST_DAY, parts_count=2, history_days=60)
         password = add_demo_owner(db, shop)
         db.commit()
     assert len(password) >= 12
@@ -119,9 +122,54 @@ def test_demo_accounts_are_refused_in_a_real_shop():
 
 def test_making_the_demo_again_gives_a_new_password_and_removes_the_old_account():
     with SessionLocal() as db:
-        first = add_demo_owner(db, create_demo_shop(db, LAST_DAY, parts_count=2, history_days=60))
+        first_shop, _ = create_demo_shop(db, LAST_DAY, parts_count=2, history_days=60)
+        first = add_demo_owner(db, first_shop)
         db.commit()
-        second = add_demo_owner(db, create_demo_shop(db, LAST_DAY, parts_count=2, history_days=60))
+        second_shop, _ = create_demo_shop(db, LAST_DAY, parts_count=2, history_days=60)
+        second = add_demo_owner(db, second_shop)
         db.commit()
         assert first != second
         assert db.scalar(select(func.count()).select_from(User).where(User.email == DEMO_OWNER_EMAIL)) == 1
+
+
+def test_every_part_has_a_supplier_with_a_real_delivery_time():
+    shop = make_small_demo()
+    with SessionLocal() as db:
+        parts = db.scalars(select(Part).where(Part.organization_id == shop.id)).all()
+        assert all(part.supplier_id is not None for part in parts)
+        suppliers = db.scalars(select(Supplier).where(Supplier.organization_id == shop.id)).all()
+        assert len(suppliers) == len(SUPPLIERS)
+        assert all(3 <= s.delivery_days <= 21 for s in suppliers)
+        assert all(s.phone and s.email for s in suppliers)
+
+
+def test_minimum_stock_is_about_two_weeks_of_normal_sales():
+    shop = make_small_demo()
+    with SessionLocal() as db:
+        parts = db.scalars(select(Part).where(Part.organization_id == shop.id)).all()
+        assert all(part.min_stock >= 1 for part in parts)  # "at least 1" even for the slowest sellers
+
+
+def test_current_stock_is_spread_across_statuses_close_to_target_shares():
+    with SessionLocal() as db:
+        shop, counts = create_demo_shop(db, LAST_DAY, history_days=HISTORY_DAYS)  # every part
+        db.commit()
+        parts = db.scalars(select(Part).where(Part.organization_id == shop.id)).all()
+        on_hand = dict(
+            db.execute(
+                select(StockLevel.part_id, func.sum(StockLevel.quantity))
+                .where(StockLevel.organization_id == shop.id)
+                .group_by(StockLevel.part_id)
+            ).all()
+        )
+        statuses = Counter(status_for(True, on_hand.get(part.id, 0), part.min_stock) for part in parts)
+
+    total = sum(counts.values())
+    assert total == len(parts) and statuses["out"] + statuses["low"] + statuses["healthy"] == total
+    assert statuses["out"] == counts["out"]  # "out" has only one way to get there: 0 on hand
+    assert statuses["low"] == counts["low"]  # "low" is exactly "at or below the minimum"
+    assert statuses["healthy"] == counts["running_out"] + counts["healthy"]  # running_out still reads "Healthy"
+    assert counts["out"] / total == pytest.approx(0.04, abs=0.02)
+    assert counts["low"] / total == pytest.approx(0.10, abs=0.03)
+    assert counts["running_out"] / total == pytest.approx(0.08, abs=0.03)
+    assert counts["healthy"] / total > 0.6

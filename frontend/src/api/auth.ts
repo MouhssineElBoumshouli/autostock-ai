@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiRequest } from "@/api/client";
 import type { User } from "@/api/users";
 
-export type Me = { user: User; organization: { id: string; name: string; currency: string } };
+export type Me = { user: User; organization: { id: string; name: string; currency: string; is_demo: boolean } };
 
 export const meQueryKey = ["me"];
 

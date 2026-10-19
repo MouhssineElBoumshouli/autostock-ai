@@ -14,6 +14,10 @@ export type Column<Row> = {
   primary?: boolean;
   /** Set to make the column sortable: clicking its header sorts by this key. */
   sortKey?: string;
+  /** Extra classes for the table's own `<th>`/`<td>` (e.g. "hidden xl:table-cell" to free up
+   * space on a tablet). Phone cards always show every column, since they stack instead of
+   * stretching sideways. */
+  className?: string;
 };
 
 export type TableSort = { key: string; direction: "asc" | "desc" };
@@ -59,7 +63,7 @@ export function DataTable<Row>({
   }
 
   return (
-    <div aria-busy={loading || undefined}>
+    <div aria-busy={loading || undefined} className="min-w-0">
       <div className="hidden md:block">
         <Table>
           <TableHeader>
@@ -94,7 +98,7 @@ export function DataTable<Row>({
               ? range(loadingRowCount).map((index) => (
                   <TableRow key={index}>
                     {columns.map((column) => (
-                      <TableCell key={column.header}>
+                      <TableCell key={column.header} className={column.className}>
                         <Skeleton className={cn("h-4 w-20", column.align === "end" && "ms-auto w-12")} />
                       </TableCell>
                     ))}
@@ -181,8 +185,8 @@ function SortButton({
   );
 }
 
-function alignClass(column: { align?: "start" | "end" }) {
-  return column.align === "end" ? "text-end tabular-nums" : "text-start";
+function alignClass(column: { align?: "start" | "end"; className?: string }) {
+  return cn(column.align === "end" ? "text-end tabular-nums" : "text-start", column.className);
 }
 
 function range(count: number) {

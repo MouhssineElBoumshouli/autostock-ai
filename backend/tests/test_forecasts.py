@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from time import perf_counter
 
 import numpy as np
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from app.db import SessionLocal
 from app.demo.demo_shop import create_demo_shop
@@ -179,10 +179,101 @@ def test_merging_a_branch_moves_its_stock_outs_and_drops_its_forecasts(browser):
 
 def test_a_full_demo_shop_is_forecast_in_under_2_minutes():
     with SessionLocal() as db:
-        shop = create_demo_shop(db, LAST_DAY)
+        shop, _counts = create_demo_shop(db, LAST_DAY)
         db.commit()
     started = perf_counter()
     run = run_now(shop.id)
     seconds = perf_counter() - started
     print(f"Forecast run for {run.series_count} part-branch pairs: {seconds:.1f} s")
     assert run.series_count > 500 and seconds < 120
+
+
+def sell(organization_id: uuid.UUID, part_id: uuid.UUID, branch_id: uuid.UUID, per_day: int, days: int = DAYS) -> None:
+    """`per_day` sold every day for `days` days, ending on LAST_DAY, of an existing part and branch."""
+    with SessionLocal() as db:
+        db.add_all(
+            SaleLine(
+                organization_id=organization_id,
+                sold_on=LAST_DAY - timedelta(days=i),
+                part_id=part_id,
+                branch_id=branch_id,
+                quantity=per_day,
+            )
+            for i in range(days)
+        )
+        db.commit()
+
+
+def test_part_forecast_has_a_number_and_range_for_each_horizon(browser):
+    set_up_shop(browser)
+    shop = shop_id()
+    part_id, _ = add_sales(shop, "OIL-1", per_day=2)
+    run_now(shop)
+
+    forecast = browser.get(f"/api/forecasts/part/{part_id}").json()
+
+    assert len(forecast["weeks"]) == 12
+    assert all(week["quantity"] == 14 for week in forecast["weeks"])  # 2 a day, 7 days
+    for horizon in HORIZONS:
+        data = forecast["horizons"][str(horizon)]
+        assert data["enough_history"] is True
+        assert data["quantity"] == 2 * horizon
+        assert data["low"] <= data["quantity"] <= data["high"]
+        assert data["method"] is not None
+
+
+def test_part_forecast_says_when_there_is_not_enough_history(browser):
+    set_up_shop(browser)
+    shop = shop_id()
+    # A long seller widens the shop's known history, but this part only sold the last 5 days of it.
+    add_sales(shop, "OLD-1", per_day=1)
+    part_id, _ = add_sales(shop, "NEW-1", per_day=3, active=True)
+    with SessionLocal() as db:
+        db.execute(delete(SaleLine).where(SaleLine.part_id == part_id, SaleLine.sold_on < LAST_DAY - timedelta(days=4)))
+        db.commit()
+    run_now(shop)
+
+    forecast = browser.get(f"/api/forecasts/part/{part_id}").json()
+
+    assert all(data["enough_history"] is False for data in forecast["horizons"].values())
+    assert forecast["weeks"][-1]["quantity"] == 15  # the last 5 days, 3 a day
+
+
+def test_part_forecast_is_a_shop_total_or_one_branch(browser):
+    set_up_shop(browser)
+    shop = shop_id()
+    part_id, casablanca = add_sales(shop, "BRK-1", per_day=2)
+    with SessionLocal() as db:
+        rabat = Branch(organization_id=shop, name="Rabat")
+        db.add(rabat)
+        db.commit()
+        rabat_id = rabat.id
+    sell(shop, part_id, rabat_id, per_day=3)
+    run_now(shop)
+
+    total = browser.get(f"/api/forecasts/part/{part_id}").json()
+    casa_only = browser.get(f"/api/forecasts/part/{part_id}?branch={casablanca}").json()
+
+    assert total["horizons"]["7"]["quantity"] == 5 * 7  # both branches added together
+    assert casa_only["horizons"]["7"]["quantity"] == 2 * 7
+    assert total["weeks"][-1]["quantity"] == 35  # (2 + 3) a day, 7 days
+    assert casa_only["weeks"][-1]["quantity"] == 14
+
+
+def test_part_forecast_rejects_a_part_from_another_shop(browser):
+    set_up_shop(browser)
+    other = create_other_shop()
+    part_id, _ = add_sales(other.organization_id, "OTHER-1")
+
+    assert browser.get(f"/api/forecasts/part/{part_id}").status_code == 404
+
+
+def test_staff_can_see_a_parts_forecast(browser):
+    set_up_shop(browser)
+    shop = shop_id()
+    part_id, _ = add_sales(shop, "OIL-1")
+    run_now(shop)
+    add_member(browser, "staff@shop.ma", "staff")
+    staff = member_with_own_password("staff@shop.ma")
+
+    assert staff.get(f"/api/forecasts/part/{part_id}").status_code == 200

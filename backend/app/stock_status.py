@@ -5,6 +5,10 @@
 - Healthy: above the minimum (or no minimum set and some on hand).
 - Inactive: the part is switched off.
 - Dead stock: has stock, but no sale in the last 90 days.
+
+A fifth status, "running_out", overrides "healthy" when the forecast says the part will run out
+within 14 days even though it is above its minimum. Out of stock and low stock still win over it;
+it needs the forecast, so it is applied on top of this module's statuses (see app.runs_out).
 """
 
 import uuid
@@ -16,7 +20,7 @@ from sqlalchemy.sql import ColumnElement
 
 from app.models import Part, SaleLine, StockLevel
 
-StockStatus = Literal["healthy", "low", "out", "inactive"]
+StockStatus = Literal["healthy", "low", "out", "inactive", "running_out"]
 DEAD_AFTER_DAYS = 90
 
 
