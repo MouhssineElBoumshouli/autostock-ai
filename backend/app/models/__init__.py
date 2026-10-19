@@ -10,6 +10,7 @@ from app.models.order_suggestion import OrderRun, OrderSuggestion
 from app.models.organization import Organization
 from app.models.part import Part
 from app.models.part_equivalent import EQUIVALENT_SOURCES, EquivalentSource, PartEquivalent
+from app.models.purchase_order import PurchaseOrder, PurchaseOrderLine
 from app.models.sale_line import SaleLine
 from app.models.stock_level import StockLevel
 from app.models.stock_out import StockOut
@@ -34,6 +35,8 @@ __all__ = [
     "Organization",
     "Part",
     "PartEquivalent",
+    "PurchaseOrder",
+    "PurchaseOrderLine",
     "Role",
     "SaleLine",
     "StockLevel",

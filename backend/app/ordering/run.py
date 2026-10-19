@@ -8,8 +8,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.audit import record_change
-from app.models import Forecast, OrderRun, OrderSuggestion, Part, SaleLine, StockLevel, Supplier, User
+from app.models import Forecast, Organization, OrderRun, OrderSuggestion, Part, SaleLine, StockLevel, Supplier, User
 from app.ordering.budget import BudgetLine, apply_budget, line_value, missed_sales_prevented, value_per_dirham
+from app.ordering.purchase_orders import on_order_by_key
 from app.ordering.reasons import reason
 from app.ordering.suggest import RECENT_DAYS, SLOW_LOOKBACK_DAYS, HorizonForecast, Position, spread, suggest
 
@@ -31,19 +32,22 @@ def make_order_run(db: Session, user: User, budget: int | None) -> OrderRun:
         return run
 
     stock = _stock(db, organization_id)
+    on_order = on_order_by_key(db, organization_id)
     sold_28 = _sold_since(db, organization_id, last_day - timedelta(days=RECENT_DAYS - 1))
     sold_90 = _sold_since(db, organization_id, last_day - timedelta(days=SLOW_LOOKBACK_DAYS - 1))
     parts = {part.id: (part, delivery) for part, delivery in db.execute(
         select(Part, Supplier.delivery_days).outerjoin(Supplier, Supplier.id == Part.supplier_id)
         .where(Part.organization_id == organization_id, Part.is_active)
     )}
+    target = db.get_one(Organization, organization_id).order_service_target
 
     lines, budget_lines = [], []
     for key in sorted(set(forecasts) | set(sold_90)):
         if key[0] not in parts:
             continue
         part, delivery = parts[key[0]]
-        line = _line(run, key, part, delivery, forecasts.get(key, ()), stock.get(key, 0), sold_28.get(key, 0), sold_90.get(key, 0))
+        line = _line(run, key, part, delivery, forecasts.get(key, ()), stock.get(key, 0), on_order.get(key, 0),
+                    sold_28.get(key, 0), sold_90.get(key, 0), target)
         if line is not None:
             lines.append(line)
             value = line_value(line.missed_sales_prevented, part.unit_cost, part.sale_price)
@@ -64,13 +68,12 @@ def make_order_run(db: Session, user: User, budget: int | None) -> OrderRun:
     return run
 
 
-def _line(run: OrderRun, key: Key, part: Part, delivery: int | None, forecasts: tuple, on_hand: int,
-          sold_28: int, sold_90: int) -> OrderSuggestion | None:
+def _line(run: OrderRun, key: Key, part: Part, delivery: int | None, forecasts: tuple, on_hand: int, on_order: int,
+          sold_28: int, sold_90: int, target: float) -> OrderSuggestion | None:
     """None when there is nothing to order."""
     delivery_days = delivery if delivery is not None else DEFAULT_DELIVERY_DAYS
-    on_order = 0  # purchase orders arrive in Step 5b; until then nothing is counted as on its way
     position = Position(on_hand, on_order, part.pack_size, delivery_days, sold_28, sold_90, forecasts)
-    s = suggest(position)
+    s = suggest(position, target)
     if s.quantity <= 0:
         return None
     prevented = missed_sales_prevented(s.expected, spread(forecasts, s.days_covered), on_hand + on_order, s.quantity)

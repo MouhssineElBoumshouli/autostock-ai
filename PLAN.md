@@ -27,7 +27,7 @@ Each step ends with something the owner can open and click. The owner approves b
 - One-sentence reason per line. Manager approves, edits or rejects.
 - Approved lines become a purchase order PDF per supplier.
 - [x] 5a. Suggestion math (need, cushion, packs, slow sellers, budget, reasons), stored per run, proven by a 6-month replay against the usual minimum rule. No screens.
-- [ ] 5b. Screens: manager approves, edits or rejects; purchase orders per supplier; orders on their way count in the next suggestion.
+- [x] 5b. Screens: manager approves, edits or rejects; purchase orders per supplier; orders on their way count in the next suggestion.
 
 ## Step 6 — Dashboard + alerts
 - One screen: stock health, what to order, forecast highlights.

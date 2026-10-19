@@ -12,6 +12,8 @@ import { HomePage } from "@/pages/HomePage";
 import { ImportPage } from "@/pages/import/ImportPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
+import { OrdersPage } from "@/pages/orders/OrdersPage";
+import { PurchaseOrderPrintPage } from "@/pages/orders/PurchaseOrderPrintPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { SetupPage } from "@/pages/SetupPage";
 import { StockPage } from "@/pages/stock/StockPage";
@@ -32,12 +34,15 @@ export const router = createBrowserRouter([
   {
     element: <RequireLogin />,
     children: [
+      // The printable purchase order page: no sidebar or top bar, so printing only shows the order.
+      { path: "/orders/purchase-orders/:id/print", element: <PurchaseOrderPrintPage /> },
       {
         element: <AppShell />,
         children: [
           page("/", <HomePage />, "home"),
           page("/change-password", <ChangePasswordPage />, "changePassword"),
           page("/stock", <StockPage />, "stock"),
+          page("/orders", <OrdersPage />, "orders"),
           {
             element: <RequireRole roles={["owner", "manager"]} />,
             children: [page("/activity", <ActivityPage />, "activity"), page("/stock/import", <ImportPage />, "importFile")],
