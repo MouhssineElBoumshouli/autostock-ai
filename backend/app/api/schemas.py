@@ -27,6 +27,7 @@ class OrganizationOut(BaseModel):
     id: uuid.UUID
     name: str
     currency: str
+    is_demo: bool
 
 
 class Me(BaseModel):

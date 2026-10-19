@@ -3,7 +3,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { apiRequest } from "@/api/client";
 import type { StockStatus } from "@/components/StockBadge";
 
-export type StockSummary = { all: number; healthy: number; low: number; out: number };
+export type StockSummary = { all: number; healthy: number; low: number; out: number; running_out: number };
 export type Choice = { id: string; name: string };
 export type StockFilterChoices = { categories: string[]; branches: Choice[]; suppliers: Choice[] };
 
@@ -19,6 +19,8 @@ export type PartRow = {
   min_stock: number;
   status: StockStatus;
   supplier: string | null;
+  expected_30d: number;
+  runs_out_days: number | null; // null = over 60 days (or no expected sales at all)
   equivalent_note: EquivalentNote | null;
 };
 // closest: the search matched nothing well, so these are the closest parts instead.
@@ -26,7 +28,7 @@ export type PartsPage = { items: PartRow[]; total: number; page: number; page_si
 
 export const statusFilters = ["healthy", "low", "out", "dead", "inactive"] as const;
 export type StatusFilter = (typeof statusFilters)[number];
-export type SortKey = "name" | "sku" | "brand" | "quantity" | "min_stock" | "status" | "supplier";
+export type SortKey = "name" | "sku" | "brand" | "quantity" | "min_stock" | "status" | "supplier" | "expected_30d" | "runs_out_days";
 
 export type PartsQuery = {
   search?: string;
@@ -34,6 +36,7 @@ export type PartsQuery = {
   category?: string;
   branch?: string;
   supplier?: string;
+  running_out?: boolean;
   sort?: SortKey;
   direction: "asc" | "desc";
   page: number;

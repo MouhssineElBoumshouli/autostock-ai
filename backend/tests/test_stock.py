@@ -1,9 +1,10 @@
+import uuid
 from datetime import date, timedelta
 
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import Part
+from app.models import Branch, Forecast, Part, StockLevel
 from tests.helpers import (
     OWNER_PASSWORD,
     add_member,
@@ -39,13 +40,13 @@ def shop_with_parts(browser):
 def test_stat_cards_count_real_parts(browser):
     shop_with_parts(browser)
 
-    assert browser.get("/api/stock/summary").json() == {"all": 22, "healthy": 15, "low": 4, "out": 3}
+    assert browser.get("/api/stock/summary").json() == {"all": 22, "healthy": 15, "low": 4, "out": 3, "running_out": 0}
 
 
 def test_empty_shop_has_zero_everywhere(browser):
     set_up_shop(browser)
 
-    assert browser.get("/api/stock/summary").json() == {"all": 0, "healthy": 0, "low": 0, "out": 0}
+    assert browser.get("/api/stock/summary").json() == {"all": 0, "healthy": 0, "low": 0, "out": 0, "running_out": 0}
     assert parts(browser)["total"] == 0
 
 
@@ -216,3 +217,74 @@ def test_cannot_use_another_shops_branch_or_supplier(browser):
     response = browser.patch(f"/api/parts/{part_id('BP-001')}", json={"stock": [{"branch_id": other_branch, "quantity": 99}]})
 
     assert response.status_code == 422
+
+
+def add_part_with_forecast(organization_id: uuid.UUID, sku: str, quantity: int, expected_30d: float | None) -> uuid.UUID:
+    """A part with `quantity` on hand and, when `expected_30d` is given, a 30-day forecast for it."""
+    with SessionLocal() as db:
+        branch = db.scalar(select(Branch).where(Branch.organization_id == organization_id))
+        part = Part(organization_id=organization_id, sku=sku, name=f"Part {sku}", min_stock=0, is_active=True)
+        db.add(part)
+        db.flush()
+        db.add(StockLevel(organization_id=organization_id, part_id=part.id, branch_id=branch.id, quantity=quantity))
+        if expected_30d is not None:
+            db.add(
+                Forecast(
+                    organization_id=organization_id,
+                    part_id=part.id,
+                    branch_id=branch.id,
+                    horizon_days=30,
+                    history_last_day=date(2026, 1, 1),
+                    demand_type="smooth",
+                    method="four_week_average",
+                    quantity=expected_30d,
+                    low=expected_30d,
+                    high=expected_30d,
+                    method_wape=None,
+                    baseline_wape=None,
+                    method_mase=None,
+                    baseline_mase=None,
+                    backtest_windows=5,
+                    reason="test",
+                )
+            )
+        db.commit()
+        return part.id
+
+
+def test_runs_out_in_and_next_30_days(browser):
+    set_up_shop(browser)
+    shop = browser.get("/api/auth/me").json()["organization"]["id"]
+    add_part_with_forecast(shop, "SOON-1", quantity=9, expected_30d=30)  # 9 pieces / (1 a day) = 9 days
+    add_part_with_forecast(shop, "SAFE-1", quantity=100, expected_30d=10)  # 300 days of cover
+    add_part_with_forecast(shop, "NODEM-1", quantity=50, expected_30d=None)  # nothing expected to sell
+
+    soon = next(i for i in parts(browser)["items"] if i["sku"] == "SOON-1")
+    safe = next(i for i in parts(browser)["items"] if i["sku"] == "SAFE-1")
+    no_demand = next(i for i in parts(browser)["items"] if i["sku"] == "NODEM-1")
+
+    assert (soon["expected_30d"], soon["runs_out_days"]) == (30, 9)
+    assert (safe["expected_30d"], safe["runs_out_days"]) == (10, None)
+    assert (no_demand["expected_30d"], no_demand["runs_out_days"]) == (0, None)
+
+
+def test_running_out_filter_and_stat(browser):
+    set_up_shop(browser)
+    shop = browser.get("/api/auth/me").json()["organization"]["id"]
+    add_part_with_forecast(shop, "SOON-1", quantity=9, expected_30d=30)
+    add_part_with_forecast(shop, "SAFE-1", quantity=100, expected_30d=10)
+
+    assert browser.get("/api/stock/summary").json()["running_out"] == 1
+    assert skus(parts(browser, running_out=True)) == ["SOON-1"]
+
+
+def test_sort_by_runs_out_days_puts_the_soonest_first(browser):
+    set_up_shop(browser)
+    shop = browser.get("/api/auth/me").json()["organization"]["id"]
+    add_part_with_forecast(shop, "SOON-1", quantity=9, expected_30d=30)
+    add_part_with_forecast(shop, "SAFE-1", quantity=100, expected_30d=10)
+    add_part_with_forecast(shop, "NODEM-1", quantity=50, expected_30d=None)
+
+    ordered = skus(parts(browser, sort="runs_out_days"))
+
+    assert ordered[0] == "SOON-1"  # nulls (no urgent cover date) sort last, either direction

@@ -1,22 +1,27 @@
-import { BoxIcon, CircleCheckIcon, PackageXIcon, TriangleAlertIcon } from "lucide-react";
+import { BoxIcon, CircleCheckIcon, PackageXIcon, TimerIcon, TriangleAlertIcon } from "lucide-react";
 
 import type { StatusFilter, StockSummary } from "@/api/stock";
 import { StatCard } from "@/components/StatCard";
 import { t } from "@/i18n";
 import { formatNumber } from "@/lib/format";
 
-// The four numbers on top of Stock and Home. Only real counts from the database.
+// The numbers on top of Stock and Home. Only real counts from the database.
 // On the Stock screen (onFilter given) tapping one filters the list; tapping it again clears it.
+// "Running out soon" is a separate on/off filter: it can be combined with a status filter.
 export function StockStats({
   summary,
   loading,
   activeStatus,
   onFilter,
+  runningOut,
+  onToggleRunningOut,
 }: {
   summary?: StockSummary;
   loading: boolean;
   activeStatus?: StatusFilter;
   onFilter?: (status: StatusFilter | undefined) => void;
+  runningOut?: boolean;
+  onToggleRunningOut?: (value: boolean) => void;
 }) {
   const value = (n: number | undefined) => formatNumber(n ?? 0);
 
@@ -24,8 +29,9 @@ export function StockStats({
     onFilter?.(activeStatus === status ? undefined : status);
   }
 
+  const columns = onToggleRunningOut ? "lg:grid-cols-3 xl:grid-cols-5" : "xl:grid-cols-4";
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+    <div className={`grid grid-cols-2 gap-3 sm:gap-4 ${columns}`}>
       <StatCard
         icon={BoxIcon}
         label={t.stock.stats.all}
@@ -65,6 +71,18 @@ export function StockStats({
         active={activeStatus === "out"}
         onClick={onFilter && (() => toggle("out"))}
       />
+      {onToggleRunningOut && (
+        <StatCard
+          icon={TimerIcon}
+          tone="warning"
+          label={t.stock.runningOutSoon}
+          value={value(summary?.running_out)}
+          note={t.stock.stats.runningOutNote}
+          loading={loading}
+          active={runningOut === true}
+          onClick={() => onToggleRunningOut(!runningOut)}
+        />
+      )}
     </div>
   );
 }
