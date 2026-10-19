@@ -48,10 +48,6 @@ $$
 def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
     op.execute("CREATE EXTENSION IF NOT EXISTS unaccent")
-    # Comparing words is much slower than PostgreSQL assumes, so it would read every part instead
-    # of using the trigram index. Telling it the real cost makes it use the index (about 20x faster).
-    op.execute("ALTER FUNCTION word_similarity_op(text, text) COST 100")
-    op.execute("ALTER FUNCTION word_similarity_commutator_op(text, text) COST 100")
     op.execute(SEARCH_TEXT)
     op.execute(SEARCH_CODE)
 
