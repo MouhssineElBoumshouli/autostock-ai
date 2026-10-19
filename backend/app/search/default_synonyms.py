@@ -20,14 +20,14 @@ DEFAULT_SYNONYMS: list[list[str]] = [
     ["filtre à gasoil", "filtre à carburant", "fuel filter", "diesel filter", "فلتر الوقود", "فلتر المازوت"],
     ["huile moteur", "engine oil", "motor oil", "زيت المحرك", "زيت الموتور", "ليويل ديال الموتور"],
     ["huile", "oil", "زيت", "ليويل"],
-    ["liquide de refroidissement", "coolant", "antifreeze", "سائل التبريد", "ليكيد ديال الراديا"],
+    ["liquide de refroidissement", "antigel", "coolant", "antifreeze", "سائل التبريد", "ليكيد ديال الراديا"],
     # Ignition and electrical
     ["bougie d'allumage", "spark plug", "شمعة الإشعال", "بوجي", "بوجية"],
     ["bougie de préchauffage", "glow plug", "شمعة التسخين", "بوجي ديال التسخين"],
     ["bobine d'allumage", "ignition coil", "ملف الإشعال", "بوبين"],
     ["allumage", "ignition", "إشعال"],
     ["batterie", "battery", "بطارية", "باطري", "باتري"],
-    ["alternateur", "alternator", "مولد كهربائي", "دينامو", "الطرناتور"],
+    ["alternateur", "alternator", "dynamo", "dinamo", "مولد كهربائي", "دينامو", "الطرناتور"],
     ["démarreur", "starter", "starter motor", "محرك التشغيل", "ديمارور", "مارش"],
     # Engine and cooling
     ["courroie de distribution", "kit de distribution", "timing belt", "سير التوقيت", "كوروا ديال الديستريبيسيون"],
@@ -46,7 +46,7 @@ DEFAULT_SYNONYMS: list[list[str]] = [
     ["amortisseur", "shock absorber", "shock", "ممتص الصدمات", "مساعد", "امورتيسور"],
     ["rotule de direction", "tie rod end", "رأس المقود", "روتيل"],
     ["biellette de barre stabilisatrice", "biellette stabilisatrice", "stabilizer link", "sway bar link", "ذراع التوازن"],
-    ["roulement de roue", "wheel bearing", "رولمان ديال الروضة", "محمل العجلة"],
+    ["roulement de roue", "roulement", "wheel bearing", "bearing", "رولمان ديال الروضة", "رولمان", "محمل العجلة"],
     ["embrayage", "clutch", "القابض", "كلاتش", "لامبرياج", "امبرياج"],
     ["kit", "set", "طقم"],
     # Other
