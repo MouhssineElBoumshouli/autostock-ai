@@ -25,6 +25,7 @@ FIELDS: dict[str, list[Field]] = {
         Field("unit_cost", "Unit cost"),
         Field("sale_price", "Sale price"),
         Field("min_stock", "Minimum stock"),
+        Field("pack_size", "Pack size"),
         Field("quantity", "Quantity"),
         Field("branch", "Branch"),
         Field("supplier", "Supplier"),

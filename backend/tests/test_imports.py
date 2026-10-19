@@ -306,3 +306,29 @@ def test_imports_stay_in_their_own_shop(browser):
     with SessionLocal() as db:
         shops = db.execute(select(Part.organization_id, func.count()).group_by(Part.organization_id)).all()
     assert sorted(n for _, n in shops) == [22, 22]
+
+
+# Pack size (optional column)
+
+
+def test_pack_size_is_imported_when_the_file_has_it_and_is_1_otherwise(browser):
+    set_up_shop(browser)
+    content = "SKU;Name;Colisage\nOF-1;Oil filter;5\nBP-1;Brake pads;\n".encode()
+
+    response = send(browser, "save", "parts", "packs.csv", {0: "sku", 1: "name", 2: "pack_size"}, content=content)
+
+    assert response.status_code == 200, response.text
+    with SessionLocal() as db:
+        packs = dict(db.execute(select(Part.sku, Part.pack_size)).all())
+    assert packs == {"OF-1": 5, "BP-1": 1}
+
+
+def test_pack_size_of_zero_is_a_problem_row(browser):
+    set_up_shop(browser)
+    content = "SKU;Name;Pack\nOF-1;Oil filter;0\nOF-2;Oil filter;2\n".encode()
+
+    summary = send(browser, "save", "parts", "packs.csv", {0: "sku", 1: "name", 2: "pack_size"}, content=content).json()
+
+    assert summary["counts"]["problem_rows"] == 1
+    with SessionLocal() as db:
+        assert dict(db.execute(select(Part.sku, Part.pack_size)).all()) == {"OF-2": 2}

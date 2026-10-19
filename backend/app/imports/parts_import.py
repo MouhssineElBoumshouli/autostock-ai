@@ -145,6 +145,12 @@ def _clean_row(cells: dict, messages: list[str]) -> PartRow:
         minimum = attempt(parse_whole_number, cells["min_stock"], "Minimum stock")
         if minimum is not None:
             values["min_stock"] = minimum
+    if "pack_size" in cells:  # optional: an empty cell leaves the pack size as it was (1 for a new part)
+        pack = attempt(parse_whole_number, cells["pack_size"], "Pack size")
+        if pack == 0:
+            messages.append("Pack size must be at least 1")
+        elif pack is not None:
+            values["pack_size"] = pack
     quantity = attempt(parse_whole_number, cells.get("quantity"), "Quantity") if "quantity" in cells else None
     return PartRow(
         sku=sku or "",

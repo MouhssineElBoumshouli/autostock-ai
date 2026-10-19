@@ -206,6 +206,7 @@ export const en = {
         unit_cost: "Unit cost",
         sale_price: "Sale price",
         min_stock: "Minimum stock",
+        pack_size: "Pack size",
         quantity: "Quantity in stock",
         branch: "Branch",
         supplier: "Supplier",
