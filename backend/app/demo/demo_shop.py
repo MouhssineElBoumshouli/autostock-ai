@@ -7,6 +7,7 @@ organization marked is_demo and never touches a real shop.
 Run inside Docker:  docker compose exec api python -m app.demo.demo_shop
 """
 
+import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -15,11 +16,13 @@ import numpy as np
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.auth.passwords import hash_password
 from app.db import Base, SessionLocal, utc_now
 from app.forecast.calendar import ramadan_flags
-from app.models import Branch, Organization, Part, SaleLine
+from app.models import Branch, Organization, Part, SaleLine, User
 
 DEMO_SHOP_NAME = "DEMO SHOP (made-up data)"
+DEMO_OWNER_EMAIL = "demo@autostock.local"
 HISTORY_DAYS = 548  # 18 months
 FUTURE_DAYS = 60  # true demand kept after the history ends, to check forecasts
 BRANCHES = {"Casablanca - Maarif": 1.0, "Rabat - Agdal": 0.7, "Marrakech - Gueliz": 0.5}
@@ -167,6 +170,19 @@ def create_demo_shop(
     return shop
 
 
+def add_demo_owner(db: Session, shop: Organization) -> str:
+    """An owner account to log in to the demo shop. Returns its password, new and random each time
+    (so none is ever written in the code). Refuses any shop that is not a demo shop."""
+    if not shop.is_demo:
+        raise ValueError("Demo accounts are only for demo shops.")
+    taken = db.scalar(select(User).where(User.email == DEMO_OWNER_EMAIL, User.organization_id != shop.id))
+    if taken is not None:
+        raise ValueError(f"{DEMO_OWNER_EMAIL} already belongs to a real shop.")
+    password = secrets.token_urlsafe(9)
+    db.add(User(organization_id=shop.id, name="Demo Owner", email=DEMO_OWNER_EMAIL, password_hash=hash_password(password), role="owner"))
+    return password
+
+
 def _make_parts(organization_id: uuid.UUID, parts_count: int | None) -> list[DemoPart]:
     parts = []
     for name, category, brands, style, count, price in FAMILIES:
@@ -200,9 +216,12 @@ def _copy(db: Session, table: str, columns: list[str], organization_id: uuid.UUI
 def main() -> None:
     with SessionLocal() as db:
         shop = create_demo_shop(db, last_day=date.today() - timedelta(days=1))
+        password = add_demo_owner(db, shop)
         db.commit()
         lines = db.scalar(select(func.count()).select_from(SaleLine).where(SaleLine.organization_id == shop.id))
         print(f"Created '{DEMO_SHOP_NAME}' with {len(FAMILIES)} part families and {lines} sales lines.")
+        print(f"Log in to the demo shop with  email: {DEMO_OWNER_EMAIL}  password: {password}")
+        print("(A new password is made each time the demo shop is created.)")
 
 
 if __name__ == "__main__":

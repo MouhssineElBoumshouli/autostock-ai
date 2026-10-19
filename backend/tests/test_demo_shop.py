@@ -1,20 +1,24 @@
 from datetime import date, timedelta
 
 import numpy as np
+import pytest
 from sqlalchemy import func, select
 
 from app.db import SessionLocal
 from app.demo.demo_shop import (
+    DEMO_OWNER_EMAIL,
     DEMO_SHOP_NAME,
     FUTURE_DAYS,
     SUMMER,
     WINTER,
+    add_demo_owner,
     create_demo_shop,
     season_factor,
     true_demand,
 )
 from app.forecast.calendar import is_ramadan
-from app.models import Branch, DemoTrueDemand, Organization, Part, SaleLine, StockOut
+from app.models import Branch, DemoTrueDemand, Organization, Part, SaleLine, StockOut, User
+from tests.helpers import new_browser, set_up_shop
 
 LAST_DAY = date(2026, 6, 30)
 HISTORY_DAYS = 200
@@ -87,3 +91,37 @@ def test_ramadan_lowers_demand():
     ramadan = np.array([is_ramadan(first_day + timedelta(days=i)) for i in range(120)])
     assert ramadan.sum() == 30
     assert demand[ramadan].mean() < 0.85 * demand[~ramadan & (np.arange(120) < 80)].mean()
+
+
+def test_the_demo_owner_can_log_in_and_a_real_shop_can_still_be_set_up(browser):
+    with SessionLocal() as db:
+        shop = create_demo_shop(db, LAST_DAY, parts_count=2, history_days=60)
+        password = add_demo_owner(db, shop)
+        db.commit()
+    assert len(password) >= 12
+    login = browser.post("/api/auth/login", json={"email": DEMO_OWNER_EMAIL, "password": password})
+    assert login.status_code == 200, login.text
+
+    fresh = new_browser()
+    assert fresh.get("/api/setup").json()["needed"] is True  # the demo account is not a real shop
+    set_up_shop(fresh)
+    assert fresh.get("/api/setup").json()["needed"] is False
+
+
+def test_demo_accounts_are_refused_in_a_real_shop():
+    with SessionLocal() as db:
+        real = Organization(name="Real Shop")
+        db.add(real)
+        db.flush()
+        with pytest.raises(ValueError):
+            add_demo_owner(db, real)
+
+
+def test_making_the_demo_again_gives_a_new_password_and_removes_the_old_account():
+    with SessionLocal() as db:
+        first = add_demo_owner(db, create_demo_shop(db, LAST_DAY, parts_count=2, history_days=60))
+        db.commit()
+        second = add_demo_owner(db, create_demo_shop(db, LAST_DAY, parts_count=2, history_days=60))
+        db.commit()
+        assert first != second
+        assert db.scalar(select(func.count()).select_from(User).where(User.email == DEMO_OWNER_EMAIL)) == 1
