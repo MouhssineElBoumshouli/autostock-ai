@@ -13,7 +13,7 @@ from app.api.schemas import NameText
 from app.audit import record_change
 from app.auth.permissions import require_role
 from app.db import get_session
-from app.models import Part, Supplier, User
+from app.models import OrderSuggestion, Part, Supplier, User
 
 router = APIRouter(prefix="/api/suppliers")
 owner_only = require_role("owner")
@@ -75,6 +75,7 @@ def merge_supplier(
         raise HTTPException(422, "Choose a different supplier to merge into.")
 
     db.execute(update(Part).where(Part.supplier_id == source.id).values(supplier_id=target.id))
+    db.execute(update(OrderSuggestion).where(OrderSuggestion.supplier_id == source.id).values(supplier_id=target.id))
     names = {"from": source.name, "into": target.name}
     db.delete(source)
     record_change(db, owner, "supplier.merged", "supplier", target.id, after=names)
@@ -90,6 +91,8 @@ def remove_supplier(
         raise HTTPException(409, "This supplier is used by some parts. Merge it into another supplier first.")
 
     record_change(db, owner, "supplier.removed", "supplier", supplier.id, before={"name": supplier.name})
+    # Past suggestions keep their numbers; they just no longer name this supplier.
+    db.execute(update(OrderSuggestion).where(OrderSuggestion.supplier_id == supplier.id).values(supplier_id=None))
     db.delete(supplier)
     db.commit()
 

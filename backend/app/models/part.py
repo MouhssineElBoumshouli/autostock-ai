@@ -22,6 +22,7 @@ class Part(Base):
     unit_cost: Mapped[int | None]
     sale_price: Mapped[int | None]
     min_stock: Mapped[int] = mapped_column(default=0)
+    pack_size: Mapped[int] = mapped_column(default=1)  # the supplier sells it by this many
     supplier_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("suppliers.id"))
     is_active: Mapped[bool] = mapped_column(default=True)
 
