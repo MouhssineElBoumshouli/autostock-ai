@@ -7,7 +7,8 @@ Searching any word of a group also searches the others. Keep a group to true equ
 
 DEFAULT_SYNONYMS: list[list[str]] = [
     # Brakes
-    ["plaquettes de frein", "plaquette de frein", "brake pads", "brake pad", "فحمات الفرامل", "فحمات", "بلاكيت"],
+    ["plaquettes de frein", "plaquette de frein", "brake pads", "brake pad", "فحمات الفرامل", "فحمات", "بلاكيت",
+     "وسادات الفرامل"],
     ["frein", "freins", "brake", "brakes", "فرامل", "فران", "فرانات"],
     ["disque de frein", "brake disc", "brake rotor", "قرص الفرامل", "ديسك فران", "ديسك"],
     ["étrier", "étrier de frein", "caliper", "brake caliper", "ملقط الفرامل", "كاليبر"],

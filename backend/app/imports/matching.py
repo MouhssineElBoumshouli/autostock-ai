@@ -33,6 +33,7 @@ _PARTS_ORDER = [
     "brand", "category", "name",
 ]
 _SALES_ORDER = ["date", "sku", "unit_price", "quantity", "branch"]
+_EQUIVALENTS_ORDER = ["equivalent_code", "our_code"]
 
 _KEYWORDS: dict[ImportKind, dict[str, list[str]]] = {
     "parts": {
@@ -82,13 +83,27 @@ _KEYWORDS: dict[ImportKind, dict[str, list[str]]] = {
             "succursale", "magasin", "الفرع", "مستودع",
         ],
     },
+    "equivalents": {
+        # Checked first: a header naming the OTHER brand or an equivalence beats the generic "code".
+        "equivalent_code": [
+            "equivalent", "cross reference", "cross ref", "other brand", "alternative", "alt code",
+            "replacement", "équivalent", "reference croisee", "référence croisée", "remplacement",
+            "concurrent", "مكافئ", "بديل",
+        ],
+        "our_code": [
+            "our code", "our sku", "our ref", "our reference", "notre code", "notre référence", "sku", "ref",
+            "réf", "reference", "référence", "part no", "رمز", "كود", "مرجع",
+        ],
+    },
 }
-_ORDERS: dict[ImportKind, list[str]] = {"parts": _PARTS_ORDER, "sales": _SALES_ORDER}
+_ORDERS: dict[ImportKind, list[str]] = {"parts": _PARTS_ORDER, "sales": _SALES_ORDER, "equivalents": _EQUIVALENTS_ORDER}
 
 # "code" on its own is the only sane way to write "SKU" in some shops, but as soon as it's part
 # of a longer header ("Code postal client", "Code barre") it almost never means the part's code.
 # Rather than guess, it's only trusted when it is the whole header, nothing else.
-_EXACT_ONLY: dict[ImportKind, dict[str, str]] = {"parts": {"code": "sku"}, "sales": {"code": "sku"}}
+_EXACT_ONLY: dict[ImportKind, dict[str, str]] = {
+    "parts": {"code": "sku"}, "sales": {"code": "sku"}, "equivalents": {"code": "our_code"},
+}
 
 
 def _is_arabic(text: str) -> bool:

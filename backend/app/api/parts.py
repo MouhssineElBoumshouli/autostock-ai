@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -13,7 +13,8 @@ from app.api.schemas import NameText
 from app.audit import record_change
 from app.auth.permissions import require_role
 from app.db import get_session
-from app.models import Branch, Part, SaleLine, StockLevel, Supplier, User
+from app.equivalents import load_graph, reachable_from
+from app.models import Branch, Part, PartEquivalent, SaleLine, StockLevel, Supplier, User
 from app.stock_status import StockStatus, status_for
 
 router = APIRouter(prefix="/api/parts")
@@ -47,6 +48,20 @@ class SaleOut(BaseModel):
     unit_price: int | None
 
 
+class EquivalentPart(BaseModel):
+    link_id: uuid.UUID | None  # None for a same-OEM-number match: automatic, so there is nothing to remove
+    part_id: uuid.UUID
+    sku: str
+    name: str
+    brand: str | None
+    price: int | None
+    quantity: int
+    stock: list[BranchStock]
+    in_stock: bool
+    reason_type: Literal["oem", "manual", "supplier_file"]
+    linked_by: str | None  # the manager who made a "manual" link
+
+
 class PartDetail(BaseModel):
     id: uuid.UUID
     sku: str
@@ -63,6 +78,11 @@ class PartDetail(BaseModel):
     supplier: SupplierOut | None
     stock: list[BranchStock]
     last_sales: list[SaleOut]
+    equivalents: list[EquivalentPart]
+
+
+class EquivalentChange(BaseModel):
+    other_part_id: uuid.UUID
 
 
 class StockChange(BaseModel):
@@ -128,6 +148,79 @@ def change_part(
         record_change(db, user, "part.updated", "part", part.id, before=before, after=after)
     db.commit()
     return describe(db, part)
+
+
+@router.post("/{part_id}/equivalents")
+def link_equivalent(
+    part_id: uuid.UUID,
+    body: EquivalentChange,
+    user: User = Depends(can_edit),
+    db: Session = Depends(get_session),
+) -> PartDetail:
+    part = find_part(db, user, part_id)
+    if body.other_part_id == part_id:
+        raise HTTPException(422, "A part can't be its own equivalent.")
+    other = find_part(db, user, body.other_part_id)
+
+    part_a_id, part_b_id = sorted([part.id, other.id])
+    exists = db.scalar(
+        select(PartEquivalent.id).where(
+            PartEquivalent.organization_id == user.organization_id,
+            PartEquivalent.part_a_id == part_a_id,
+            PartEquivalent.part_b_id == part_b_id,
+        )
+    )
+    if exists:
+        raise HTTPException(422, "These parts are already linked.")
+
+    link = PartEquivalent(
+        organization_id=user.organization_id,
+        part_a_id=part_a_id,
+        part_b_id=part_b_id,
+        source="manual",
+        created_by_user_id=user.id,
+    )
+    db.add(link)
+    db.flush()
+    record_change(
+        db, user, "part_equivalent.linked", "part_equivalent", link.id,
+        after={"part": _part_label(part), "other_part": _part_label(other), "source": "manual"},
+    )
+    db.commit()
+    return describe(db, part)
+
+
+@router.delete("/{part_id}/equivalents/{link_id}")
+def unlink_equivalent(
+    part_id: uuid.UUID,
+    link_id: uuid.UUID,
+    user: User = Depends(can_edit),
+    db: Session = Depends(get_session),
+) -> PartDetail:
+    part = find_part(db, user, part_id)
+    link = db.scalar(
+        select(PartEquivalent).where(
+            PartEquivalent.id == link_id,
+            PartEquivalent.organization_id == user.organization_id,
+            (PartEquivalent.part_a_id == part_id) | (PartEquivalent.part_b_id == part_id),
+        )
+    )
+    if link is None:
+        raise HTTPException(404, "This link is not in your shop.")
+    other_id = link.part_b_id if link.part_a_id == part_id else link.part_a_id
+    other = db.get(Part, other_id)
+
+    record_change(
+        db, user, "part_equivalent.removed", "part_equivalent", link.id,
+        before={"part": _part_label(part), "other_part": _part_label(other), "source": link.source},
+    )
+    db.delete(link)
+    db.commit()
+    return describe(db, part)
+
+
+def _part_label(part: Part) -> str:
+    return f"{part.name} ({part.sku})"
 
 
 def find_part(db: Session, user: User, part_id: uuid.UUID, lock: bool = False) -> Part:
@@ -199,4 +292,45 @@ def describe(db: Session, part: Part) -> PartDetail:
         supplier=SupplierOut.model_validate(supplier, from_attributes=True) if supplier else None,
         stock=stock,
         last_sales=[SaleOut(sold_on=s.sold_on, branch=s.name, quantity=s.quantity, unit_price=s.unit_price) for s in sales],
+        equivalents=equivalents_of(db, part),
     )
+
+
+def equivalents_of(db: Session, part: Part) -> list[EquivalentPart]:
+    """Every part from another brand considered the same part, in stock first."""
+    graph = load_graph(db, part.organization_id)
+    reached = reachable_from(graph, part.id)
+    if not reached:
+        return []
+
+    others = {
+        other.id: other
+        for other in db.scalars(select(Part).where(Part.id.in_([r.part_id for r in reached])))
+    }
+    managers = dict(
+        db.execute(select(User.id, User.name).where(User.id.in_([r.linked_by for r in reached if r.linked_by]))).all()
+    )
+
+    equivalents = []
+    for r in reached:
+        other = others.get(r.part_id)
+        if other is None:
+            continue
+        stock = stock_by_branch(db, other)
+        quantity = sum(row.quantity for row in stock)
+        equivalents.append(
+            EquivalentPart(
+                link_id=r.link_id,
+                part_id=other.id,
+                sku=other.sku,
+                name=other.name,
+                brand=other.brand,
+                price=other.sale_price,
+                quantity=quantity,
+                stock=stock,
+                in_stock=quantity > 0,
+                reason_type=r.reason_type,
+                linked_by=managers.get(r.linked_by) if r.linked_by else None,
+            )
+        )
+    return sorted(equivalents, key=lambda e: (not e.in_stock, e.name))

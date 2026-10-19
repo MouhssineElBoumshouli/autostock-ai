@@ -15,7 +15,7 @@ Each step ends with something the owner can open and click. The owner approves b
 
 ## Step 3 — Part search
 - Search by name, SKU, OEM reference, in French, Arabic or English, with typos.
-- Equivalent parts from other brands that fit the same car.
+- Equivalent parts from other brands (same OEM number, manager links, supplier cross-reference files).
 
 ## Step 4 — Forecasting
 - 7 / 30 / 60-day demand per part and per branch.

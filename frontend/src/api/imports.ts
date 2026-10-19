@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { apiRequest } from "@/api/client";
 
-export type ImportKind = "parts" | "sales";
+export type ImportKind = "parts" | "sales" | "equivalents";
 export type Mapping = Record<number, string>; // column index -> field
 
 export type ImportPreview = {

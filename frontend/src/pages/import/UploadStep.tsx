@@ -9,7 +9,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { t } from "@/i18n";
 import { formatNumber } from "@/lib/format";
 
-const kinds: ImportKind[] = ["parts", "sales"];
+const kinds: ImportKind[] = ["parts", "sales", "equivalents"];
 
 function fileProblem(file: File | null): string | undefined {
   if (!file) return t.importFile.noFile;
@@ -45,7 +45,7 @@ export function UploadStep({
       <CardContent className="grid gap-6">
         <fieldset className="grid gap-3">
           <legend className="mb-1 text-title-small">{t.importFile.kindLabel}</legend>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             {kinds.map((option) => (
               <label
                 key={option}
