@@ -9,6 +9,7 @@ Run inside Docker:  docker compose exec api python -m app.demo.demo_shop
 
 import secrets
 import uuid
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -19,7 +20,7 @@ from sqlalchemy.orm import Session
 from app.auth.passwords import hash_password
 from app.db import Base, SessionLocal, utc_now
 from app.forecast.calendar import ramadan_flags
-from app.models import Branch, Organization, Part, SaleLine, User
+from app.models import Branch, Organization, Part, SaleLine, Supplier, User
 
 DEMO_SHOP_NAME = "DEMO SHOP (made-up data)"
 DEMO_OWNER_EMAIL = "demo@autostock.local"
@@ -30,6 +31,19 @@ BRANCHES = {"Casablanca - Maarif": 1.0, "Rabat - Agdal": 0.7, "Marrakech - Gueli
 WEEKDAY_FACTORS = np.array([1.0, 1.0, 1.0, 1.0, 0.8, 1.05, 0.35])
 RAMADAN_FACTOR = 0.7
 STOCK_OUT_CHANCE = 0.35
+# Made-up Moroccan distributors, each with its own delivery time (Step 5 will need it).
+SUPPLIERS = [
+    ("Atlas Distribution Pieces", "+212 522-301145", "contact@atlas-distribution.ma", 6),
+    ("CasaPieces Auto", "+212 522-884421", "ventes@casapieces.ma", 3),
+    ("Maghreb Auto Supply", "+212 537-662290", "commandes@maghrebautosupply.ma", 11),
+    ("Rabat Pieces Express", "+212 537-119983", "info@rabatpieces.ma", 4),
+    ("Groupe Alami Automobile", "+212 524-557712", "contact@groupe-alami.ma", 18),
+    ("Tanger Auto Parts", "+212 539-443367", "info@tangerautoparts.ma", 21),
+]
+# How current stock is spread on the day the demo is created, as a share of all parts.
+# "running_out" parts are above their minimum (so they still read as "Healthy") but have little
+# cover left at their own selling rate — exactly what the forecast is meant to catch.
+STOCK_BUCKETS = [("out", 0.04), ("low", 0.10), ("running_out", 0.08), ("healthy", 0.78)]
 CARS = [
     "Dacia Logan 1.5 dCi", "Dacia Sandero 1.0", "Renault Clio 4 1.5 dCi", "Peugeot 208 1.6 HDi",
     "Peugeot 301 1.6", "Hyundai i10 1.1", "Fiat Uno 1.4", "VW Golf 7 2.0 TDI", "Toyota Corolla 1.6",
@@ -134,8 +148,9 @@ def remove_demo_shops(db: Session) -> None:
 
 def create_demo_shop(
     db: Session, last_day: date, parts_count: int | None = None, history_days: int = HISTORY_DAYS, seed: int = 7
-) -> Organization:
-    """Replaces any old demo shop with a new one whose sales history ends on `last_day`."""
+) -> tuple[Organization, Counter]:
+    """Replaces any old demo shop with a new one whose sales history ends on `last_day`.
+    Returns the shop and how many parts started out of stock, low, running out soon, or healthy."""
     rng = np.random.default_rng(seed)
     remove_demo_shops(db)
     shop = Organization(name=DEMO_SHOP_NAME, currency="MAD", is_demo=True)
@@ -143,13 +158,19 @@ def create_demo_shop(
     db.flush()
     branches = {Branch(organization_id=shop.id, name=name): factor for name, factor in BRANCHES.items()}
     db.add_all(branches)
-    parts = _make_parts(shop.id, parts_count)
+    suppliers = _make_suppliers(shop.id)
+    db.add_all(suppliers)
+    db.flush()
+    parts = _make_parts(shop.id, parts_count, rng, suppliers)
     db.add_all(item.part for item in parts)
     db.flush()
+    buckets = _stock_buckets(rng, len(parts))
 
     first_day = last_day - timedelta(days=history_days - 1)
     sales, truth, outs, stock = [], [], [], []
-    for item in parts:
+    counts = Counter()
+    for item, bucket in zip(parts, buckets):
+        branch_rates = []
         for branch, factor in branches.items():
             wanted = true_demand(rng, first_day, history_days + FUTURE_DAYS, item.style, factor)
             sold = wanted[:history_days].copy()
@@ -160,14 +181,34 @@ def create_demo_shop(
             key = (item.part.id, branch.id)
             sales += [(*key, first_day + timedelta(days=int(i)), int(sold[i]), item.part.sale_price) for i in np.flatnonzero(sold)]
             truth += [(*key, first_day + timedelta(days=int(i)), int(wanted[i])) for i in np.flatnonzero(wanted)]
-            empty_now = any(last == history_days - 1 for _, last in periods)
-            stock.append((*key, 0 if empty_now else int(rng.poisson(wanted[:history_days].mean() * 30 + 2))))
+            branch_rates.append(wanted[:history_days].mean())
+
+        daily_rate = sum(branch_rates)
+        min_days = rng.uniform(8, 12) if bucket == "running_out" else rng.uniform(10, 18)  # "about 2 weeks"
+        item.part.min_stock = max(1, round(daily_rate * min_days))
+        total = _target_quantity(rng, bucket, item.part.min_stock, daily_rate, min_days)
+        for (branch, _), quantity in zip(branches.items(), _branch_quantities(rng, total, np.array(branch_rates))):
+            stock.append((item.part.id, branch.id, quantity))
+        counts[bucket] += 1
 
     _copy(db, "sale_lines", ["part_id", "branch_id", "sold_on", "quantity", "unit_price"], shop.id, sales)
     _copy(db, "demo_true_demand", ["part_id", "branch_id", "day", "quantity"], shop.id, truth)
     _copy(db, "stock_outs", ["part_id", "branch_id", "first_day", "last_day"], shop.id, outs)
     _copy(db, "stock_levels", ["part_id", "branch_id", "quantity"], shop.id, stock)
-    return shop
+    return shop, counts
+
+
+def _target_quantity(rng: np.random.Generator, bucket: str, min_stock: int, daily_rate: float, min_days: float) -> int:
+    """How many pieces the part starts with in total, to land in its assigned bucket."""
+    if bucket == "out":
+        return 0
+    if bucket == "low":
+        return max(1, round(min_stock * rng.uniform(0.3, 1.0)))
+    if bucket == "running_out":  # above the minimum (reads "Healthy"), but little cover left
+        cover_days = rng.uniform(min_days + 1, 14)
+        return max(min_stock + 1, round(daily_rate * cover_days))
+    cover_days = rng.uniform(25, 90)  # healthy: plenty of cover
+    return max(min_stock + 1, round(daily_rate * cover_days))
 
 
 def add_demo_owner(db: Session, shop: Organization) -> str:
@@ -183,10 +224,18 @@ def add_demo_owner(db: Session, shop: Organization) -> str:
     return password
 
 
-def _make_parts(organization_id: uuid.UUID, parts_count: int | None) -> list[DemoPart]:
+def _make_suppliers(organization_id: uuid.UUID) -> list[Supplier]:
+    return [
+        Supplier(organization_id=organization_id, name=name, phone=phone, email=email, delivery_days=days)
+        for name, phone, email, days in SUPPLIERS
+    ]
+
+
+def _make_parts(organization_id: uuid.UUID, parts_count: int | None, rng: np.random.Generator, suppliers: list[Supplier]) -> list[DemoPart]:
     parts = []
     for name, category, brands, style, count, price in FAMILIES:
         for i in range(count):
+            supplier = suppliers[rng.integers(0, len(suppliers))]
             part = Part(
                 organization_id=organization_id,
                 sku=f"DEMO-{len(parts) + 1:04d}",
@@ -195,12 +244,30 @@ def _make_parts(organization_id: uuid.UUID, parts_count: int | None) -> list[Dem
                 category=category,
                 unit_cost=price * 70,  # centimes: cost is 70% of the sale price
                 sale_price=price * 100,
-                min_stock=2,
+                supplier_id=supplier.id,
             )
             parts.append(DemoPart(part, style))
     if parts_count is None or parts_count >= len(parts):
         return parts
     return [parts[i * len(parts) // parts_count] for i in range(parts_count)]  # spread over all families
+
+
+def _stock_buckets(rng: np.random.Generator, n: int) -> list[str]:
+    """One bucket per part ("out", "low", "running_out" or "healthy"), shuffled, in the shares of
+    STOCK_BUCKETS (rounding goes to "healthy", the largest and least sensitive share)."""
+    counts = {name: round(n * share) for name, share in STOCK_BUCKETS}
+    counts["healthy"] += n - sum(counts.values())
+    buckets = [name for name, count in counts.items() for _ in range(count)]
+    rng.shuffle(buckets)
+    return buckets
+
+
+def _branch_quantities(rng: np.random.Generator, total: int, weights: np.ndarray) -> list[int]:
+    """Splits `total` whole pieces across branches, busier branches getting more."""
+    if total <= 0:
+        return [0] * len(weights)
+    share = weights / weights.sum() if weights.sum() > 0 else np.full(len(weights), 1 / len(weights))
+    return [int(n) for n in rng.multinomial(total, share)]
 
 
 def _copy(db: Session, table: str, columns: list[str], organization_id: uuid.UUID, rows: list[tuple]) -> None:
@@ -215,11 +282,15 @@ def _copy(db: Session, table: str, columns: list[str], organization_id: uuid.UUI
 
 def main() -> None:
     with SessionLocal() as db:
-        shop = create_demo_shop(db, last_day=date.today() - timedelta(days=1))
+        shop, counts = create_demo_shop(db, last_day=date.today() - timedelta(days=1))
         password = add_demo_owner(db, shop)
         db.commit()
         lines = db.scalar(select(func.count()).select_from(SaleLine).where(SaleLine.organization_id == shop.id))
         print(f"Created '{DEMO_SHOP_NAME}' with {len(FAMILIES)} part families and {lines} sales lines.")
+        print(
+            f"Stock on day 1: {counts['out']} out of stock, {counts['low']} low, "
+            f"{counts['running_out']} running out within 14 days, {counts['healthy']} healthy."
+        )
         print(f"Log in to the demo shop with  email: {DEMO_OWNER_EMAIL}  password: {password}")
         print("(A new password is made each time the demo shop is created.)")
 

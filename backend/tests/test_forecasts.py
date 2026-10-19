@@ -179,7 +179,7 @@ def test_merging_a_branch_moves_its_stock_outs_and_drops_its_forecasts(browser):
 
 def test_a_full_demo_shop_is_forecast_in_under_2_minutes():
     with SessionLocal() as db:
-        shop = create_demo_shop(db, LAST_DAY)
+        shop, _counts = create_demo_shop(db, LAST_DAY)
         db.commit()
     started = perf_counter()
     run = run_now(shop.id)
