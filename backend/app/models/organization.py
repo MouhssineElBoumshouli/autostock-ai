@@ -11,3 +11,5 @@ class Organization(Base):
 
     name: Mapped[str] = mapped_column(String(200))
     currency: Mapped[str] = mapped_column(String(3), default="MAD")
+    # A made-up shop for demos and for measuring forecasts. Real shops are never demo shops.
+    is_demo: Mapped[bool] = mapped_column(default=False)

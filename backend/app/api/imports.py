@@ -6,7 +6,7 @@ The browser sends the file again at each step, so nothing half-done is kept on t
 import json
 import uuid
 
-from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 from app.audit import record_change
 from app.auth.permissions import require_role
 from app.db import get_session
+from app.forecast.run import run_forecasts_in_background
+from app.stock_outs import record_stock_outs_now
 from app.imports.equivalents_import import plan_equivalents, save_equivalents
 from app.imports.fields import FIELDS, ImportKind, check_mapping
 from app.imports.matching import suggest_field
@@ -128,12 +130,15 @@ async def check(
 @router.post("/save")
 async def save(
     file: UploadFile,
+    background: BackgroundTasks,
     kind: ImportKind = Form(),
     mapping: str = Form(),
     user: User = Depends(can_import),
     db: Session = Depends(get_session),
 ) -> SummaryOut:
-    """Saves every good row in one transaction: if anything fails, nothing is saved."""
+    """Saves every good row in one transaction: if anything fails, nothing is saved.
+    New sales remake the forecasts in the background, after the answer is sent; new stock
+    levels save today's stock-outs."""
     table, file_name = await _read(file)
     by_column = _parse_mapping(mapping)
     columns = check_mapping(kind, by_column, len(table.headers))
@@ -164,6 +169,10 @@ async def save(
         },
     )
     db.commit()
+    if kind == "sales":
+        background.add_task(run_forecasts_in_background, user.organization_id, "sales_import")
+    elif kind == "parts":  # the file may set stock to 0
+        background.add_task(record_stock_outs_now, user.organization_id)
     return _summary_out(file_name, plan.summary)
 
 

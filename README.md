@@ -77,6 +77,20 @@ Tests use their own database (`autostock_test`), so they never touch your data.
 Example import files (a messy French one and a clean English one per kind) are in `backend/tests/fixtures/`.
 They are only for tests; `python tests/fixtures/make_fixtures.py` (inside the api container) rebuilds them.
 
+## Demo shop and forecasts
+
+A made-up demo shop (about 200 parts, 3 branches, 18 months of sales) to try forecasts on.
+It is its own organization, marked as demo; running it again replaces it and never touches a real shop.
+
+```
+docker compose exec api python -m app.demo.demo_shop
+docker compose exec api python -m app.demo.check_forecasts
+```
+
+The first command prints a login for the demo shop (a new password each time).
+The second command remakes the demo shop's forecasts and scores them against the true demand the demo was made from.
+Forecasts are remade by themselves after every sales import, or with `POST /api/forecasts/run` (owners and managers).
+
 ## Database changes
 
 Database changes (migrations) live in `backend/migrations/versions/` and run automatically when the server starts.

@@ -1,9 +1,22 @@
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
-from app.api import activity, auth, branches, health, imports, parts, settings, setup, stock, suppliers, synonyms, users
+from app.api import activity, auth, branches, forecasts, health, imports, parts, settings, setup, stock, suppliers, synonyms, users
 from app.origin_check import OriginCheckMiddleware
+from app.stock_outs import keep_recording_stock_outs
 
-app = FastAPI(title="AutoStock AI", docs_url="/api/docs", openapi_url="/api/openapi.json")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Work that runs while the server is up: saving stock-out days for forecasts."""
+    task = asyncio.create_task(keep_recording_stock_outs())
+    yield
+    task.cancel()
+
+
+app = FastAPI(title="AutoStock AI", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
 
 app.add_middleware(OriginCheckMiddleware)
 
@@ -19,3 +32,4 @@ app.include_router(stock.router)
 app.include_router(parts.router)
 app.include_router(branches.router)
 app.include_router(suppliers.router)
+app.include_router(forecasts.router)

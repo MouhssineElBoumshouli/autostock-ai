@@ -6,14 +6,14 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.api.schemas import NameText
 from app.audit import record_change
 from app.auth.permissions import require_role
 from app.db import get_session
-from app.models import Branch, SaleLine, StockLevel, User
+from app.models import Branch, Forecast, SaleLine, StockLevel, StockOut, User
 
 router = APIRouter(prefix="/api/branches")
 owner_only = require_role("owner")
@@ -86,6 +86,8 @@ def merge_branch(
             kept.quantity += level.quantity
             db.delete(level)
     db.execute(update(SaleLine).where(SaleLine.branch_id == source.id).values(branch_id=target.id))
+    db.execute(update(StockOut).where(StockOut.branch_id == source.id).values(branch_id=target.id))
+    db.execute(delete(Forecast).where(Forecast.branch_id == source.id))  # remade on the next forecast run
     db.flush()
 
     names = {"from": source.name, "into": target.name}

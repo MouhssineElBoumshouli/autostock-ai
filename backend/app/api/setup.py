@@ -30,7 +30,9 @@ class SetupRequest(BaseModel):
 
 
 def anyone_exists(db: Session) -> bool:
-    return db.scalar(select(exists().select_from(User))) or False
+    """Someone in a real shop. The demo shop's account does not count, so setup still runs."""
+    real_user = select(User.id).join(Organization, Organization.id == User.organization_id).where(~Organization.is_demo)
+    return db.scalar(select(exists(real_user))) or False
 
 
 @router.get("")
