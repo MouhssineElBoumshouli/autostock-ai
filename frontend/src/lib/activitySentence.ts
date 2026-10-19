@@ -27,6 +27,8 @@ export function activitySentence(item: ActivityItem): string {
       ]
         .filter(Boolean)
         .join(" ");
+    case "synonyms.updated":
+      return words.synonymsChanged(actor);
     case "user.created":
       return self
         ? words.joinedAsFounder(actor, roleName(after.role))

@@ -12,7 +12,8 @@ from app.auth.emails import clean_email
 from app.auth.passwords import check_password_rules, hash_password
 from app.auth.sessions import start_session
 from app.db import get_session, utc_now
-from app.models import Branch, Organization, User
+from app.models import Branch, Organization, SynonymGroup, User
+from app.search.default_synonyms import DEFAULT_SYNONYMS
 
 router = APIRouter(prefix="/api/setup")
 
@@ -61,6 +62,7 @@ def run_setup(body: SetupRequest, response: Response, db: Session = Depends(get_
     db.add(owner)
     # Every shop starts with one branch, named after the shop.
     db.add(Branch(organization_id=organization.id, name=organization.name))
+    db.add_all(SynonymGroup(organization_id=organization.id, words=words) for words in DEFAULT_SYNONYMS)
     db.flush()
     # One activity line for the whole setup: "Sara created the shop Atlas Parts."
     record_change(

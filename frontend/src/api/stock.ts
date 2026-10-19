@@ -18,7 +18,8 @@ export type PartRow = {
   status: StockStatus;
   supplier: string | null;
 };
-export type PartsPage = { items: PartRow[]; total: number; page: number; page_size: number };
+// closest: the search matched nothing well, so these are the closest parts instead.
+export type PartsPage = { items: PartRow[]; total: number; page: number; page_size: number; closest: boolean };
 
 export const statusFilters = ["healthy", "low", "out", "dead", "inactive"] as const;
 export type StatusFilter = (typeof statusFilters)[number];
@@ -30,7 +31,7 @@ export type PartsQuery = {
   category?: string;
   branch?: string;
   supplier?: string;
-  sort: SortKey;
+  sort?: SortKey;
   direction: "asc" | "desc";
   page: number;
 };

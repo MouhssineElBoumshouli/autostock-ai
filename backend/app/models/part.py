@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import Computed, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -24,3 +24,10 @@ class Part(Base):
     min_stock: Mapped[int] = mapped_column(default=0)
     supplier_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("suppliers.id"))
     is_active: Mapped[bool] = mapped_column(default=True)
+
+    # Filled by the database (see app/search). Used only for searching.
+    search_words: Mapped[str] = mapped_column(
+        Text, Computed("' ' || search_text(name || ' ' || coalesce(brand, '') || ' ' || coalesce(category, ''))"), deferred=True
+    )
+    sku_key: Mapped[str] = mapped_column(Text, Computed("search_code(sku)"), deferred=True)
+    oem_key: Mapped[str] = mapped_column(Text, Computed("search_code(oem_reference)"), deferred=True)

@@ -16,8 +16,9 @@ import { requiredError } from "@/lib/validation";
 
 import { BranchesCard } from "./settings/BranchesCard";
 import { SuppliersCard } from "./settings/SuppliersCard";
+import { SynonymsCard } from "./settings/SynonymsCard";
 
-// Owners only: shop name, currency, branches and suppliers.
+// Owners only: shop name, currency, branches, suppliers and search words.
 export function SettingsPage() {
   const settings = useSettings();
 
@@ -42,6 +43,7 @@ export function SettingsPage() {
       </Card>
       <BranchesCard />
       <SuppliersCard />
+      <SynonymsCard />
     </div>
   );
 }
