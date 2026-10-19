@@ -6,12 +6,12 @@ import numpy as np
 import pytest
 
 from app.forecast.backtest import (
-    MIN_WINDOWS,
-    Score,
     actuals,
     backtest_origins,
-    choose,
+    choose_for_type,
     forecast_range,
+    range_gaps,
+    widen_factor,
     mase_scale,
     score,
 )
@@ -203,32 +203,51 @@ def test_mase_scale_is_the_usual_day_to_day_change():
     assert mase_scale(np.array([1, 3, NAN, 2, 2])) == pytest.approx(1.0)  # changes 2 and 0
 
 
-def test_baseline_is_kept_without_enough_history():
-    method, reason = choose({"four_week_average": Score(10, 0.5, 1), "boosting": Score(1, 0.1, 0.1)}, "four_week_average", MIN_WINDOWS - 1)
-    assert method == "four_week_average" and "Too little history" in reason
+def test_one_method_per_type_from_the_pooled_errors_of_its_parts():
+    errors = {"four_week_average": 100.0, "croston": 80.0, "tsb": 90.0}
+    method, reason = choose_for_type(errors, "four_week_average", "slow", 12)
+    assert method == "croston" and "slow" in reason and "20%" in reason and "12 parts" in reason
 
 
-def test_best_method_is_used_only_if_it_clearly_beats_the_baseline():
-    base = Score(100, 0.5, 1.0)
-    method, reason = choose({"four_week_average": base, "croston": Score(80, 0.4, 0.8), "tsb": Score(90, 0.45, 0.9)}, "four_week_average", 8)
-    assert method == "croston" and "20%" in reason
-    method, reason = choose({"four_week_average": base, "croston": Score(97, 0.48, 0.97)}, "four_week_average", 8)
-    assert method == "four_week_average" and "No method beat" in reason
-    method, _ = choose({"four_week_average": base, "boosting": None}, "four_week_average", 8)
+def test_the_baseline_stays_unless_a_method_beats_it_by_5_percent():
+    method, reason = choose_for_type({"four_week_average": 100.0, "croston": 97.0}, "four_week_average", "slow", 12)
+    assert method == "four_week_average" and "no method beat" in reason
+    method, reason = choose_for_type({"four_week_average": 0.0, "croston": 0.0}, "four_week_average", "slow", 12)
     assert method == "four_week_average"
+    method, reason = choose_for_type({"four_week_average": 5.0, "croston": 1.0}, "four_week_average", "lumpy", 0)
+    assert method == "four_week_average" and "Not enough" in reason
 
 
-def test_range_comes_from_past_misses_and_is_never_negative():
+def test_range_gaps_come_from_past_misses():
     predicted = np.full(10, 1.0)
     actual = np.linspace(0.5, 3.0, 10)  # we under-forecast a lot, sometimes over
-    low, high = forecast_range(30.0, predicted, actual, 30)
+    below, above = range_gaps(30.0, predicted, actual, 30)
     misses = (actual - predicted) * 30
-    assert low == pytest.approx(30 + np.quantile(misses, 0.1))
-    assert high == pytest.approx(30 + np.quantile(misses, 0.9))
-    low, high = forecast_range(4.0, np.full(5, 1.0), np.full(5, 1.0), 7)  # perfect past: chance still counts
-    assert low == pytest.approx(4 - 1.28 * 2) and high == pytest.approx(4 + 1.28 * 2)
-    assert forecast_range(1.0, np.full(5, 1.0), np.full(5, 0.0), 30)[0] == 0.0
-    assert forecast_range(5.0, np.array([1.0]), np.array([1.0]), 7) == (0.0, 10.0)  # too few windows: wide
+    assert below == pytest.approx(-np.quantile(misses, 0.1))
+    assert above == pytest.approx(np.quantile(misses, 0.9))
+    perfect = range_gaps(4.0, np.full(5, 1.0), np.full(5, 1.0), 7)  # chance still counts
+    assert perfect == pytest.approx((1.28 * 2, 1.28 * 2))
+    assert range_gaps(5.0, np.array([1.0]), np.array([1.0]), 7) == (5.0, 5.0)  # too few windows: 0 to double
+
+
+def test_forecast_range_widens_and_is_never_negative():
+    assert forecast_range(30.0, 7.5, 20.0) == (22.5, 50.0)
+    assert forecast_range(30.0, 7.5, 20.0, widen=2.0) == (15.0, 70.0)
+    assert forecast_range(1.0, 5.0, 5.0) == (0.0, 6.0)
+
+
+def calm_then_wild(check_offsets) -> tuple[np.ndarray, np.ndarray]:
+    learn = 1.0 + np.array([0.1, -0.1] * 4)
+    return np.full(12, 1.0), np.concatenate([learn, 1.0 + np.array(check_offsets)])
+
+
+def test_ranges_are_widened_until_newer_windows_land_inside_80_percent_of_the_time():
+    # Older windows miss by about 3 pieces (chance alone allows 7); the newest miss by 6 and 9.
+    cases = [calm_then_wild([-0.3, 0.3, -0.2, 0.2]) for _ in range(10)]
+    assert widen_factor(cases, 30) == 1.3  # 9 / 7.01 = 1.28, rounded up to the next step
+    assert widen_factor([calm_then_wild([0.1, -0.1, 0.1, -0.1])], 30) == 1.0  # already catches them
+    assert widen_factor([(np.full(4, 1.0), np.full(4, 9.0))], 30) == 1.0  # too few windows to check
+    assert widen_factor([], 30) == 1.0
 
 
 # --- the whole engine ---------------------------------------------------------------------------
@@ -246,3 +265,12 @@ def test_engine_forecasts_every_row_for_every_horizon_with_a_range_and_a_reason(
     assert all(r.demand_type == "slow" for r in slow)
     month = next(r for r in slow if r.horizon == 30)
     assert month.quantity == pytest.approx(30 * 3 / 20, rel=0.35)
+
+
+def test_engine_uses_one_method_per_demand_type_but_keeps_each_parts_own_score():
+    results = forecast_all(seasonal_panel(rows=30, days=400), DAY0)
+    for horizon in HORIZONS:
+        smooth = [r for r in results if r.horizon == horizon and r.demand_type == "smooth"]
+        assert len(smooth) > 10 and len({r.method for r in smooth}) == 1
+        assert len({r.baseline_wape for r in smooth}) > 1  # each part's own past score
+        assert all(r.widen >= 1.0 for r in smooth)

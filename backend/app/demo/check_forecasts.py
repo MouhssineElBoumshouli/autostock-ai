@@ -62,10 +62,13 @@ def true_future_totals(db, shop: ShopDemand) -> dict[int, np.ndarray]:
 
 def print_wins(results: list[SeriesForecast]) -> None:
     by_type = defaultdict(Counter)
+    widen = {}
     for r in results:
         by_type[r.demand_type][r.method] += 1
+        widen[r.demand_type] = r.widen
     for kind, wins in sorted(by_type.items()):
-        print(f"  {kind:8} ({sum(wins.values()):3}): " + ", ".join(f"{m} {n}" for m, n in wins.most_common()))
+        used = ", ".join(f"{m} {n}" for m, n in wins.most_common())
+        print(f"  {kind:8} ({sum(wins.values()):3}): {used}; ranges widened x{widen[kind]}")
 
 
 def print_backtest(results: list[SeriesForecast]) -> None:

@@ -17,6 +17,9 @@ STEP = 7  # one week between two windows
 MIN_KNOWN_BEFORE = 28  # a window counts only if the part had 4 known weeks before it
 MIN_WINDOWS = 3
 MARGIN = 0.05  # a method must beat the baseline by at least 5%, so luck alone rarely wins
+TARGET_COVERAGE = 0.8  # ranges should catch the real total 8 times out of 10
+CHECK_WINDOWS = 4  # newest windows used to check the ranges
+WIDEN_STEPS = np.round(np.arange(1.0, 5.01, 0.05), 2)
 
 
 @dataclass
@@ -64,31 +67,57 @@ def score(predicted: np.ndarray, actual: np.ndarray, known: np.ndarray, scale: f
     )
 
 
-def choose(scores: dict[str, Score | None], baseline: str, windows: int) -> tuple[str, str]:
-    """The method to use and why. The baseline unless another method clearly beat it on this part's past."""
-    if windows < MIN_WINDOWS:
-        return baseline, f"Too little history to test ({windows} of {MIN_WINDOWS} past windows): using the 4-week average."
-    base = scores[baseline]
-    others = {name: s for name, s in scores.items() if name != baseline and s is not None}
-    if not others:
-        return baseline, "No other method could be tested: using the 4-week average."
-    name = min(others, key=lambda n: others[n].error)
-    if base.error > 0 and others[name].error < (1 - MARGIN) * base.error:
-        gain = round(100 * (1 - others[name].error / base.error))
-        return name, f"Beat the 4-week average by {gain}% on this part's past {windows} windows."
-    return baseline, f"No method beat the 4-week average by at least {round(MARGIN * 100)}% on this part's past."
+def choose_for_type(errors: dict[str, float], baseline: str, kind: str, parts: int) -> tuple[str, str]:
+    """One method for all parts of a demand type, from their pooled past errors (pieces off).
+    The baseline unless another method beat it by at least MARGIN."""
+    others = {name: error for name, error in errors.items() if name != baseline}
+    if parts == 0 or not others:
+        return baseline, f"Not enough {kind} parts with history to compare methods: using the 4-week average."
+    name = min(others, key=others.get)
+    base = errors[baseline]
+    if base > 0 and others[name] < (1 - MARGIN) * base:
+        gain = round(100 * (1 - others[name] / base))
+        return name, f"For {kind} parts, it beat the 4-week average by {gain}% over the past of {parts} parts."
+    return baseline, f"For {kind} parts, no method beat the 4-week average by at least {round(MARGIN * 100)}%."
 
 
-def forecast_range(quantity: float, predicted: np.ndarray, actual: np.ndarray, horizon: int) -> tuple[float, float]:
-    """Low and high: the forecast plus the 10th and 90th percentile of its own past misses.
+def range_gaps(quantity: float, predicted: np.ndarray, actual: np.ndarray, horizon: int) -> tuple[float, float]:
+    """How far below and above the forecast the range goes: the 10th and 90th percentile of the
+    method's own past misses.
 
-    Past windows overlap and are few, so they can look calmer than reality. The range is therefore
-    never narrower than chance alone allows for counted sales (Poisson: 1.28 x square root).
+    Never narrower than chance alone allows for counted sales (Poisson: 1.28 x square root).
     """
     misses = (actual - predicted) * horizon
     if len(misses) < MIN_WINDOWS or np.isnan(misses).any():
-        return 0.0, max(2 * quantity, 1.0)  # nothing to learn from: a wide, honest range
+        return quantity, max(quantity, 1.0)  # nothing to learn from: a wide range (0 to double)
     chance = 1.28 * np.sqrt(quantity)
-    low = quantity + min(float(np.quantile(misses, 0.1)), -chance)
-    high = quantity + max(float(np.quantile(misses, 0.9)), chance)
-    return max(low, 0.0), high
+    return max(-float(np.quantile(misses, 0.1)), chance), max(float(np.quantile(misses, 0.9)), chance)
+
+
+def forecast_range(quantity: float, below: float, above: float, widen: float = 1.0) -> tuple[float, float]:
+    return max(quantity - widen * below, 0.0), quantity + widen * above
+
+
+def widen_factor(cases: list[tuple[np.ndarray, np.ndarray]], horizon: int) -> float:
+    """How much to widen the ranges of one demand type so they catch the real total TARGET_COVERAGE
+    of the time. Tested honestly in time order: ranges built from older windows, checked on the
+    newest CHECK_WINDOWS. `cases` = each part's (predicted, actual) daily rates per past window."""
+    forecasts, reals, belows, aboves = [], [], [], []
+    for predicted, actual in cases:
+        if len(actual) < MIN_WINDOWS + CHECK_WINDOWS:
+            continue
+        learn = slice(None, -CHECK_WINDOWS)
+        for p, a in zip(predicted[-CHECK_WINDOWS:], actual[-CHECK_WINDOWS:]):
+            below, above = range_gaps(p * horizon, predicted[learn], actual[learn], horizon)
+            forecasts.append(p * horizon)
+            reals.append(a * horizon)
+            belows.append(below)
+            aboves.append(above)
+    if not forecasts:
+        return 1.0
+    forecasts, reals, belows, aboves = map(np.array, (forecasts, reals, belows, aboves))
+    for widen in WIDEN_STEPS:
+        caught = (reals >= forecasts - widen * belows) & (reals <= forecasts + widen * aboves)
+        if caught.mean() >= TARGET_COVERAGE:
+            return float(widen)
+    return float(WIDEN_STEPS[-1])
