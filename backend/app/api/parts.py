@@ -13,7 +13,7 @@ from app.api.schemas import NameText
 from app.audit import record_change
 from app.auth.permissions import require_role
 from app.db import get_session
-from app.equivalents import load_graph, reachable_from
+from app.equivalents import reachable_from
 from app.models import Branch, Part, PartEquivalent, SaleLine, StockLevel, Supplier, User
 from app.stock_status import StockStatus, status_for
 
@@ -298,8 +298,7 @@ def describe(db: Session, part: Part) -> PartDetail:
 
 def equivalents_of(db: Session, part: Part) -> list[EquivalentPart]:
     """Every part from another brand considered the same part, in stock first."""
-    graph = load_graph(db, part.organization_id)
-    reached = reachable_from(graph, part.id)
+    reached = reachable_from(db, part.organization_id, part.id)
     if not reached:
         return []
 

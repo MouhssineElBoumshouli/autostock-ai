@@ -1,14 +1,19 @@
 """Parts that are the same part under another brand: same OEM number (automatic, from
 parts.oem_key), a manager's link, or a row from a supplier's cross-reference file. If A and B are
 the same, and B and C are the same, then A and C are the same: equivalents form groups, not pairs.
+
+Every lookup here expands outward from a known handful of parts (the ones on screen), one
+database query per hop. None of it ever loads a whole shop's parts or links, so a search stays
+fast no matter how big the catalog is - only the size of an equivalence group matters, and those
+stay small (a few brands of the same part).
 """
 
 import uuid
-from collections import defaultdict, deque
+from collections import defaultdict
 from dataclasses import dataclass
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session, aliased
 
 from app.models import Part, PartEquivalent
 
@@ -22,53 +27,90 @@ class Reached:
 
 
 @dataclass
-class EquivalentGraph:
-    organization_id: uuid.UUID
-    oem_of: dict[uuid.UUID, str]  # part_id -> oem_key, only for parts that have one
-    by_oem: dict[str, list[uuid.UUID]]
-    links: dict[uuid.UUID, list[tuple[uuid.UUID, PartEquivalent]]]  # part_id -> [(other part, link)]
+class Edge:
+    node: uuid.UUID  # the part already in the frontier
+    other: uuid.UUID  # the part it leads to
+    reason_type: str
+    link_id: uuid.UUID | None
+    linked_by: uuid.UUID | None
 
 
-def load_graph(db: Session, organization_id: uuid.UUID) -> EquivalentGraph:
-    oem_of: dict[uuid.UUID, str] = {}
-    by_oem: dict[str, list[uuid.UUID]] = defaultdict(list)
-    for part_id, oem_key in db.execute(select(Part.id, Part.oem_key).where(Part.organization_id == organization_id)):
-        if oem_key:
-            oem_of[part_id] = oem_key
-            by_oem[oem_key].append(part_id)
+def _expand(db: Session, organization_id: uuid.UUID, frontier: set[uuid.UUID]) -> list[Edge]:
+    """Every same-OEM-number match or stored link touching a part in `frontier`. One query for
+    each (a self-join, not "load this part's code, then look up who shares it" as two queries)."""
+    edges: list[Edge] = []
 
-    links: dict[uuid.UUID, list[tuple[uuid.UUID, PartEquivalent]]] = defaultdict(list)
-    for link in db.scalars(select(PartEquivalent).where(PartEquivalent.organization_id == organization_id)):
-        links[link.part_a_id].append((link.part_b_id, link))
-        links[link.part_b_id].append((link.part_a_id, link))
-    return EquivalentGraph(organization_id=organization_id, oem_of=oem_of, by_oem=by_oem, links=links)
+    origin, other = aliased(Part), aliased(Part)
+    same_oem = db.execute(
+        select(origin.id, other.id).join(
+            other,
+            (other.organization_id == origin.organization_id) & (other.oem_key == origin.oem_key) & (other.id != origin.id),
+        ).where(origin.id.in_(frontier), origin.organization_id == organization_id, origin.oem_key != "")
+    ).all()
+    edges += [Edge(node, other_id, "oem", None, None) for node, other_id in same_oem]
+
+    links = db.scalars(
+        select(PartEquivalent).where(
+            PartEquivalent.organization_id == organization_id,
+            or_(PartEquivalent.part_a_id.in_(frontier), PartEquivalent.part_b_id.in_(frontier)),
+        )
+    ).all()
+    for link in links:
+        if link.part_a_id in frontier:
+            edges.append(Edge(link.part_a_id, link.part_b_id, link.source, link.id, link.created_by_user_id))
+        if link.part_b_id in frontier:
+            edges.append(Edge(link.part_b_id, link.part_a_id, link.source, link.id, link.created_by_user_id))
+    return edges
 
 
-def reachable_from(graph: EquivalentGraph, part_id: uuid.UUID) -> list[Reached]:
-    """Every part in the same equivalence group, however many links away, with how it was first
-    reached. A part reached only through others (A-B-C) still counts: if A=B and B=C, then A=C."""
+def reachable_from(db: Session, organization_id: uuid.UUID, part_id: uuid.UUID) -> list[Reached]:
+    """Every part in the same equivalence group as part_id, however many links away, with how it
+    was first reached. A part reached only through others (A-B-C) still counts: if A=B and B=C,
+    then A=C."""
     visited: dict[uuid.UUID, Reached] = {}
-    queue = deque([part_id])
-    while queue:
-        current = queue.popleft()
-        neighbors: list[Reached] = []
-        oem = graph.oem_of.get(current)
-        if oem:
-            neighbors += [
-                Reached(part_id=other, link_id=None, reason_type="oem", linked_by=None)
-                for other in graph.by_oem[oem] if other != current
-            ]
-        neighbors += [
-            Reached(part_id=other, link_id=link.id, reason_type=link.source, linked_by=link.created_by_user_id)
-            for other, link in graph.links[current]
-        ]
-        for reached in neighbors:
-            if reached.part_id != part_id and reached.part_id not in visited:
-                visited[reached.part_id] = reached
-                queue.append(reached.part_id)
+    frontier = {part_id}
+    while frontier:
+        next_frontier: set[uuid.UUID] = set()
+        for edge in _expand(db, organization_id, frontier):
+            if edge.other != part_id and edge.other not in visited:
+                visited[edge.other] = Reached(
+                    part_id=edge.other, link_id=edge.link_id, reason_type=edge.reason_type, linked_by=edge.linked_by
+                )
+                next_frontier.add(edge.other)
+        frontier = next_frontier
     return list(visited.values())
 
 
-def has_group(graph: EquivalentGraph, part_id: uuid.UUID) -> bool:
-    oem = graph.oem_of.get(part_id)
-    return bool(oem and len(graph.by_oem[oem]) > 1) or bool(graph.links[part_id])
+def groups_of(db: Session, organization_id: uuid.UUID, part_ids: list[uuid.UUID]) -> dict[uuid.UUID, set[uuid.UUID]]:
+    """For each of these parts, every part id in the same equivalence group (itself included).
+    One combined, union-find expansion from all of them at once."""
+    if not part_ids:
+        return {}
+    parent: dict[uuid.UUID, uuid.UUID] = {}
+
+    def find(node: uuid.UUID) -> uuid.UUID:
+        parent.setdefault(node, node)
+        while parent[node] != node:
+            node = parent[node]
+        return node
+
+    def union(a: uuid.UUID, b: uuid.UUID) -> None:
+        root_a, root_b = find(a), find(b)
+        if root_a != root_b:
+            parent[root_a] = root_b
+
+    seen = set(part_ids)
+    frontier = set(part_ids)
+    while frontier:
+        next_frontier: set[uuid.UUID] = set()
+        for edge in _expand(db, organization_id, frontier):
+            union(edge.node, edge.other)
+            if edge.other not in seen:
+                seen.add(edge.other)
+                next_frontier.add(edge.other)
+        frontier = next_frontier
+
+    members: dict[uuid.UUID, set[uuid.UUID]] = defaultdict(set)
+    for node in seen:
+        members[find(node)].add(node)
+    return {part_id: members[find(part_id)] for part_id in part_ids}
