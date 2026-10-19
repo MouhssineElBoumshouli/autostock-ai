@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api import activity, auth, branches, health, imports, parts, settings, setup, stock, suppliers, synonyms, users
+from app.api import activity, auth, branches, forecasts, health, imports, parts, settings, setup, stock, suppliers, synonyms, users
 from app.origin_check import OriginCheckMiddleware
 
 app = FastAPI(title="AutoStock AI", docs_url="/api/docs", openapi_url="/api/openapi.json")
@@ -19,3 +19,4 @@ app.include_router(stock.router)
 app.include_router(parts.router)
 app.include_router(branches.router)
 app.include_router(suppliers.router)
+app.include_router(forecasts.router)

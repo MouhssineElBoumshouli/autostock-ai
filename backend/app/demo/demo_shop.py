@@ -94,7 +94,7 @@ def season_factor(days_of_year: np.ndarray, style: SellingStyle) -> np.ndarray:
 
 
 def true_demand(rng: np.random.Generator, first_day: date, days: int, style: SellingStyle, branch_factor: float) -> np.ndarray:
-    """Pieces customers wanted on each day: customers (Poisson) plus extra pieces per customer."""
+    """Pieces customers wanted on each day: customers (Poisson) plus extra pieces they bought."""
     dates = [first_day + timedelta(days=i) for i in range(days)]
     weekdays = WEEKDAY_FACTORS[[d.weekday() for d in dates]]
     seasons = season_factor(np.array([d.timetuple().tm_yday for d in dates]), style)
@@ -102,7 +102,9 @@ def true_demand(rng: np.random.Generator, first_day: date, days: int, style: Sel
     trend = 1.0 + rng.uniform(-0.1, 0.2) * np.arange(days) / 365  # -10% to +20% a year
     base = rng.uniform(*style.customers_per_day) * branch_factor
     customers = rng.poisson(base * weekdays * seasons * ramadan * trend)
-    return customers + rng.poisson(style.extra_pieces * customers)
+    # Extra pieces come unevenly: most days none, some days a garage buys a whole batch.
+    batches = rng.gamma(0.5, 2.0, days)  # average 1, often near 0, sometimes 3 or more
+    return customers + rng.poisson(style.extra_pieces * customers * batches)
 
 
 def stock_out_periods(rng: np.random.Generator, history_days: int) -> list[tuple[int, int]]:

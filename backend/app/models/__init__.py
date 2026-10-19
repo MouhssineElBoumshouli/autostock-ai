@@ -3,6 +3,7 @@
 from app.models.audit_log import AuditLog
 from app.models.branch import Branch
 from app.models.demo_true_demand import DemoTrueDemand
+from app.models.forecast import Forecast, ForecastRun
 from app.models.import_mapping import ImportMapping
 from app.models.login_failure import LoginFailure
 from app.models.organization import Organization
@@ -22,6 +23,8 @@ __all__ = [
     "AuditLog",
     "Branch",
     "DemoTrueDemand",
+    "Forecast",
+    "ForecastRun",
     "EquivalentSource",
     "ImportMapping",
     "LoginFailure",
