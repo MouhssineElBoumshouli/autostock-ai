@@ -13,7 +13,7 @@ READER says how, chosen by measuring every way on both labeled question sets
 """
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 from sqlalchemy import func, select
@@ -54,7 +54,9 @@ def understand(db: Session, organization_id: uuid.UUID, text: str) -> Understood
     by_model = read_with_model(text, shop)
     if not model_reading_usable(by_rule, by_model):
         return Understood(by_rule, "rule", ai_on)
-    return Understood(by_model, "model", ai_on)
+    # A best guess: the rule's other suggestions stay, so a wrong guess is one tap to fix.
+    others = tuple(question_type for question_type in by_rule.suggestions if question_type != by_model.type)
+    return Understood(replace(by_model, suggestions=others), "model", ai_on)
 
 
 def model_reading_usable(by_rule: Question, by_model: Question | None) -> bool:

@@ -24,6 +24,7 @@ router = APIRouter(prefix="/api/ask")
 anyone = require_role()
 
 AI_OFF = "AI is off: questions are read with simple keyword rules."
+BEST_GUESS = "Best guess. "
 
 
 class AskIn(BaseModel):
@@ -46,14 +47,16 @@ class Suggestion(BaseModel):
 
 
 class AskOut(BaseModel):
-    understood: str | None  # "I understood: Sales of brake pads · Rabat - Agdal · last month", shown first
+    # "I understood: Sales of brake pads · Rabat - Agdal · last month", shown first; starts with
+    # "Best guess." when the local model chose the reading, with the other types as buttons below.
+    understood: str | None
     question_type: str
     filters: dict[str, str]
     understood_by: Literal["model", "rule"]
     ai_note: str | None  # AI_OFF when the local model isn't running
     sentence: str
     numbers: list[Number]
-    suggestions: list[Suggestion]  # only when we weren't sure what was meant
+    suggestions: list[Suggestion]  # when we weren't sure, or the reading is the model's best guess
 
 
 @router.post("")
@@ -67,8 +70,11 @@ def ask(body: AskIn, user: User = Depends(anyone), db: Session = Depends(get_ses
         understood = understand(db, user.organization_id, body.question)
     question = understood.question
     result = answer(db, user.organization_id, question, currency)
+    line = understood_line(question)
+    if line and understood.understood_by == "model":
+        line = BEST_GUESS + line
     return AskOut(
-        understood=understood_line(question),
+        understood=line,
         question_type=question.type,
         filters=understood.question.filters(),
         understood_by=understood.understood_by,

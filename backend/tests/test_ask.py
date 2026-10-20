@@ -308,8 +308,16 @@ def test_model_reads_what_the_rule_is_unsure_about(browser, shop, monkeypatch):
     })
     answer = ask(browser, "chhal mcha mn filtre a huile f rbat")
     assert answer["understood_by"] == "model"
-    assert answer["understood"] == f"I understood: Sales of oil filter · {RABAT} · this week"
+    assert answer["understood"] == f"Best guess. I understood: Sales of oil filter · {RABAT} · this week"
     assert numbers(answer)["Pieces sold"] == 2  # the number comes from the database, not the model
+    # The other readings stay one tap away, without repeating the one chosen.
+    assert [s["question_type"] for s in answer["suggestions"]] == ["stock_of_part", "forecast_of_part"]
+
+
+def test_rule_readings_are_not_called_a_guess(browser, shop, monkeypatch):
+    monkeypatch.setattr(llm, "is_on", lambda: True)
+    answer = ask(browser, "oil filters sold this week")
+    assert answer["understood"].startswith("I understood:") and answer["suggestions"] == []
 
 
 @pytest.mark.parametrize("reply", [
