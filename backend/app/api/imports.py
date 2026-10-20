@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.audit import record_change
 from app.auth.permissions import require_role
 from app.db import get_session
+from app.alerts.run import run_alerts_now
 from app.forecast.run import run_forecasts_in_background
 from app.stock_outs import record_stock_outs_now
 from app.imports.equivalents_import import plan_equivalents, save_equivalents
@@ -138,7 +139,7 @@ async def save(
 ) -> SummaryOut:
     """Saves every good row in one transaction: if anything fails, nothing is saved.
     New sales remake the forecasts in the background, after the answer is sent; new stock
-    levels save today's stock-outs."""
+    levels save today's stock-outs. Both then check for alerts."""
     table, file_name = await _read(file)
     by_column = _parse_mapping(mapping)
     columns = check_mapping(kind, by_column, len(table.headers))
@@ -171,8 +172,10 @@ async def save(
     db.commit()
     if kind == "sales":
         background.add_task(run_forecasts_in_background, user.organization_id, "sales_import")
-    elif kind == "parts":  # the file may set stock to 0
+    elif kind == "parts":  # the file may change stock (and set it to 0)
         background.add_task(record_stock_outs_now, user.organization_id)
+    if kind in ("sales", "parts"):  # after the tasks above, so alerts see fresh forecasts and stock
+        background.add_task(run_alerts_now, user.organization_id)
     return _summary_out(file_name, plan.summary)
 
 

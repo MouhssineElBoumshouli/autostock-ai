@@ -466,6 +466,9 @@ export const en = {
         `${actor} received purchase order ${orderNumber} from ${supplier} in full.`,
       stockReceived: (actor: string, quantity: string, part: string, branch: string, orderNumber: string) =>
         `${actor} received ${quantity} of ${part} at ${branch} (${orderNumber}).`,
+      alertLookedAt: (actor: string, part: string, branch: string) => `${actor} looked at the alert on ${part} at ${branch}.`,
+      alertNotAProblem: (actor: string, part: string, branch: string) =>
+        `${actor} marked the alert on ${part} at ${branch} as not a problem.`,
       otherChange: (actor: string) => `${actor} made a change.`,
     },
   },

@@ -1,0 +1,105 @@
+"""Turns the day's problems into alerts, without flooding the shop:
+- at most DAILY_LIMIT new alerts per shop per day, the most money at stake first;
+- the same problem (same part, branch and kind) is not raised again while its alert is open, nor
+  for REPEAT_DAYS after it was raised.
+Runs every day and after each sales or stock import.
+"""
+
+import asyncio
+import logging
+import uuid
+from datetime import date, timedelta
+
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session
+
+from app.alerts.problem import Problem
+from app.alerts.sales_rules import sales_problems
+from app.alerts.shop_data import ShopData, load_shop_data
+from app.alerts.stock_rules import stock_problems
+from app.db import SessionLocal
+from app.models import Alert, Organization
+
+log = logging.getLogger(__name__)
+DAILY_LIMIT = 10
+REPEAT_DAYS = 30
+CHECK_EVERY_SECONDS = 3600
+
+
+def find_problems(data: ShopData, today: date) -> list[Problem]:
+    """Everything unusual in the week that ends on the last day with imported sales."""
+    end = data.last_sales_index((today - data.first_day).days)
+    if end is None:
+        return []
+    return sales_problems(data, end) + stock_problems(data, end)
+
+
+def pick_new(problems: list[Problem], blocked: set[tuple], room: int) -> list[Problem]:
+    """The problems to raise: not blocked by the no-repeat rule, most money at stake first."""
+    fresh = [p for p in problems if p.key not in blocked]
+    fresh.sort(key=lambda p: (-p.money_at_stake, p.sentence))
+    return fresh[: max(room, 0)]
+
+
+def raise_alerts(db: Session, organization_id: uuid.UUID, data: ShopData, today: date) -> list[Alert]:
+    """Saves today's new alerts. The caller commits."""
+    blocked = set(
+        db.execute(
+            select(Alert.part_id, Alert.branch_id, Alert.kind).where(
+                Alert.organization_id == organization_id,
+                or_(Alert.status == "open", Alert.raised_on > today - timedelta(days=REPEAT_DAYS)),
+            )
+        ).all()
+    )
+    raised_today = db.scalar(select(func.count()).select_from(Alert).where(Alert.organization_id == organization_id, Alert.raised_on == today))
+    alerts = [
+        Alert(
+            organization_id=organization_id,
+            part_id=p.part_id,
+            branch_id=p.branch_id,
+            kind=p.kind,
+            sentence=p.sentence,
+            numbers=p.numbers,
+            money_at_stake=p.money_at_stake,
+            started_on=p.started_on,
+            raised_on=today,
+            status="open",
+        )
+        for p in pick_new(find_problems(data, today), blocked, DAILY_LIMIT - raised_today)
+    ]
+    db.add_all(alerts)
+    db.flush()
+    return alerts
+
+
+def run_alerts(db: Session, organization_id: uuid.UUID, today: date) -> list[Alert]:
+    data = load_shop_data(db, organization_id, today)
+    return raise_alerts(db, organization_id, data, today) if data else []
+
+
+def run_alerts_now(organization_id: uuid.UUID) -> None:
+    """For one shop, in its own session (used after an import)."""
+    with SessionLocal() as db:
+        try:
+            run_alerts(db, organization_id, date.today())
+            db.commit()
+        except Exception:
+            log.exception("Alerts failed for %s", organization_id)
+
+
+async def keep_raising_alerts() -> None:
+    """Runs while the server is up: once a day per shop, checked hourly so a restart never skips a day.
+    Real shops only: the demo shop's alerts come from its replay (app/demo/check_alerts.py)."""
+    checked_on: dict[uuid.UUID, date] = {}
+    while True:
+        today = date.today()
+        try:
+            with SessionLocal() as db:
+                shops = db.scalars(select(Organization.id).where(~Organization.is_demo)).all()
+            for shop_id in shops:
+                if checked_on.get(shop_id) != today:
+                    await asyncio.to_thread(run_alerts_now, shop_id)
+                    checked_on[shop_id] = today
+        except Exception:
+            log.exception("Daily alerts failed")
+        await asyncio.sleep(CHECK_EVERY_SECONDS)

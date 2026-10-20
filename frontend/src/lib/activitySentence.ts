@@ -114,6 +114,10 @@ export function activitySentence(item: ActivityItem): string {
         String(after.branch),
         String(after.order_number),
       );
+    case "alert.reviewed":
+      return after.status === "not_a_problem"
+        ? words.alertNotAProblem(actor, String(after.part), String(after.branch))
+        : words.alertLookedAt(actor, String(after.part), String(after.branch));
     default:
       return words.otherChange(actor);
   }

@@ -147,8 +147,14 @@ def stock_by_day(rng: np.random.Generator, s: DemoSeries) -> np.ndarray:
         before = stock[d] + counted[d]
         if s.out_days[d - 1]:
             stock[d - 1] = 0
-        else:
-            stock[d - 1] = before if before <= full else int(rng.integers(1, refill_point + 1))
+        elif before <= full:
+            stock[d - 1] = before
+        else:  # a delivery came that day
+            stock[d - 1] = int(rng.integers(1, refill_point + 1))
+            if stock[d - 1] == stock[d] and counted[d] > 0:
+                # Real deliveries almost never match a day's sales to the piece; if they did here
+                # (common for slow parts, whose refill point is 1), the stock would look frozen.
+                stock[d - 1] += 1
 
     if p and p.kind == "sold_at_zero":
         stock[p.first - 1 : p.last + 1] = 0

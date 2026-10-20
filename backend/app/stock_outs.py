@@ -1,4 +1,5 @@
-"""Remembers the days a part had no stock in a branch. Forecasts read those days as "unknown
+"""Remembers the days a part had no stock in a branch (and the stock day by day, for alerts: see
+stock_history.py). Forecasts read those days as "unknown
 demand", not "nobody wanted it". Real shops only: the demo shop comes with its own stock-outs.
 
 Checked every hour and after each parts/stock import. Each day is saved once: a part still empty
@@ -15,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.models import Organization, Part, StockLevel, StockOut
+from app.stock_history import record_stock_history
 
 log = logging.getLogger(__name__)
 CHECK_EVERY_SECONDS = 3600
@@ -51,6 +53,7 @@ def record_stock_outs_now(organization_id: uuid.UUID) -> None:
     """For one shop, in its own session (used after an import)."""
     with SessionLocal() as db:
         record_stock_outs(db, organization_id, date.today())
+        record_stock_history(db, organization_id, date.today())
         db.commit()
 
 
@@ -58,6 +61,7 @@ def record_all_stock_outs(today: date) -> None:
     with SessionLocal() as db:
         for shop_id in db.scalars(select(Organization.id).where(~Organization.is_demo)).all():
             record_stock_outs(db, shop_id, today)
+            record_stock_history(db, shop_id, today)
         db.commit()
 
 
