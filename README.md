@@ -91,6 +91,19 @@ The first command prints a login for the demo shop (a new password each time).
 The second command remakes the demo shop's forecasts and scores them against the true demand the demo was made from.
 Forecasts are remade by themselves after every sales import, or with `POST /api/forecasts/run` (owners and managers).
 
+## Ask your shop (optional local AI)
+
+Questions are read by simple keyword rules; nothing extra is needed. To also start the free local
+model (Ollama, about 1 GB downloaded once, nothing leaves the computer):
+
+```
+docker compose --profile ai up
+docker compose exec api python -m app.ask.check_questions
+```
+
+The second command scores the keyword rule and the model on 90 labeled questions per language.
+The app only uses the model if it scores better than the rule (today it does not).
+
 ## Database changes
 
 Database changes (migrations) live in `backend/migrations/versions/` and run automatically when the server starts.

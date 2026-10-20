@@ -37,6 +37,7 @@ Each step ends with something the owner can open and click. The owner approves b
 
 ## Step 7 — Ask your shop
 - Questions in plain language, answered from the shop's real data, with the numbers shown. Runs on a free local model (Ollama); optional.
+- [x] 7a. Engine: 10 read-only question types, keyword rule vs local model measured on 90 labeled questions in 4 languages (rule won: 93% vs 48%), staff get no money. No screens.
 
 ## Step 8 — Polish and launch
 - French and Arabic (right-to-left). Realistic Moroccan demo shop. Backups. Speed check. Presentation.
