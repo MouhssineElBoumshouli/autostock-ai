@@ -9,10 +9,15 @@ from app.ask import model_reader
 from app.ask.keyword_rule import read_with_rule
 from app.ask.model_reader import read_with_model
 from app.ask.periods import day_range, range_before
-from app.ask.question import CANNOT_ANSWER, Question, ShopWords, checked_question
-from app.ask.words import content_key, normalize, same_word
+from app.ask.question import CANNOT_ANSWER, NOT_SURE, Question, ShopWords, checked_question
+from app.ask.understood_line import understood_line
+from app.ask.words import content_key, normalize, same_word, vocabulary
 
-SHOP = ShopWords(categories=("Brakes", "Filters"), branches=("Casablanca - Maarif", "Rabat - Agdal"))
+SHOP = ShopWords(
+    categories=("Brakes", "Filters", "Lighting"),
+    branches=("Casablanca - Maarif", "Rabat - Agdal"),
+    part_words=vocabulary(["Oil filter Bosch", "Brake pads front", "Brake disc", "disque de frein", "plaquettes de frein", "مضخة الماء"]),
+)
 
 
 # Checking the model's JSON
@@ -84,14 +89,49 @@ def test_llm_is_off_when_ollama_does_not_answer(monkeypatch):
     ("forecast brake discs", Question("forecast_of_part", part="brake discs")),
     ("sales this month compared to last month", Question("sales_vs_last", period="this_month")),
     ("sales compared to last week", Question("sales_vs_last", period="this_week")),
+    ("what sold the most last month in rabat", Question("best_sellers", branch="Rabat - Agdal", period="last_month")),
+    ("total sales yesterday", Question("sales_of", period="yesterday")),
+    ("il reste combien de disques de frein a rabat", Question("stock_of_part", part="disques frein", branch="Rabat - Agdal")),
+    ("كم لدينا من مضخة الماء في الرباط", Question("stock_of_part", part="مضخه الماء", branch="Rabat - Agdal")),
+    ("ventes freinage de l'année", Question("sales_of", category="Brakes", period="this_year")),
+    ("faut commander quoi pour l'éclairage", Question("what_to_order", category="Lighting")),
+    ("مبيعات هذا الشهر", Question("sales_of", period="this_month")),
+    ("chhal bi3na had chhar", Question("sales_of", period="this_month")),
 ])
 def test_rule_reads_each_question_type(text, expected):
     assert read_with_rule(text, SHOP) == expected
 
 
-@pytest.mark.parametrize("text", ["who is our best customer", "change the price of oil filters", "bonjour", ""])
-def test_rule_never_guesses(text):
+@pytest.mark.parametrize("text", ["who is our best customer", "change the price of oil filters", "print an invoice"])
+def test_rule_says_what_it_cannot_answer(text):
     assert read_with_rule(text, SHOP) == CANNOT_ANSWER
+
+
+def test_words_the_rule_does_not_know_are_never_made_a_part_name():
+    question = read_with_rule("stock of unicorn horns in rabat", SHOP)
+    assert question.type == NOT_SURE
+    assert question.part == "unicorn horns" and question.branch == "Rabat - Agdal"
+    assert question.suggestions[0] == "stock_of_part" and len(question.suggestions) == 3
+
+
+@pytest.mark.parametrize("text", ["bonjour", "", "brake pads"])
+def test_no_question_type_means_not_sure_not_a_guess(text):
+    question = read_with_rule(text, SHOP)
+    assert question.type == NOT_SURE
+    assert 2 <= len(question.suggestions) <= 3
+
+
+def test_every_answerable_reading_is_shown_in_plain_words():
+    assert understood_line(Question("sales_of", part="brake pads", branch="Rabat - Agdal", period="last_month")) == (
+        "I understood: Sales of brake pads · Rabat - Agdal · last month"
+    )
+    assert understood_line(Question("best_sellers", category="Filters")) == (
+        "I understood: Best sellers in Filters (category) · the last 30 days"
+    )
+    assert understood_line(Question("sales_vs_last")) == "I understood: Sales compared with the period before · this week"
+    assert understood_line(Question("late_deliveries")) == "I understood: Late deliveries"
+    assert understood_line(CANNOT_ANSWER) is None
+    assert understood_line(Question(NOT_SURE, suggestions=("sales_of",))) is None
 
 
 # Words and periods
@@ -102,6 +142,8 @@ def test_words_are_compared_without_accents_case_or_arabic_spelling_differences(
     assert content_key("les filtres à huile") == content_key("Filtres huile")
     assert content_key("الفرامل") == content_key("فرامل")
     assert same_word("plaquete", "plaquette") and not same_word("sel", "sell")
+    assert same_word("stok", "stock") and not same_word("most", "mort")
+    assert same_word("batteries", "battery") is False and same_word(normalize("بطاريات"), normalize("البطارية"))
 
 
 TODAY = date(2026, 10, 20)

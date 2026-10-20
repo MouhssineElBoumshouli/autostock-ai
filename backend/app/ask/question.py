@@ -26,13 +26,17 @@ PART_TEXT_MAX = 80
 NOT_A_PART = {"null", "none"}  # the word for "nothing", written as text
 
 
+NOT_SURE = "not_sure"  # the rule found words it doesn't understand: it asks instead of guessing
+
+
 @dataclass(frozen=True)
 class Question:
-    type: str
-    part: str | None = None
+    type: str  # one of QUESTION_TYPES, or NOT_SURE
+    part: str | None = None  # for NOT_SURE: the words that weren't understood
     category: str | None = None
     branch: str | None = None
     period: str | None = None
+    suggestions: tuple[str, ...] = ()  # for NOT_SURE: the closest question types
 
     def filters(self) -> dict[str, str]:
         return {name: getattr(self, name) for name in FILTERS if getattr(self, name)}
@@ -43,10 +47,12 @@ CANNOT_ANSWER = Question("cannot_answer")
 
 @dataclass(frozen=True)
 class ShopWords:
-    """The shop's own category and branch names: the only values those filters may take."""
+    """The shop's own category and branch names (the only values those filters may take), and
+    every word its parts can be called by (names, brands, its synonym list)."""
 
     categories: tuple[str, ...]
     branches: tuple[str, ...]
+    part_words: frozenset[str] = frozenset()
 
 
 def checked_question(raw: object, shop: ShopWords) -> Question | None:
