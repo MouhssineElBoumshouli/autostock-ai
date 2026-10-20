@@ -13,7 +13,7 @@ from app.api.schemas import NameText
 from app.audit import record_change
 from app.auth.permissions import require_role
 from app.db import get_session
-from app.models import Branch, Forecast, OrderSuggestion, SaleLine, StockLevel, StockOut, User
+from app.models import Alert, Branch, Forecast, OrderSuggestion, SaleLine, StockHistory, StockLevel, StockOut, User
 
 router = APIRouter(prefix="/api/branches")
 owner_only = require_role("owner")
@@ -89,6 +89,10 @@ def merge_branch(
     db.execute(update(StockOut).where(StockOut.branch_id == source.id).values(branch_id=target.id))
     db.execute(delete(Forecast).where(Forecast.branch_id == source.id))  # remade on the next forecast run
     db.execute(update(OrderSuggestion).where(OrderSuggestion.branch_id == source.id).values(branch_id=target.id))
+    # Two branches' day-by-day stock can't be added up after the fact: the merged number is saved
+    # from today on by the next stock check.
+    db.execute(delete(StockHistory).where(StockHistory.branch_id == source.id))
+    db.execute(update(Alert).where(Alert.branch_id == source.id).values(branch_id=target.id))
     db.flush()
 
     names = {"from": source.name, "into": target.name}

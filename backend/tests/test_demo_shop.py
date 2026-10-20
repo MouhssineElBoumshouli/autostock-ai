@@ -19,7 +19,7 @@ from app.demo.demo_shop import (
     true_demand,
 )
 from app.forecast.calendar import is_ramadan
-from app.models import Branch, DemoTrueDemand, Organization, Part, SaleLine, StockLevel, StockOut, Supplier, User
+from app.models import Branch, DemoPlantedProblem, DemoTrueDemand, Organization, Part, SaleLine, StockHistory, StockLevel, StockOut, Supplier, User
 from app.stock_status import status_for
 from tests.helpers import new_browser, set_up_shop
 
@@ -162,6 +162,10 @@ def test_current_stock_is_spread_across_statuses_close_to_target_shares():
                 .group_by(StockLevel.part_id)
             ).all()
         )
+        # Negative stock is planted after the buckets are counted: count those with the stock they had before.
+        for planted in db.scalars(select(DemoPlantedProblem).where(DemoPlantedProblem.kind == "negative_stock")):
+            now = db.scalar(select(StockLevel.quantity).where(StockLevel.part_id == planted.part_id, StockLevel.branch_id == planted.branch_id))
+            on_hand[planted.part_id] += planted.details["quantity_before"] - now
         statuses = Counter(status_for(True, on_hand.get(part.id, 0), part.min_stock) for part in parts)
 
     total = sum(counts.values())
@@ -173,3 +177,52 @@ def test_current_stock_is_spread_across_statuses_close_to_target_shares():
     assert counts["low"] / total == pytest.approx(0.10, abs=0.03)
     assert counts["running_out"] / total == pytest.approx(0.08, abs=0.03)
     assert counts["healthy"] / total > 0.6
+
+
+def test_known_problems_are_planted_with_their_dates_in_the_last_weeks():
+    with SessionLocal() as db:
+        shop, _counts = create_demo_shop(db, LAST_DAY, history_days=HISTORY_DAYS)
+        db.commit()
+        planted = db.scalars(select(DemoPlantedProblem).where(DemoPlantedProblem.organization_id == shop.id)).all()
+    kinds = Counter(p.kind for p in planted)
+    assert kinds == {"sales_spike": 15, "sales_drop": 15, "stock_frozen": 10, "sold_at_zero": 10, "negative_stock": 4}
+    assert len({(p.part_id, p.branch_id) for p in planted}) == len(planted)  # one problem per part and branch
+    assert all(LAST_DAY - timedelta(days=50) <= p.first_day <= p.last_day <= LAST_DAY for p in planted)
+
+
+def test_planted_stock_problems_show_in_the_stock_history():
+    with SessionLocal() as db:
+        shop, _counts = create_demo_shop(db, LAST_DAY, history_days=HISTORY_DAYS)
+        db.commit()
+        planted = db.scalars(select(DemoPlantedProblem).where(DemoPlantedProblem.organization_id == shop.id)).all()
+        for p in planted:
+            history = db.execute(
+                select(StockHistory.day, StockHistory.quantity)
+                .where(StockHistory.part_id == p.part_id, StockHistory.branch_id == p.branch_id)
+                .order_by(StockHistory.day)
+            ).all()
+            sold = db.scalar(
+                select(func.coalesce(func.sum(SaleLine.quantity), 0)).where(
+                    SaleLine.part_id == p.part_id, SaleLine.branch_id == p.branch_id, SaleLine.sold_on.between(p.first_day, p.last_day)
+                )
+            )
+            shelf = db.scalar(select(StockLevel.quantity).where(StockLevel.part_id == p.part_id, StockLevel.branch_id == p.branch_id))
+            if p.kind == "stock_frozen":
+                assert history[-1].day < p.first_day and history[-1].quantity == shelf > 0 and sold > 0
+            elif p.kind == "sold_at_zero":
+                at_zero = [q for day, q in history if p.first_day - timedelta(days=1) <= day <= p.last_day]
+                assert at_zero == [0] and sold >= p.last_day.toordinal() - p.first_day.toordinal() + 1
+            elif p.kind == "negative_stock":
+                assert shelf < 0 and history[-1].quantity == shelf
+
+
+def test_stock_history_ends_at_todays_stock_and_never_goes_negative_by_itself():
+    shop = make_small_demo()
+    with SessionLocal() as db:
+        negative = set(db.execute(select(DemoPlantedProblem.part_id, DemoPlantedProblem.branch_id).where(DemoPlantedProblem.kind == "negative_stock")).all())
+        latest = {}
+        for row in db.scalars(select(StockHistory).where(StockHistory.organization_id == shop.id).order_by(StockHistory.day)):
+            latest[(row.part_id, row.branch_id)] = row.quantity
+            assert row.quantity >= 0 or (row.part_id, row.branch_id) in negative
+        for level in db.scalars(select(StockLevel).where(StockLevel.organization_id == shop.id)):
+            assert latest[(level.part_id, level.branch_id)] == level.quantity

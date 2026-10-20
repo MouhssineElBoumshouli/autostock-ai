@@ -1,7 +1,9 @@
 """All tables. Importing this package registers them with Alembic."""
 
+from app.models.alert import Alert
 from app.models.audit_log import AuditLog
 from app.models.branch import Branch
+from app.models.demo_planted_problem import DemoPlantedProblem
 from app.models.demo_true_demand import DemoTrueDemand
 from app.models.forecast import Forecast, ForecastRun
 from app.models.import_mapping import ImportMapping
@@ -12,6 +14,7 @@ from app.models.part import Part
 from app.models.part_equivalent import EQUIVALENT_SOURCES, EquivalentSource, PartEquivalent
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderLine
 from app.models.sale_line import SaleLine
+from app.models.stock_history import StockHistory
 from app.models.stock_level import StockLevel
 from app.models.stock_out import StockOut
 from app.models.supplier import Supplier
@@ -22,8 +25,10 @@ from app.models.user_session import UserSession
 __all__ = [
     "EQUIVALENT_SOURCES",
     "ROLES",
+    "Alert",
     "AuditLog",
     "Branch",
+    "DemoPlantedProblem",
     "DemoTrueDemand",
     "Forecast",
     "ForecastRun",
@@ -39,6 +44,7 @@ __all__ = [
     "PurchaseOrderLine",
     "Role",
     "SaleLine",
+    "StockHistory",
     "StockLevel",
     "StockOut",
     "Supplier",

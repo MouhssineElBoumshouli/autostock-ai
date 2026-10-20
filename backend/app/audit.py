@@ -37,6 +37,7 @@ KNOWN_ACTIONS = frozenset({
     "purchase_order.sent",
     "purchase_order.received",
     "stock_level.received",
+    "alert.reviewed",
 })
 
 
