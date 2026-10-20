@@ -1,10 +1,15 @@
 """Turning a typed question into a checked Question.
 
+Measured 2026-10-20 (right / wrong question answered): first set rule 86% / 0%, hybrid with
+qwen2.5:3b 97% / 2%; counter set rule 70% / 0%, hybrid 90% / 7%. Hybrid is used: every answer
+shows "I understood: ..." so a wrong reading is visible, and with AI off it is the rule alone.
+
 READER says how, chosen by measuring every way on both labeled question sets
 (app/ask/check_questions.py, results in docs/journey.md):
 - "rule": the keyword rule only; when it is unsure it asks the person.
-- "hybrid": the rule first; the local model only when the rule is unsure. If the model is off or
-  its answer isn't allowed, the person is asked, as with the rule alone.
+- "hybrid": the rule first; the local model only when the rule is unsure, and the model may only
+  pick one of the question types the rule would have offered as buttons. If the model is off, its
+  answer isn't allowed, or it picks another type, the person is asked, as with the rule alone.
 """
 
 import uuid
@@ -47,9 +52,14 @@ def understand(db: Session, organization_id: uuid.UUID, text: str) -> Understood
     if READER == "rule" or by_rule.type != NOT_SURE or not ai_on:
         return Understood(by_rule, "rule", ai_on)
     by_model = read_with_model(text, shop)
-    if by_model is None or by_model.type == "cannot_answer":
+    if not model_reading_usable(by_rule, by_model):
         return Understood(by_rule, "rule", ai_on)
     return Understood(by_model, "model", ai_on)
+
+
+def model_reading_usable(by_rule: Question, by_model: Question | None) -> bool:
+    """The model fills in for an unsure rule only with one of the rule's own suggestions."""
+    return by_model is not None and by_model.type in by_rule.suggestions
 
 
 def understand_as(db: Session, organization_id: uuid.UUID, text: str, question_type: str) -> Understood:

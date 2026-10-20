@@ -2,7 +2,8 @@
 and app/ask/blind_test_counter_questions.py), for every way of reading a question:
 - rule: the keyword rule alone;
 - model: a local model alone (the rule only when the model's answer is rejected);
-- hybrid: the rule, and the model only when the rule is unsure.
+- hybrid: the rule, and the model only when the rule is unsure (and only to pick one of the
+  question types the rule offers), exactly as app/ask/understand.py does.
 
 Each answer is one of:
 - right: right question type AND every filter right (part compared without little words,
@@ -27,6 +28,7 @@ from app.ask.blind_test_questions import BLIND_QUESTIONS, BlindQuestion
 from app.ask.keyword_rule import read_with_rule
 from app.ask.model_reader import read_with_model
 from app.ask.question import NOT_SURE, Question, ShopWords
+from app.ask.understand import model_reading_usable
 from app.ask.words import content_key, vocabulary
 from app.demo.demo_shop import BRANCHES, CARS, FAMILIES
 from app.search.default_synonyms import DEFAULT_SYNONYMS
@@ -87,7 +89,7 @@ def score_set(questions: list[BlindQuestion], models: list[str], show_misses: bo
             model_seconds = perf_counter() - started
             readings[f"model {model}"] = (by_model or by_rule, model_seconds + (rule_seconds if by_model is None else 0))
             if by_rule.type == NOT_SURE:
-                usable = by_model is not None and by_model.type != "cannot_answer"
+                usable = model_reading_usable(by_rule, by_model)
                 readings[f"hybrid {model}"] = (by_model if usable else by_rule, rule_seconds + model_seconds)
             else:
                 readings[f"hybrid {model}"] = (by_rule, rule_seconds)

@@ -325,6 +325,16 @@ def test_no_usable_model_reading_means_not_sure(browser, shop, monkeypatch, repl
     assert answer["question_type"] == "not_sure" and answer["suggestions"]
 
 
+def test_model_may_only_pick_one_of_the_offered_types(browser, shop, monkeypatch):
+    monkeypatch.setattr(llm, "is_on", lambda: True)
+    monkeypatch.setattr(llm, "ask_json", lambda *_: {
+        "type": "late_deliveries", "part": None, "category": None, "branch": None, "period": None,
+    })
+    answer = ask(browser, "chhal mcha mn filtre a huile")
+    assert "late_deliveries" not in [s["question_type"] for s in answer["suggestions"]]
+    assert answer["question_type"] == "not_sure" and answer["understood_by"] == "rule"
+
+
 def test_rule_only_reader_never_asks_the_model(browser, shop, monkeypatch):
     monkeypatch.setattr(llm, "is_on", lambda: True)
     monkeypatch.setattr(understand_module, "READER", "rule")
