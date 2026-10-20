@@ -33,6 +33,7 @@ Each step ends with something the owner can open and click. The owner approves b
 - One screen: stock health, what to order, forecast highlights.
 - Alerts for unusual sales spikes, drops, and stock that doesn't match sales.
 - [x] 6a. Alerts engine (spikes, drops, negative stock, sold at 0, frozen stock), daily limit and no-repeat, "Looked at it" / "Not a problem", measured on problems planted in the demo. No screens.
+- [x] 6b. Home becomes "Today": what needs you, what to order, late deliveries, worth a look, this week's sales vs a normal week. New Alerts page with filters. Staff see it all but without money totals or the mark buttons.
 
 ## Step 7 — Ask your shop
 - Questions in plain language, answered from the shop's real data, with the numbers shown. Runs on a free local model (Ollama); optional.

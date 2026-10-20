@@ -380,6 +380,7 @@ export const en = {
   },
   nav: {
     home: "Home",
+    alerts: "Alerts",
     activity: "Activity",
     team: "Team",
     settings: "Settings",
@@ -399,8 +400,44 @@ export const en = {
   },
   home: {
     greeting: (partOfDay: "morning" | "afternoon" | "evening", name: string) => `Good ${partOfDay}, ${name}`,
-    recentActivity: "Recent activity",
-    seeAll: "See all activity",
+    needsYouToday: (count: number) =>
+      count === 0
+        ? "All good today. Nothing needs you."
+        : count === 1
+          ? "1 thing needs you today."
+          : `${count} things need you today.`,
+    needsAction: {
+      title: "Needs action",
+      empty: "Nothing needs action right now.",
+    },
+    worthALook: {
+      title: "Worth a look",
+      empty: "Nothing unusual in sales this week.",
+    },
+    seeAllAlerts: "See all alerts",
+    lookedAtIt: "Looked at it",
+    notAProblem: "Not a problem",
+    lookedAtItDone: "Marked as looked at.",
+    notAProblemDone: "Marked as not a problem.",
+    toOrder: {
+      title: "To order",
+      summary: (lines: string, cost: string) => `${lines} lines to order, ${cost}`,
+      linesOnly: (lines: string) => `${lines} lines to order`,
+      empty: "Nothing to order right now.",
+      button: "Go to What to order",
+    },
+    lateDeliveries: {
+      title: "Late deliveries",
+      empty: "Nothing is late.",
+      daysLate: (days: number) => (days === 1 ? "1 day late" : `${days} days late`),
+      sentOn: (date: string) => `Sent ${date}`,
+    },
+    weeklySales: {
+      title: "This week's sales",
+      normalWeek: (normal: string) => `Normal week: about ${normal}`,
+      topParts: "Top 5 parts sold this week",
+      noSalesYet: "No sales recorded yet.",
+    },
   },
   activity: {
     subtitle: "Everything that changed in your shop, newest first.",
@@ -549,6 +586,18 @@ export const en = {
     resetTitle: (name: string) => `Reset the password of ${name}?`,
     resetText: "They are logged out everywhere. They log in with the temporary password, then choose their own.",
     resetDone: (name: string) => `New temporary password set. Give it to ${name} in person.`,
+  },
+  alertsPage: {
+    subtitle: "Everything unusual that needs a look, newest first.",
+    group: "Group",
+    allGroups: "All alerts",
+    groups: { needs_action: "Needs action", worth_a_look: "Worth a look" },
+    status: "Status",
+    allStatuses: "All statuses",
+    statuses: { open: "Open", looked_at: "Looked at", not_a_problem: "Not a problem" },
+    nothingYet: "No alerts yet.",
+    nothingMatches: "No alerts match these filters.",
+    markedBy: (name: string) => `Marked by ${name}`,
   },
   notFound: {
     title: "Page not found",
