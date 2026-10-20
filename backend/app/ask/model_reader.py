@@ -62,9 +62,9 @@ def schema_for(shop: ShopWords) -> dict:
     }
 
 
-def read_with_model(text: str, shop: ShopWords) -> Question | None:
+def read_with_model(text: str, shop: ShopWords, model: str = llm.OLLAMA_MODEL) -> Question | None:
     """The model's reading, or None when it is off or its answer is not allowed."""
-    raw = llm.ask_json(instructions_for(shop), text, schema_for(shop))
+    raw = llm.ask_json(instructions_for(shop), text, schema_for(shop), model)
     if isinstance(raw, dict) and raw.get("type") in QUESTION_TYPES:
         used = QUESTION_TYPES[raw["type"]]
         raw = {key: value for key, value in raw.items() if key == "type" or key in used or key not in FILTERS}

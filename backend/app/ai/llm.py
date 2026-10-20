@@ -14,7 +14,7 @@ CHECK_SECONDS = 1
 ANSWER_SECONDS = 30
 
 
-def is_on() -> bool:
+def is_on(model: str = OLLAMA_MODEL) -> bool:
     """True when Ollama answers and has the model downloaded."""
     if not OLLAMA_URL:
         return False
@@ -23,15 +23,15 @@ def is_on() -> bool:
             models = json.load(response).get("models", [])
     except (OSError, ValueError):
         return False
-    return any(model.get("name") in (OLLAMA_MODEL, f"{OLLAMA_MODEL}:latest") for model in models)
+    return any(found.get("name") in (model, f"{model}:latest") for found in models)
 
 
-def ask_json(instructions: str, text: str, schema: dict) -> object | None:
+def ask_json(instructions: str, text: str, schema: dict, model: str = OLLAMA_MODEL) -> object | None:
     """The model's answer as parsed JSON, shaped by `schema`, or None if anything goes wrong."""
     if not OLLAMA_URL:
         return None
     body = {
-        "model": OLLAMA_MODEL,
+        "model": model,
         "messages": [{"role": "system", "content": instructions}, {"role": "user", "content": text}],
         "format": schema,
         "stream": False,
