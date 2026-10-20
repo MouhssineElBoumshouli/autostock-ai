@@ -15,7 +15,7 @@ that part in that branch, judged with a count model (see counts.py).
 import numpy as np
 
 from app.alerts.counts import chance_at_least, chance_at_most, spread
-from app.alerts.problem import Problem, day_label, money
+from app.alerts.problem import Problem, day_label
 from app.alerts.shop_data import ShopData
 
 WEEK = 7
@@ -90,10 +90,6 @@ def usual_range(expected: float, extra_spread: float) -> tuple[int, int]:
 def _problem(data: ShopData, row: int, kind: str, start: int, end: int, sold: int, expected: float, extra_spread: float) -> Problem:
     at_stake = round(abs(sold - expected)) * data.money_per_piece(row, sales=True)
     usual_low, usual_high = usual_range(expected, extra_spread)
-    side = "above" if kind == "sales_spike" else "below"
-    sentence = (
-        f"Sold {sold} in the 7 days to {day_label(data.day(end))}, usually {usual_low} to {usual_high}. "
-        f"About {money(at_stake, data.currency)} of sales {side} usual."
-    )
+    sentence = f"Sold {sold} in the 7 days to {day_label(data.day(end))}, usually {usual_low} to {usual_high}."
     numbers = {"sold": sold, "usual_low": usual_low, "usual_high": usual_high, "expected": round(expected, 1), "week_end": data.day(end).isoformat()}
     return Problem(*data.keys[row], kind, data.day(start), at_stake, sentence, numbers)

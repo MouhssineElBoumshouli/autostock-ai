@@ -8,7 +8,7 @@ clearest first:
 
 import numpy as np
 
-from app.alerts.problem import Problem, day_label, money, pieces
+from app.alerts.problem import Problem, day_label, pieces
 from app.alerts.shop_data import ShopData
 
 LOOK_BACK_DAYS = 7  # "sold while 0" looks at the last week
@@ -42,10 +42,7 @@ def _negative(data: ShopData, row: int, shelf: np.ndarray) -> Problem | None:
         first -= 1
     quantity = int(shelf[end])
     at_stake = -quantity * data.money_per_piece(row, sales=False)
-    sentence = (
-        f"Stock shows {quantity} since {day_label(data.day(first))}: below zero is impossible, so the count is wrong. "
-        f"About {money(at_stake, data.currency)} of stock to recount."
-    )
+    sentence = f"Stock shows {quantity} since {day_label(data.day(first))}: below zero is impossible, so the count is wrong."
     return Problem(*data.keys[row], "negative_stock", data.day(first), at_stake, sentence, {"quantity": quantity})
 
 
@@ -61,10 +58,7 @@ def _sold_at_zero(data: ShopData, row: int, shelf: np.ndarray, sold: np.ndarray)
     count = int(sold[days].sum())
     at_stake = count * data.money_per_piece(row, sales=False)
     on_days = "1 day" if len(days) == 1 else f"{len(days)} days"
-    sentence = (
-        f"Sold {pieces(count)} on {on_days} since {day_label(data.day(days[0]))} while stock showed 0. "
-        f"About {money(at_stake, data.currency)} of stock not counted."
-    )
+    sentence = f"Sold {pieces(count)} on {on_days} since {day_label(data.day(days[0]))} while stock showed 0."
     return Problem(*data.keys[row], "sold_at_zero", data.day(days[0]), at_stake, sentence, {"sold": count, "days": len(days)})
 
 
@@ -82,9 +76,6 @@ def _frozen(data: ShopData, row: int, shelf: np.ndarray, sold: np.ndarray) -> Pr
     quantity = int(shelf[end])
     at_stake = count * data.money_per_piece(row, sales=False)
     since = data.day(last_change + 1)
-    sentence = (
-        f"Stock stuck at {quantity} since {day_label(since)} while {pieces(count)} were sold. "
-        f"About {money(at_stake, data.currency)} of stock may be missing."
-    )
+    sentence = f"Stock stuck at {quantity} since {day_label(since)} while {pieces(count)} were sold."
     numbers = {"quantity": quantity, "sold": count, "unchanged_days": unchanged_days}
     return Problem(*data.keys[row], "stock_frozen", since, at_stake, sentence, numbers)

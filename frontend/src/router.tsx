@@ -6,6 +6,7 @@ import { RequireRole } from "@/components/RequireRole";
 import { AppShell } from "@/components/shell/AppShell";
 import type { PageHandle } from "@/components/shell/navigation";
 import { ActivityPage } from "@/pages/ActivityPage";
+import { AlertsPage } from "@/pages/AlertsPage";
 import { ChangePasswordPage } from "@/pages/ChangePasswordPage";
 import { DesignPage } from "@/pages/design/DesignPage";
 import { HomePage } from "@/pages/HomePage";
@@ -40,6 +41,7 @@ export const router = createBrowserRouter([
         element: <AppShell />,
         children: [
           page("/", <HomePage />, "home"),
+          page("/alerts", <AlertsPage />, "alerts"),
           page("/change-password", <ChangePasswordPage />, "changePassword"),
           page("/stock", <StockPage />, "stock"),
           page("/orders", <OrdersPage />, "orders"),
