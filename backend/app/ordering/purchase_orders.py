@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.audit import record_change
 from app.db import utc_now
-from app.models import OrderSuggestion, Part, PurchaseOrder, PurchaseOrderLine, StockLevel, User
+from app.models import Branch, OrderSuggestion, Part, PurchaseOrder, PurchaseOrderLine, StockLevel, Supplier, User
 
 Key = tuple[uuid.UUID, uuid.UUID]  # (part_id, branch_id)
 
@@ -41,6 +41,8 @@ def decide_suggestion(
     line, po = _current_line(db, suggestion)
     if po is not None and po.status != "draft":
         raise HTTPException(409, "This line is already on a purchase order that was sent.")
+    part = db.get_one(Part, suggestion.part_id)
+    branch = db.get_one(Branch, suggestion.branch_id)
 
     if decision == "reject":
         if line is not None:
@@ -50,7 +52,7 @@ def decide_suggestion(
         before = {"status": suggestion.status}
         suggestion.status, suggestion.approved_quantity = "rejected", None
         record_change(db, user, "order_suggestion.rejected", "order_suggestion", suggestion.id, before=before,
-                      after={"status": "rejected"})
+                      after={"status": "rejected", "part": part.name, "branch": branch.name})
         return suggestion
 
     if suggestion.supplier_id is None:
@@ -59,7 +61,6 @@ def decide_suggestion(
     if qty <= 0:
         raise HTTPException(422, "Enter a quantity of at least 1.")
 
-    part = db.get_one(Part, suggestion.part_id)
     if po is None:
         po = _draft_order_for_supplier(db, user, suggestion.supplier_id)
         line = PurchaseOrderLine(organization_id=suggestion.organization_id, purchase_order_id=po.id,
@@ -74,7 +75,8 @@ def decide_suggestion(
     before = {"status": suggestion.status, "quantity": suggestion.approved_quantity}
     suggestion.status, suggestion.approved_quantity = "approved", qty
     record_change(db, user, "order_suggestion.approved", "order_suggestion", suggestion.id, before=before,
-                  after={"status": "approved", "quantity": qty, "order_number": po.order_number})
+                  after={"status": "approved", "quantity": qty, "order_number": po.order_number,
+                        "part": part.name, "branch": branch.name})
     return suggestion
 
 
@@ -88,7 +90,9 @@ def send_purchase_order(db: Session, user: User, po: PurchaseOrder) -> PurchaseO
     if po.status != "draft":
         raise HTTPException(409, "Only a draft order can be sent.")
     po.status, po.sent_at = "sent", utc_now()
-    record_change(db, user, "purchase_order.sent", "purchase_order", po.id, after={"order_number": po.order_number})
+    supplier = db.get_one(Supplier, po.supplier_id)
+    record_change(db, user, "purchase_order.sent", "purchase_order", po.id,
+                  after={"order_number": po.order_number, "supplier": supplier.name})
     return po
 
 
@@ -115,14 +119,19 @@ def receive_purchase_order(
         before_quantity = level.quantity
         level.quantity += quantity
         line.received_quantity += quantity
+        part = db.get_one(Part, line.part_id)
+        branch = db.get_one(Branch, line.branch_id)
         record_change(db, user, "stock_level.received", "stock_level", level.id,
                       before={"quantity": before_quantity},
-                      after={"quantity": level.quantity, "order_number": po.order_number})
+                      after={"quantity": level.quantity, "order_number": po.order_number,
+                            "part": part.name, "branch": branch.name})
 
     db.flush()
     if all(line.received_quantity >= line.quantity for line in lines.values()):
         po.status, po.received_at = "received", utc_now()
-        record_change(db, user, "purchase_order.received", "purchase_order", po.id, after={"order_number": po.order_number})
+        supplier = db.get_one(Supplier, po.supplier_id)
+        record_change(db, user, "purchase_order.received", "purchase_order", po.id,
+                      after={"order_number": po.order_number, "supplier": supplier.name})
     return po
 
 
@@ -156,8 +165,9 @@ def _draft_order_for_supplier(db: Session, user: User, supplier_id: uuid.UUID) -
                        order_number=_next_order_number(db, user.organization_id), status="draft")
     db.add(po)
     db.flush()
+    supplier = db.get_one(Supplier, supplier_id)
     record_change(db, user, "purchase_order.created", "purchase_order", po.id,
-                  after={"order_number": po.order_number})
+                  after={"order_number": po.order_number, "supplier": supplier.name})
     return po
 
 

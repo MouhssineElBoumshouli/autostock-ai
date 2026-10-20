@@ -445,6 +445,27 @@ export const en = {
       partEdited: (actor: string, part: string, sku: string) => `${actor} edited ${part} (${sku}).`,
       partsLinked: (actor: string, part: string, other: string) => `${actor} linked ${part} to ${other}.`,
       partsUnlinked: (actor: string, part: string, other: string) => `${actor} removed the link between ${part} and ${other}.`,
+      branchRenamed: (actor: string, from: string, to: string) => `${actor} renamed the branch from ${from} to ${to}.`,
+      branchMerged: (actor: string, from: string, into: string) => `${actor} merged branch ${from} into ${into}.`,
+      branchRemoved: (actor: string, name: string) => `${actor} removed branch ${name}.`,
+      supplierMerged: (actor: string, from: string, into: string) => `${actor} merged supplier ${from} into ${into}.`,
+      supplierRemoved: (actor: string, name: string) => `${actor} removed supplier ${name}.`,
+      orderCareChanged: (actor: string, level: string) => `${actor} changed how careful orders should be to "${level}".`,
+      forecastRequested: (actor: string) => `${actor} asked for forecasts to be recalculated.`,
+      suggestionsCreated: (actor: string, lines: string, cut: string) =>
+        `${actor} worked out what to order: ${lines} lines to decide on, ${cut} cut by the budget.`,
+      suggestionsCreatedEmpty: (actor: string) => `${actor} asked for order suggestions, but there is no sales history yet.`,
+      orderApproved: (actor: string, quantity: string, part: string, branch: string) =>
+        `${actor} approved ordering ${quantity} of ${part} for ${branch}.`,
+      orderRejected: (actor: string, part: string, branch: string) => `${actor} rejected ordering ${part} for ${branch}.`,
+      purchaseOrderCreated: (actor: string, orderNumber: string, supplier: string) =>
+        `${actor} created purchase order ${orderNumber} for ${supplier}.`,
+      purchaseOrderSent: (actor: string, orderNumber: string, supplier: string) =>
+        `${actor} marked purchase order ${orderNumber} to ${supplier} as sent.`,
+      purchaseOrderReceived: (actor: string, orderNumber: string, supplier: string) =>
+        `${actor} received purchase order ${orderNumber} from ${supplier} in full.`,
+      stockReceived: (actor: string, quantity: string, part: string, branch: string, orderNumber: string) =>
+        `${actor} received ${quantity} of ${part} at ${branch} (${orderNumber}).`,
       otherChange: (actor: string) => `${actor} made a change.`,
     },
   },
