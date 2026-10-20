@@ -15,6 +15,7 @@ import { t } from "@/i18n";
 import { requiredError } from "@/lib/validation";
 
 import { BranchesCard } from "./settings/BranchesCard";
+import { OrderingCard } from "./settings/OrderingCard";
 import { SuppliersCard } from "./settings/SuppliersCard";
 import { SynonymsCard } from "./settings/SynonymsCard";
 
@@ -44,6 +45,7 @@ export function SettingsPage() {
       <BranchesCard />
       <SuppliersCard />
       <SynonymsCard />
+      <OrderingCard />
     </div>
   );
 }

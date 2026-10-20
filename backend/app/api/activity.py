@@ -31,7 +31,7 @@ ACTIONS_BY_KIND: dict[str, list[str]] = {
 # Only these fields of before/after are ever sent to the website (never anything secret).
 SHOWN_FIELDS = {
     # people and shop
-    "name", "email", "role", "is_active", "currency",
+    "name", "email", "role", "is_active", "currency", "order_service_target",
     # parts
     "sku",
     # imports
@@ -39,6 +39,10 @@ SHOWN_FIELDS = {
     "problem_rows", "new_suppliers", "new_branches", "new_equivalents", "already_linked",
     # equivalent part links
     "part", "other_part", "source",
+    # merges (branches and suppliers)
+    "from", "into",
+    # what to order and purchase orders
+    "branch", "supplier", "order_number", "quantity", "lines", "cut", "cost", "budget",
 }
 
 

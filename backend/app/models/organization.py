@@ -13,3 +13,5 @@ class Organization(Base):
     currency: Mapped[str] = mapped_column(String(3), default="MAD")
     # A made-up shop for demos and for measuring forecasts. Real shops are never demo shops.
     is_demo: Mapped[bool] = mapped_column(default=False)
+    # How careful "what to order" suggestions should be: 0.8 (save money), 0.9 (balanced), 0.95 (never run out).
+    order_service_target: Mapped[float] = mapped_column(default=0.9)

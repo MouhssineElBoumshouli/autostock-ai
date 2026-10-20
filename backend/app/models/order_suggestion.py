@@ -33,7 +33,8 @@ class OrderSuggestion(Base):
     part_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("parts.id"))
     branch_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("branches.id"))
     supplier_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("suppliers.id"))
-    status: Mapped[str] = mapped_column(String(20))  # suggested, cut_by_budget
+    # suggested, cut_by_budget (still pending a decision), approved, rejected
+    status: Mapped[str] = mapped_column(String(20))
     rule: Mapped[str] = mapped_column(String(20))  # forecast, slow_out_of_stock
     quantity: Mapped[int]
     on_hand: Mapped[int]
@@ -50,3 +51,7 @@ class OrderSuggestion(Base):
     missed_sales_prevented: Mapped[float]  # pieces
     value_per_dirham: Mapped[float | None]  # lost profit prevented per dirham spent; None = free line
     reason: Mapped[str] = mapped_column(String(400))
+    # Set once a manager decides. approved_quantity may differ from `quantity` (the manager can change it).
+    approved_quantity: Mapped[int | None]
+    # The purchase order line this became, once approved. Locked (no more edits) once that order is sent.
+    purchase_order_line_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("purchase_order_lines.id"))

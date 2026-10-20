@@ -137,12 +137,14 @@ def test_negative_budget_is_refused(browser):
     assert browser.post("/api/orders/suggestions", json={"budget": -1}).status_code == 422
 
 
-def test_staff_cannot_ask_for_or_read_suggestions(browser):
+def test_staff_can_view_but_not_ask_for_suggestions(browser):
     set_up_shop(browser)
+    add_part(shop_id(), "OIL-1", per_week=9, on_hand=6)
+    browser.post("/api/orders/suggestions", json={})
     add_member(browser, "staff@shop.ma", "staff")
     staff = member_with_own_password("staff@shop.ma")
     assert staff.post("/api/orders/suggestions", json={}).status_code == 403
-    assert staff.get("/api/orders/suggestions/latest").status_code == 403
+    assert staff.get("/api/orders/suggestions/latest").status_code == 200
 
 
 def test_each_shop_only_sees_its_own_suggestions(browser):

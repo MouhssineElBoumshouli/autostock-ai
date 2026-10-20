@@ -3,7 +3,23 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import activity, auth, branches, forecasts, health, imports, orders, parts, settings, setup, stock, suppliers, synonyms, users
+from app.api import (
+    activity,
+    auth,
+    branches,
+    forecasts,
+    health,
+    imports,
+    orders,
+    parts,
+    purchase_orders,
+    settings,
+    setup,
+    stock,
+    suppliers,
+    synonyms,
+    users,
+)
 from app.origin_check import OriginCheckMiddleware
 from app.stock_outs import keep_recording_stock_outs
 
@@ -34,3 +50,4 @@ app.include_router(branches.router)
 app.include_router(suppliers.router)
 app.include_router(forecasts.router)
 app.include_router(orders.router)
+app.include_router(purchase_orders.router)
