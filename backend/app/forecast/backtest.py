@@ -102,35 +102,6 @@ def widen_factor(cases: list[tuple[np.ndarray, np.ndarray]], horizon: int) -> fl
     """How much to widen the ranges of one demand type so they catch the real total TARGET_COVERAGE
     of the time. Tested honestly in time order: ranges built from older windows, checked on the
     newest CHECK_WINDOWS. `cases` = each part's (predicted, actual) daily rates per past window."""
-    checked = _checked_ranges(cases, horizon)
-    if checked is None:
-        return 1.0
-    forecasts, reals, belows, aboves = checked
-    for widen in WIDEN_STEPS:
-        caught = (reals >= forecasts - widen * belows) & (reals <= forecasts + widen * aboves)
-        if caught.mean() >= TARGET_COVERAGE:
-            return float(widen)
-    return float(WIDEN_STEPS[-1])
-
-
-def side_widen_factors(cases: list[tuple[np.ndarray, np.ndarray]], horizon: int, miss_share: float) -> tuple[float, float]:
-    """Like widen_factor, but each side on its own: how much to widen below and above so the real
-    total falls under the range, and over it, at most `miss_share` of the time each. Uneven sellers
-    have rare huge weeks; widening both sides for them would push the bottom of the range to 0."""
-    checked = _checked_ranges(cases, horizon)
-    if checked is None:
-        return 1.0, 1.0
-    forecasts, reals, belows, aboves = checked
-
-    def smallest(missed) -> float:
-        return next((float(w) for w in WIDEN_STEPS if missed(w).mean() <= miss_share), float(WIDEN_STEPS[-1]))
-
-    return smallest(lambda w: reals < forecasts - w * belows), smallest(lambda w: reals > forecasts + w * aboves)
-
-
-def _checked_ranges(cases: list[tuple[np.ndarray, np.ndarray]], horizon: int) -> tuple[np.ndarray, ...] | None:
-    """Forecast, real total and range gaps for each part's newest CHECK_WINDOWS, with gaps learned
-    from its older windows only. None when no part has enough windows."""
     forecasts, reals, belows, aboves = [], [], [], []
     for predicted, actual in cases:
         if len(actual) < MIN_WINDOWS + CHECK_WINDOWS:
@@ -143,5 +114,10 @@ def _checked_ranges(cases: list[tuple[np.ndarray, np.ndarray]], horizon: int) ->
             belows.append(below)
             aboves.append(above)
     if not forecasts:
-        return None
-    return tuple(map(np.array, (forecasts, reals, belows, aboves)))
+        return 1.0
+    forecasts, reals, belows, aboves = map(np.array, (forecasts, reals, belows, aboves))
+    for widen in WIDEN_STEPS:
+        caught = (reals >= forecasts - widen * belows) & (reals <= forecasts + widen * aboves)
+        if caught.mean() >= TARGET_COVERAGE:
+            return float(widen)
+    return float(WIDEN_STEPS[-1])
