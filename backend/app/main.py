@@ -20,6 +20,7 @@ from app.api import (
     stock,
     suppliers,
     synonyms,
+    today,
     users,
 )
 from app.origin_check import OriginCheckMiddleware
@@ -55,3 +56,4 @@ app.include_router(forecasts.router)
 app.include_router(orders.router)
 app.include_router(purchase_orders.router)
 app.include_router(alerts.router)
+app.include_router(today.router)

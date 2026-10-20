@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.alerts.problem import NEEDS_ACTION, SALES_KINDS, WORTH_A_LOOK, group_of
 from app.audit import record_change
@@ -18,6 +18,7 @@ from app.models import Alert, Branch, Part, User
 router = APIRouter(prefix="/api/alerts")
 managers = require_role("owner", "manager")
 anyone = require_role()
+Reviewer = aliased(User)
 
 Status = Literal["open", "looked_at", "not_a_problem"]
 Group = Literal["needs_action", "worth_a_look"]
@@ -39,6 +40,7 @@ class AlertOut(BaseModel):
     raised_on: date
     status: Status
     reviewed_by: uuid.UUID | None
+    reviewed_by_name: str | None
     reviewed_at: datetime | None
 
 
@@ -53,9 +55,10 @@ def list_alerts(
     """Newest first; within a day, the most money at stake first. `group`: "needs_action" (stock
     that doesn't match sales) or "worth_a_look" (sales spikes and drops)."""
     query = (
-        select(Alert, Part, Branch)
+        select(Alert, Part, Branch, Reviewer.name)
         .join(Part, Part.id == Alert.part_id)
         .join(Branch, Branch.id == Alert.branch_id)
+        .outerjoin(Reviewer, Reviewer.id == Alert.reviewed_by)
         .where(Alert.organization_id == user.organization_id)
         .order_by(Alert.raised_on.desc(), Alert.money_at_stake.desc())
         .limit(SHOWN)
@@ -66,7 +69,7 @@ def list_alerts(
         query = query.where(Alert.kind.in_(SALES_KINDS))
     elif group == NEEDS_ACTION:
         query = query.where(Alert.kind.not_in(SALES_KINDS))
-    return [_alert_out(alert, part, branch) for alert, part, branch in db.execute(query)]
+    return [_alert_out(alert, part, branch, reviewer_name) for alert, part, branch, reviewer_name in db.execute(query)]
 
 
 @router.post("/{alert_id}/review")
@@ -80,14 +83,15 @@ def review(alert_id: uuid.UUID, body: ReviewIn, user: User = Depends(managers), 
     after = {"status": body.status, "kind": alert.kind, "part": part.name, "branch": branch.name}
     record_change(db, user, "alert.reviewed", "alert", alert.id, before={"status": before}, after=after)
     db.commit()
-    return _alert_out(alert, part, branch)
+    return _alert_out(alert, part, branch, user.name)
 
 
-def _alert_out(alert: Alert, part: Part, branch: Branch) -> AlertOut:
+def _alert_out(alert: Alert, part: Part, branch: Branch, reviewer_name: str | None) -> AlertOut:
     return AlertOut(
         **{field: getattr(alert, field) for field in AlertOut.model_fields if hasattr(alert, field)},
         part_name=part.name,
         sku=part.sku,
         branch_name=branch.name,
         group=group_of(alert.kind),
+        reviewed_by_name=reviewer_name,
     )

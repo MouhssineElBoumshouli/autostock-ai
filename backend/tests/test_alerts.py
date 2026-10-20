@@ -349,6 +349,8 @@ def test_everyone_sees_alerts_but_only_owners_and_managers_review_them(browser):
     reviewed = browser.post(f"/api/alerts/{alert_id}/review", json={"status": "not_a_problem"})
     assert reviewed.status_code == 200, reviewed.text
     assert reviewed.json()["status"] == "not_a_problem" and reviewed.json()["reviewed_at"]
+    assert reviewed.json()["reviewed_by_name"] == "Sara Owner"
+    assert browser.get("/api/alerts").json()[0]["reviewed_by_name"] == "Sara Owner"
     [row] = audit_rows("alert.reviewed")
     assert row.before == {"status": "open"} and row.after["status"] == "not_a_problem" and row.user_id is not None
     assert browser.get("/api/alerts", params={"status": "open"}).json() == []
