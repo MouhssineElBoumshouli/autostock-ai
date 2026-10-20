@@ -2,11 +2,14 @@ import uuid
 from datetime import date, timedelta
 
 import numpy as np
+import pytest
 from sqlalchemy import func, select
 
+from app.alerts import sales_rules
+from app.alerts.counts import chance_at_least, chance_at_most, spread
 from app.alerts.problem import Problem
-from app.alerts.run import DAILY_LIMIT, REPEAT_DAYS, find_problems, pick_new, raise_alerts
-from app.alerts.sales_rules import sales_problems
+from app.alerts.run import DAILY_LIMIT, REPEAT_DAYS, SALES_DAILY_LIMIT, find_problems, pick_new, raise_alerts
+from app.alerts.sales_rules import TARGET_FALSE_PER_WEEK, sales_problems
 from app.alerts.shop_data import ShopData, load_shop_data
 from app.alerts.stock_rules import stock_problems
 from app.db import SessionLocal
@@ -78,6 +81,57 @@ def test_no_drop_while_the_shelf_was_empty():
 
 def test_too_little_history_raises_nothing():
     assert sales_problems(shop_data([steady(2, last_week=8)]), 50) == []
+
+
+def test_a_rare_week_is_not_a_spike_unless_it_is_up_by_half():
+    assert sales_problems(shop_data([steady(20, last_week=28)]), LAST) == []  # +40%: rare for Poisson, but not +50%
+    [problem] = sales_problems(shop_data([steady(20, last_week=30)]), LAST)  # +50%
+    assert problem.kind == "sales_spike"
+
+
+def six_a_week(last_week: list[int]) -> np.ndarray:
+    days = np.tile([1.0, 1, 1, 1, 1, 1, 0], DAYS // 7)
+    days[-7:] = last_week
+    return days
+
+
+def test_a_change_needs_at_least_five_pieces(monkeypatch):
+    monkeypatch.setattr(sales_rules, "TARGET_FALSE_PER_WEEK", 1e9)  # every week counts as rare here
+    monkeypatch.setattr(sales_rules, "MIN_EXPECTED_WEEKLY", 1.0)
+    assert sales_problems(shop_data([six_a_week([2, 2, 2, 1, 1, 1, 1])]), LAST) == []  # 10 sold: +67%, but only +4 pieces
+    [problem] = sales_problems(shop_data([six_a_week([2, 2, 2, 2, 2, 1, 1])]), LAST)
+    assert problem.numbers["sold"] == 12
+
+
+def test_the_bar_rises_with_the_number_of_parts_checked():
+    """About 2 false alarms a week for the whole shop: the more parts judged, the rarer a week must be."""
+    spiky = steady(2, last_week=4)  # 28 sold, 14 expected
+    surprise = chance_at_least(28, 14, 0.0)
+    assert len(sales_problems(shop_data([spiky]), LAST)) == 1
+    many = int(TARGET_FALSE_PER_WEEK / (surprise * 14)) + 2  # enough parts that this week is no longer rare enough
+    assert sales_problems(shop_data([spiky] + [steady(3)] * many), LAST) == []
+
+
+def uneven() -> np.ndarray:
+    """Weeks (counted back from the last day) alternate 7 and 35 pieces: 21 a week on average."""
+    weeks_back = (LAST - np.arange(DAYS)) // 7
+    return np.where(weeks_back % 2 == 1, 1.0, 5.0)
+
+
+def test_parts_that_usually_sell_unevenly_need_a_bigger_surprise():
+    lumpy = uneven()
+    lumpy[-7:] = 6  # 42 sold, 21 expected: ordinary for this part
+    rows = [steady(3, last_week=6), lumpy] + [steady(3)] * 48
+    [problem] = sales_problems(shop_data(rows), LAST)
+    assert problem.numbers["sold"] == 42 and problem.numbers["expected"] == 21  # only the even seller
+
+
+def test_count_model_tails():
+    assert chance_at_most(0, 3.0, 0.0) == pytest.approx(np.exp(-3))  # Poisson
+    assert chance_at_least(0, 3.0, 0.0) == 1.0
+    assert chance_at_least(10, 3.0, 0.5) > chance_at_least(10, 3.0, 0.0)  # uneven sellers: fatter tails
+    assert spread(np.full(10, 10.0), np.full(10, 10.0)) == 0.0
+    assert spread(np.full(10, 10.0), np.array([0, 20] * 5, dtype=float)) == pytest.approx(0.9)
 
 
 # --- Stock that doesn't match sales -------------------------------------------------------------
@@ -154,13 +208,22 @@ def problem(money: int, kind: str = "negative_stock") -> Problem:
 
 def test_new_alerts_are_ranked_by_money_at_stake_and_capped():
     problems = [problem(m) for m in (5, 50, 20, 40)]
-    assert [p.money_at_stake for p in pick_new(problems, set(), 3)] == [50, 40, 20]
-    assert pick_new(problems, set(), 0) == []
+    assert [p.money_at_stake for p in pick_new(problems, set(), 3, 3)] == [50, 40, 20]
+    assert pick_new(problems, set(), 0, 3) == []
 
 
 def test_blocked_problems_are_skipped():
     problems = [problem(10), problem(20)]
-    assert pick_new(problems, {problems[1].key}, 10) == [problems[0]]
+    assert pick_new(problems, {problems[1].key}, 10, 3) == [problems[0]]
+
+
+def test_at_most_three_sales_alerts_a_day_so_stock_problems_still_get_through():
+    sales = [problem(m, "sales_spike") for m in (900, 800, 700, 600, 500)]
+    stock = [problem(m) for m in (20, 10)]
+    picked = pick_new(sales + stock, set(), DAILY_LIMIT, SALES_DAILY_LIMIT)
+    assert [p.money_at_stake for p in picked] == [900, 800, 700, 20, 10]
+    assert [p.group for p in picked] == ["worth_a_look"] * 3 + ["needs_action"] * 2
+    assert len(pick_new(sales, set(), DAILY_LIMIT, 1)) == 1  # 2 already raised today: 1 left
 
 
 def make_shop_with_parts(count: int) -> tuple[uuid.UUID, list[tuple[uuid.UUID, uuid.UUID]]]:
@@ -278,6 +341,9 @@ def test_everyone_sees_alerts_but_only_owners_and_managers_review_them(browser):
 
     [listed] = staff.get("/api/alerts", params={"status": "open"}).json()
     assert listed["sentence"] == "Stock shows -2 since 1 Mar." and listed["part_name"] == "Brake pads"
+    assert listed["group"] == "needs_action"
+    assert len(staff.get("/api/alerts", params={"group": "needs_action"}).json()) == 1
+    assert staff.get("/api/alerts", params={"group": "worth_a_look"}).json() == []
     assert staff.post(f"/api/alerts/{alert_id}/review", json={"status": "looked_at"}).status_code == 403
 
     reviewed = browser.post(f"/api/alerts/{alert_id}/review", json={"status": "not_a_problem"})

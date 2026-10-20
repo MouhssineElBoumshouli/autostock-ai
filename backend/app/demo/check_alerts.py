@@ -20,8 +20,8 @@ from time import perf_counter
 import numpy as np
 from sqlalchemy import delete, select
 
-from app.alerts.problem import KINDS
-from app.alerts.run import DAILY_LIMIT, raise_alerts
+from app.alerts.problem import KINDS, NEEDS_ACTION, WORTH_A_LOOK, group_of
+from app.alerts.run import DAILY_LIMIT, SALES_DAILY_LIMIT, raise_alerts
 from app.alerts.shop_data import replayable_method, load_shop_data
 from app.db import SessionLocal
 from app.demo.demo_shop import create_demo_shop
@@ -91,8 +91,14 @@ def report(planted: list[DemoPlantedProblem], alerts: list[Alert], series: int) 
     weeks = REPLAY_DAYS / 7
     kinds = ", ".join(f"{kind} {count}" for kind, count in Counter(a.kind for a in false).most_common())
     print(f"\nFalse alarms (nothing planted there): {len(false)} in {weeks:.0f} weeks = {len(false) / weeks:.1f} a week ({kinds or 'none'}).")
+    for group, label in ((NEEDS_ACTION, "Needs action"), (WORTH_A_LOOK, "Worth a look")):
+        in_group = [a for a in alerts if group_of(a.kind) == group]
+        wrong = sum(1 for a in false if group_of(a.kind) == group)
+        print(f"  {label}: {len(in_group)} alerts, {wrong} of them false alarms.")
     per_day = Counter(a.raised_on for a in alerts)
+    sales_per_day = Counter(a.raised_on for a in alerts if group_of(a.kind) == WORTH_A_LOOK)
     print(f"Days the daily limit of {DAILY_LIMIT} was reached: {sum(1 for n in per_day.values() if n >= DAILY_LIMIT)} of {REPLAY_DAYS}.")
+    print(f"Days the sales limit of {SALES_DAILY_LIMIT} was reached: {sum(1 for n in sales_per_day.values() if n >= SALES_DAILY_LIMIT)} of {REPLAY_DAYS}.")
 
 
 if __name__ == "__main__":

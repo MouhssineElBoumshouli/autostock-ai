@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.alerts.problem import NEEDS_ACTION, SALES_KINDS, WORTH_A_LOOK, group_of
 from app.audit import record_change
 from app.auth.permissions import require_role
 from app.db import get_session, utc_now
@@ -19,12 +20,14 @@ managers = require_role("owner", "manager")
 anyone = require_role()
 
 Status = Literal["open", "looked_at", "not_a_problem"]
+Group = Literal["needs_action", "worth_a_look"]
 SHOWN = 200
 
 
 class AlertOut(BaseModel):
     id: uuid.UUID
     kind: str
+    group: Group
     part_id: uuid.UUID
     part_name: str
     sku: str
@@ -44,8 +47,11 @@ class ReviewIn(BaseModel):
 
 
 @router.get("")
-def list_alerts(status: Status | None = None, user: User = Depends(anyone), db: Session = Depends(get_session)) -> list[AlertOut]:
-    """Newest first; within a day, the most money at stake first."""
+def list_alerts(
+    status: Status | None = None, group: Group | None = None, user: User = Depends(anyone), db: Session = Depends(get_session)
+) -> list[AlertOut]:
+    """Newest first; within a day, the most money at stake first. `group`: "needs_action" (stock
+    that doesn't match sales) or "worth_a_look" (sales spikes and drops)."""
     query = (
         select(Alert, Part, Branch)
         .join(Part, Part.id == Alert.part_id)
@@ -56,6 +62,10 @@ def list_alerts(status: Status | None = None, user: User = Depends(anyone), db: 
     )
     if status:
         query = query.where(Alert.status == status)
+    if group == WORTH_A_LOOK:
+        query = query.where(Alert.kind.in_(SALES_KINDS))
+    elif group == NEEDS_ACTION:
+        query = query.where(Alert.kind.not_in(SALES_KINDS))
     return [_alert_out(alert, part, branch) for alert, part, branch in db.execute(query)]
 
 
@@ -79,4 +89,5 @@ def _alert_out(alert: Alert, part: Part, branch: Branch) -> AlertOut:
         part_name=part.name,
         sku=part.sku,
         branch_name=branch.name,
+        group=group_of(alert.kind),
     )
