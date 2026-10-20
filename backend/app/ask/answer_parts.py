@@ -54,6 +54,11 @@ class PartPick:
     condition: ColumnElement  # on Part
     label: str  # "Oil filter (12 parts)", "the Brakes category", "all parts"
 
+    @property
+    def title(self) -> str:
+        """The label at the start of a sentence: only the first letter changes."""
+        return self.label[:1].upper() + self.label[1:]
+
 
 def shop_today(db: Session, organization_id: uuid.UUID) -> date:
     """The last day with sales, or the calendar day if the shop has no sales yet."""

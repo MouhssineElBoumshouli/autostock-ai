@@ -31,7 +31,7 @@ def stock_of_part(asked: Asked) -> Answer:
     per_branch = [(name, int(quantity)) for name, quantity in asked.db.execute(query)]
     total = sum(quantity for _, quantity in per_branch)
     return Answer(
-        f"{parts.label.capitalize()}: {pieces(total)} in stock{where_words(asked)}.",
+        f"{parts.title}: {pieces(total)} in stock{where_words(asked)}.",
         [Number(label=name, value=quantity, unit="pieces") for name, quantity in per_branch],
     )
 
@@ -112,7 +112,7 @@ def forecast_of_part(asked: Asked) -> Answer:
     if expected is None:
         return Answer(f"No forecast yet for {parts.label}. Forecasts are made after sales are imported.")
     return Answer(
-        f"{parts.label.capitalize()}{where_words(asked)}: about {pieces(round(expected))} expected over the next "
+        f"{parts.title}{where_words(asked)}: about {pieces(round(expected))} expected over the next "
         f"{HORIZON_DAYS} days (likely between {round(low)} and {round(high)}), from sales up to {day_label(made_from)}.",
         [
             Number(label=f"Expected, next {HORIZON_DAYS} days", value=round(expected), unit="pieces"),

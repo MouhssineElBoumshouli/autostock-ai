@@ -21,7 +21,7 @@ def sales_of(asked: Asked) -> Answer:
     first, last = day_range(period, asked.today)
     sold, value = _sold(asked, parts, branch_id(asked), first, last)
     return Answer(
-        f"{parts.label.capitalize()}: {pieces(sold)} sold{where_words(asked)} {LABELS[period]} "
+        f"{parts.title}: {pieces(sold)} sold{where_words(asked)} {LABELS[period]} "
         f"({range_words(first, last)}){asked.money_words(value)}.",
         [
             Number(label="Pieces sold", value=sold, unit="pieces"),
@@ -70,7 +70,7 @@ def sales_vs_last(asked: Asked) -> Answer:
         change = "the same as" if percent == 0 else f"{'up' if percent > 0 else 'down'} {abs(percent)}% on"
         change += f" {range_words(before_first, before_last)} ({pieces(before)})"
     return Answer(
-        f"{parts.label.capitalize()}{where_words(asked)}, {LABELS[period]} ({range_words(first, last)}): "
+        f"{parts.title}{where_words(asked)}, {LABELS[period]} ({range_words(first, last)}): "
         f"{pieces(now)}, {change}.",
         [
             Number(label="Pieces sold, this period", value=now, unit="pieces"),
