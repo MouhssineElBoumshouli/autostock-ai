@@ -1,7 +1,8 @@
 """A clearly labeled, made-up demo shop: about 200 parts, 3 branches, 18 months of daily sales.
 
 It also saves the true demand it was made from (including stock-out days and 60 days after the
-history ends), so forecasts can be checked against the truth. It always creates its own
+history ends), so forecasts can be checked against the truth, and problems planted on purpose with
+their true dates (planted_problems.py), so alerts can be checked too. It always creates its own
 organization marked is_demo and never touches a real shop.
 
 Run inside Docker:  docker compose exec api python -m app.demo.demo_shop
@@ -20,7 +21,8 @@ from sqlalchemy.orm import Session
 from app.auth.passwords import hash_password
 from app.db import Base, SessionLocal, utc_now
 from app.forecast.calendar import ramadan_flags
-from app.models import Branch, Organization, Part, SaleLine, Supplier, User
+from app.demo.planted_problems import DemoSeries, plant_problems, planted_rows, stock_history_rows
+from app.models import Branch, DemoPlantedProblem, Organization, Part, SaleLine, Supplier, User
 
 DEMO_SHOP_NAME = "DEMO SHOP (made-up data)"
 DEMO_OWNER_EMAIL = "demo@autostock.local"
@@ -169,34 +171,48 @@ def create_demo_shop(
     buckets = _stock_buckets(rng, len(parts))
 
     first_day = last_day - timedelta(days=history_days - 1)
-    sales, truth, outs, stock = [], [], [], []
+    series, outs = [], []
     counts = Counter()
     for item, bucket in zip(parts, buckets):
-        branch_rates = []
+        group = []
         for branch, factor in branches.items():
             wanted = true_demand(rng, first_day, history_days + FUTURE_DAYS, item.style, factor)
             sold = wanted[:history_days].copy()
-            periods = stock_out_periods(rng, history_days)
-            for first, last in periods:
+            out_days = np.zeros(history_days, dtype=bool)
+            for first, last in stock_out_periods(rng, history_days):
                 sold[first : last + 1] = 0
+                out_days[first : last + 1] = True
                 outs.append((item.part.id, branch.id, first_day + timedelta(days=first), first_day + timedelta(days=last)))
-            key = (item.part.id, branch.id)
-            sales += [(*key, first_day + timedelta(days=int(i)), int(sold[i]), item.part.sale_price) for i in np.flatnonzero(sold)]
-            truth += [(*key, first_day + timedelta(days=int(i)), int(wanted[i])) for i in np.flatnonzero(wanted)]
-            branch_rates.append(wanted[:history_days].mean())
+            group.append(DemoSeries(item.part, branch.id, sold, wanted, out_days))
 
-        daily_rate = sum(branch_rates)
+        branch_rates = np.array([s.wanted[:history_days].mean() for s in group])
+        daily_rate = branch_rates.sum()
         min_days = rng.uniform(8, 12) if bucket == "running_out" else rng.uniform(10, 18)  # "about 2 weeks"
         item.part.min_stock = max(1, round(daily_rate * min_days))
         total = _target_quantity(rng, bucket, item.part.min_stock, daily_rate, min_days)
-        for (branch, _), quantity in zip(branches.items(), _branch_quantities(rng, total, np.array(branch_rates))):
-            stock.append((item.part.id, branch.id, quantity))
+        for s, quantity in zip(group, _branch_quantities(rng, total, branch_rates)):
+            s.quantity = quantity
+        series += group
         counts[bucket] += 1
+
+    planted = plant_problems(rng, series)
+    history = [row for s in series for row in stock_history_rows(rng, s, first_day)]
+    sales, truth, stock = [], [], []
+    for s in series:
+        key = (s.part.id, s.branch_id)
+        sales += [(*key, first_day + timedelta(days=int(i)), int(s.sold[i]), s.part.sale_price) for i in np.flatnonzero(s.sold)]
+        truth += [(*key, first_day + timedelta(days=int(i)), int(s.wanted[i])) for i in np.flatnonzero(s.wanted)]
+        stock.append((*key, s.quantity))
 
     _copy(db, "sale_lines", ["part_id", "branch_id", "sold_on", "quantity", "unit_price"], shop.id, sales)
     _copy(db, "demo_true_demand", ["part_id", "branch_id", "day", "quantity"], shop.id, truth)
     _copy(db, "stock_outs", ["part_id", "branch_id", "first_day", "last_day"], shop.id, outs)
     _copy(db, "stock_levels", ["part_id", "branch_id", "quantity"], shop.id, stock)
+    _copy(db, "stock_history", ["part_id", "branch_id", "day", "quantity"], shop.id, history)
+    db.add_all(
+        DemoPlantedProblem(organization_id=shop.id, part_id=part, branch_id=branch, kind=kind, first_day=first, last_day=last, details=details)
+        for part, branch, kind, first, last, details in (planted_rows(s, first_day) for s in planted)
+    )
     return shop, counts
 
 
@@ -294,6 +310,8 @@ def main() -> None:
             f"Stock on day 1: {counts['out']} out of stock, {counts['low']} low, "
             f"{counts['running_out']} running out within 14 days, {counts['healthy']} healthy."
         )
+        planted = db.scalar(select(func.count()).select_from(DemoPlantedProblem).where(DemoPlantedProblem.organization_id == shop.id))
+        print(f"Planted {planted} known problems (spikes, drops, stock that doesn't match sales) to test the alerts.")
         print(f"Log in to the demo shop with  email: {DEMO_OWNER_EMAIL}  password: {password}")
         print("(A new password is made each time the demo shop is created.)")
 
