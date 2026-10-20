@@ -22,7 +22,8 @@ from app.auth.passwords import hash_password
 from app.db import Base, SessionLocal, utc_now
 from app.forecast.calendar import ramadan_flags
 from app.demo.planted_problems import DemoSeries, plant_problems, planted_rows, stock_history_rows
-from app.models import Branch, DemoPlantedProblem, Organization, Part, SaleLine, Supplier, User
+from app.models import Branch, DemoPlantedProblem, Organization, Part, SaleLine, Supplier, SynonymGroup, User
+from app.search.default_synonyms import DEFAULT_SYNONYMS
 
 DEMO_SHOP_NAME = "DEMO SHOP (made-up data)"
 DEMO_OWNER_EMAIL = "demo@autostock.local"
@@ -160,6 +161,8 @@ def create_demo_shop(
     shop = Organization(name=DEMO_SHOP_NAME, currency="MAD", is_demo=True)
     db.add(shop)
     db.flush()
+    # The same starting synonym list every real shop gets at setup (app/api/setup.py).
+    db.add_all(SynonymGroup(organization_id=shop.id, words=words) for words in DEFAULT_SYNONYMS)
     branches = {Branch(organization_id=shop.id, name=name): factor for name, factor in BRANCHES.items()}
     db.add_all(branches)
     suppliers = _make_suppliers(shop.id)

@@ -7,6 +7,7 @@ from app.alerts.run import keep_raising_alerts
 from app.api import (
     activity,
     alerts,
+    ask,
     auth,
     branches,
     forecasts,
@@ -57,3 +58,4 @@ app.include_router(orders.router)
 app.include_router(purchase_orders.router)
 app.include_router(alerts.router)
 app.include_router(today.router)
+app.include_router(ask.router)

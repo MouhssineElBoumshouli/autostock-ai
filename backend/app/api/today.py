@@ -103,7 +103,7 @@ def today(user: User = Depends(anyone), db: Session = Depends(get_session)) -> T
         worth_a_look=worth_a_look,
         worth_a_look_total=worth_a_look_total,
         to_order=_to_order(db, user.organization_id, can_see_money),
-        late_deliveries=_late_deliveries(db, user.organization_id, date.today()),
+        late_deliveries=find_late_deliveries(db, user.organization_id, date.today()),
         weekly_sales=_weekly_sales(db, user.organization_id),
     )
 
@@ -146,7 +146,7 @@ def _to_order(db: Session, organization_id: uuid.UUID, can_see_money: bool) -> T
     return ToOrderSummary(lines=lines, total_cost=cost) if can_see_money else ToOrderLines(lines=lines)
 
 
-def _late_deliveries(db: Session, organization_id: uuid.UUID, today: date) -> list[LateDelivery]:
+def find_late_deliveries(db: Session, organization_id: uuid.UUID, today: date) -> list[LateDelivery]:
     rows = db.execute(
         select(PurchaseOrder, Supplier.name, Supplier.delivery_days)
         .join(Supplier, Supplier.id == PurchaseOrder.supplier_id)
