@@ -15,7 +15,7 @@ export type Alert = {
   branch_name: string;
   sentence: string;
   numbers: Record<string, unknown>;
-  money_at_stake: number;
+  money_at_stake?: number; // absent for staff: the server leaves it out entirely
   started_on: string;
   raised_on: string;
   status: AlertStatus;

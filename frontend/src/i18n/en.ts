@@ -400,12 +400,24 @@ export const en = {
   },
   home: {
     greeting: (partOfDay: "morning" | "afternoon" | "evening", name: string) => `Good ${partOfDay}, ${name}`,
-    needsYouToday: (count: number) =>
-      count === 0
-        ? "All good today. Nothing needs you."
-        : count === 1
-          ? "1 thing needs you today."
-          : `${count} things need you today.`,
+    // "18 stock problems to check · 222 parts to order · 1 late delivery", each part left out
+    // when its count is 0. "Worth a look" doesn't count: it's informational, nothing to check.
+    needsYouToday: ({
+      stockProblems,
+      partsToOrder,
+      lateDeliveries,
+    }: {
+      stockProblems: number;
+      partsToOrder: number;
+      lateDeliveries: number;
+    }) => {
+      const segments = [
+        stockProblems > 0 && (stockProblems === 1 ? "1 stock problem to check" : `${stockProblems} stock problems to check`),
+        partsToOrder > 0 && (partsToOrder === 1 ? "1 part to order" : `${partsToOrder} parts to order`),
+        lateDeliveries > 0 && (lateDeliveries === 1 ? "1 late delivery" : `${lateDeliveries} late deliveries`),
+      ].filter((segment): segment is string => Boolean(segment));
+      return segments.length === 0 ? "All good today. Nothing needs you." : segments.join(" · ");
+    },
     needsAction: {
       title: "Needs action",
       empty: "Nothing needs action right now.",

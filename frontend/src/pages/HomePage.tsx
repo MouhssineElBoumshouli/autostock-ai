@@ -1,4 +1,4 @@
-import { thingsNeedingYou, useToday } from "@/api/today";
+import { useToday } from "@/api/today";
 import { useStockSummary } from "@/api/stock";
 import { useSignedIn } from "@/components/SignedIn";
 import { ErrorState } from "@/components/ErrorState";
@@ -25,7 +25,6 @@ function partOfDay(hour: number) {
 export function HomePage() {
   const me = useSignedIn();
   const canReview = me.user.role !== "staff";
-  const canSeeMoney = me.user.role !== "staff";
 
   return (
     <div className="grid gap-8">
@@ -33,13 +32,13 @@ export function HomePage() {
         title={t.home.greeting(partOfDay(new Date().getHours()), me.user.name.split(" ")[0])}
         subtitle={me.organization.name}
       />
-      <Today canReview={canReview} canSeeMoney={canSeeMoney} currency={me.organization.currency} />
+      <Today canReview={canReview} />
       <StockOverview />
     </div>
   );
 }
 
-function Today({ canReview, canSeeMoney, currency }: { canReview: boolean; canSeeMoney: boolean; currency: string }) {
+function Today({ canReview }: { canReview: boolean }) {
   const today = useToday();
 
   if (today.isError) {
@@ -65,11 +64,15 @@ function Today({ canReview, canSeeMoney, currency }: { canReview: boolean; canSe
     // grid-cols-1 (not bare "grid"): without a defined track, a long unbreakable line deep inside
     // (e.g. a truncated part name) can force this whole column wider than the viewport.
     <div className="grid grid-cols-1 gap-6">
-      <TodayHeadline count={thingsNeedingYou(data)} />
+      <TodayHeadline
+        stockProblems={data.needs_action_total}
+        partsToOrder={data.to_order?.lines ?? 0}
+        lateDeliveries={data.late_deliveries.length}
+      />
       <div className="grid gap-4 lg:grid-cols-2">
         <NeedsActionCard alerts={data.needs_action} total={data.needs_action_total} canReview={canReview} />
         <div className="grid gap-4">
-          <ToOrderCard toOrder={data.to_order} canSeeMoney={canSeeMoney} currency={currency} />
+          <ToOrderCard toOrder={data.to_order} />
           <LateDeliveriesCard deliveries={data.late_deliveries} />
         </div>
       </div>

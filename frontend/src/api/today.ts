@@ -11,7 +11,7 @@ export type AlertSummary = {
   raised_on: string;
 };
 
-export type ToOrderSummary = { lines: number; total_cost: number };
+export type ToOrderSummary = { lines: number; total_cost?: number };
 
 export type LateDelivery = {
   id: string;
@@ -44,10 +44,4 @@ export type Today = {
 
 export function useToday() {
   return useQuery({ queryKey: ["today"], queryFn: () => apiRequest<Today>("/api/today") });
-}
-
-// How many things need a person today: open "needs action" alerts, late deliveries, and (as one
-// thing) having a pending order to review. "Worth a look" is informational, so it isn't counted.
-export function thingsNeedingYou(data: Today): number {
-  return data.needs_action_total + data.late_deliveries.length + (data.to_order && data.to_order.lines > 0 ? 1 : 0);
 }
