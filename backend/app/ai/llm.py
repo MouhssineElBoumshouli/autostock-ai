@@ -1,0 +1,48 @@
+"""The one door to the optional local language model (Ollama): free, runs on this computer.
+
+Nothing here decides anything: callers get the model's JSON, check it themselves, and fall back
+to their non-AI way when the answer is None (Ollama off, model missing, slow or broken answer).
+"""
+
+import json
+import urllib.error
+import urllib.request
+
+from app.config import OLLAMA_MODEL, OLLAMA_URL
+
+CHECK_SECONDS = 1
+ANSWER_SECONDS = 30
+
+
+def is_on() -> bool:
+    """True when Ollama answers and has the model downloaded."""
+    if not OLLAMA_URL:
+        return False
+    try:
+        with urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=CHECK_SECONDS) as response:
+            models = json.load(response).get("models", [])
+    except (OSError, ValueError):
+        return False
+    return any(model.get("name") in (OLLAMA_MODEL, f"{OLLAMA_MODEL}:latest") for model in models)
+
+
+def ask_json(instructions: str, text: str, schema: dict) -> object | None:
+    """The model's answer as parsed JSON, shaped by `schema`, or None if anything goes wrong."""
+    if not OLLAMA_URL:
+        return None
+    body = {
+        "model": OLLAMA_MODEL,
+        "messages": [{"role": "system", "content": instructions}, {"role": "user", "content": text}],
+        "format": schema,
+        "stream": False,
+        "keep_alive": "30m",
+        "options": {"temperature": 0},
+    }
+    request = urllib.request.Request(
+        f"{OLLAMA_URL}/api/chat", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=ANSWER_SECONDS) as response:
+            return json.loads(json.load(response)["message"]["content"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
