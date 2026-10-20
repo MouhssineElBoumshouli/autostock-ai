@@ -162,6 +162,33 @@ def test_a_picked_type_must_be_a_real_one(browser, shop):
         assert browser.post("/api/ask", json={"question": "x", "question_type": bad}).status_code == 422
 
 
+# Changing a filter chip without retyping the question
+
+def test_a_filter_chip_change_keeps_the_type_and_reasks(browser, shop):
+    question = "stock of oil filter in rabat"
+    first = ask(browser, question)
+    assert first["filters"] == {"part": "oil filter", "branch": RABAT}
+    changed = browser.post("/api/ask", json={
+        "question": question, "question_type": "stock_of_part",
+        "filters": {"part": "oil filter"},  # the branch chip was cleared
+    }).json()
+    assert changed["filters"] == {"part": "oil filter"}
+    assert changed["understood"] == "I understood: Stock of oil filter"
+    assert changed["understood_by"] == "rule" and changed["ai_note"].startswith("AI is off")
+
+
+def test_a_filter_chip_needs_the_question_type(browser, shop):
+    response = browser.post("/api/ask", json={"question": "stock of oil filter", "filters": {"branch": RABAT}})
+    assert response.status_code == 422
+
+
+def test_a_filter_chip_value_must_be_real(browser, shop):
+    response = browser.post("/api/ask", json={
+        "question": "stock of oil filter", "question_type": "stock_of_part", "filters": {"branch": "Paris"},
+    })
+    assert response.status_code == 422
+
+
 def test_every_answer_says_how_the_question_was_read(browser, shop):
     answer = ask(browser, "oil filters sold last month in rabat")
     assert answer["understood"] == f"I understood: Sales of oil filters · {RABAT} · last month"
