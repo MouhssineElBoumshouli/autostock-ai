@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 
 from app.alerts import sales_rules
 from app.alerts.counts import chance_at_least, chance_at_most, spread
-from app.alerts.problem import Problem
+from app.alerts.problem import Problem, money, money_note
 from app.alerts.run import DAILY_LIMIT, REPEAT_DAYS, SALES_DAILY_LIMIT, find_problems, pick_new, raise_alerts
 from app.alerts.sales_rules import TARGET_FALSE_PER_WEEK, sales_problems
 from app.alerts.shop_data import ShopData, load_shop_data
@@ -62,7 +62,8 @@ def test_a_week_far_above_the_usual_range_is_a_spike_with_its_real_numbers():
 def test_a_week_far_below_the_usual_range_is_a_drop():
     [problem] = sales_problems(shop_data([steady(3, last_week=0)]), LAST)
     assert problem.kind == "sales_drop" and problem.numbers["sold"] == 0
-    assert "of sales below usual" in problem.sentence
+    assert "MAD" not in problem.sentence  # money is kept apart, see money_note
+    assert money_note(problem.kind, problem.money_at_stake, "MAD") == f"About {money(problem.money_at_stake, 'MAD')} of sales below usual."
 
 
 def test_a_normal_week_raises_nothing():
@@ -342,6 +343,7 @@ def test_everyone_sees_alerts_but_only_owners_and_managers_review_them(browser):
     [listed] = staff.get("/api/alerts", params={"status": "open"}).json()
     assert listed["sentence"] == "Stock shows -2 since 1 Mar." and listed["part_name"] == "Brake pads"
     assert listed["group"] == "needs_action"
+    assert "money_at_stake" not in listed  # staff: no money field at all, not even zero
     assert len(staff.get("/api/alerts", params={"group": "needs_action"}).json()) == 1
     assert staff.get("/api/alerts", params={"group": "worth_a_look"}).json() == []
     assert staff.post(f"/api/alerts/{alert_id}/review", json={"status": "looked_at"}).status_code == 403
@@ -354,6 +356,23 @@ def test_everyone_sees_alerts_but_only_owners_and_managers_review_them(browser):
     [row] = audit_rows("alert.reviewed")
     assert row.before == {"status": "open"} and row.after["status"] == "not_a_problem" and row.user_id is not None
     assert browser.get("/api/alerts", params={"status": "open"}).json() == []
+
+
+def test_owners_and_managers_see_money_staff_never_does(browser):
+    """The raw JSON itself, not just the browser's display: no money key, no money in the sentence."""
+    set_up_shop(browser)
+    alert_in_shop(_shop_id())
+    add_member(browser, "staff@shop.ma", "staff")
+    staff = member_with_own_password("staff@shop.ma")
+
+    [owner_alert] = browser.get("/api/alerts").json()
+    assert owner_alert["money_at_stake"] == 14000
+    assert owner_alert["sentence"] == "Stock shows -2 since 1 Mar. About 140 MAD of stock to recount."
+
+    [staff_alert] = staff.get("/api/alerts").json()
+    assert "money_at_stake" not in staff_alert
+    assert staff_alert["sentence"] == "Stock shows -2 since 1 Mar."
+    assert "MAD" not in staff_alert["sentence"] and "140" not in staff_alert["sentence"]
 
 
 def test_alerts_of_another_shop_cannot_be_reviewed(browser):

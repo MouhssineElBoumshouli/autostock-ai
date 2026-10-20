@@ -15,10 +15,10 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.alerts.problem import NEEDS_ACTION, SALES_KINDS, WORTH_A_LOOK
+from app.alerts.problem import NEEDS_ACTION, SALES_KINDS, WORTH_A_LOOK, money_note
 from app.auth.permissions import require_role
 from app.db import get_session
-from app.models import Alert, Branch, OrderRun, OrderSuggestion, Part, PurchaseOrder, SaleLine, Supplier, User
+from app.models import Alert, Branch, OrderRun, OrderSuggestion, Organization, Part, PurchaseOrder, SaleLine, Supplier, User
 
 router = APIRouter(prefix="/api/today")
 anyone = require_role()
@@ -39,8 +39,15 @@ class AlertSummary(BaseModel):
     raised_on: date
 
 
-class ToOrderSummary(BaseModel):
+class ToOrderLines(BaseModel):
+    """What staff see: how many lines, no money."""
+
     lines: int
+
+
+class ToOrderSummary(ToOrderLines):
+    """What owners and managers also see."""
+
     total_cost: int
 
 
@@ -76,7 +83,7 @@ class TodayOut(BaseModel):
     needs_action_total: int
     worth_a_look: list[AlertSummary]
     worth_a_look_total: int
-    to_order: ToOrderSummary | None
+    to_order: ToOrderSummary | ToOrderLines | None
     late_deliveries: list[LateDelivery]
     weekly_sales: WeeklySales | None
 
@@ -86,20 +93,22 @@ Group = Literal["needs_action", "worth_a_look"]
 
 @router.get("")
 def today(user: User = Depends(anyone), db: Session = Depends(get_session)) -> TodayOut:
-    needs_action, needs_action_total = _alerts(db, user.organization_id, NEEDS_ACTION)
-    worth_a_look, worth_a_look_total = _alerts(db, user.organization_id, WORTH_A_LOOK)
+    can_see_money = user.role != "staff"
+    currency = db.scalar(select(Organization.currency).where(Organization.id == user.organization_id)) if can_see_money else None
+    needs_action, needs_action_total = _alerts(db, user.organization_id, NEEDS_ACTION, currency)
+    worth_a_look, worth_a_look_total = _alerts(db, user.organization_id, WORTH_A_LOOK, currency)
     return TodayOut(
         needs_action=needs_action,
         needs_action_total=needs_action_total,
         worth_a_look=worth_a_look,
         worth_a_look_total=worth_a_look_total,
-        to_order=_to_order(db, user.organization_id),
+        to_order=_to_order(db, user.organization_id, can_see_money),
         late_deliveries=_late_deliveries(db, user.organization_id, date.today()),
         weekly_sales=_weekly_sales(db, user.organization_id),
     )
 
 
-def _alerts(db: Session, organization_id: uuid.UUID, group: Group) -> tuple[list[AlertSummary], int]:
+def _alerts(db: Session, organization_id: uuid.UUID, group: Group, currency: str | None) -> tuple[list[AlertSummary], int]:
     filters = [Alert.organization_id == organization_id, Alert.status == "open"]
     filters.append(Alert.kind.in_(SALES_KINDS) if group == WORTH_A_LOOK else Alert.kind.not_in(SALES_KINDS))
     total = db.scalar(select(func.count()).select_from(Alert).where(*filters)) or 0
@@ -112,14 +121,16 @@ def _alerts(db: Session, organization_id: uuid.UUID, group: Group) -> tuple[list
         .limit(SHOWN_ALERTS)
     ).all()
     items = [
-        AlertSummary(id=alert.id, kind=alert.kind, sentence=alert.sentence, part_name=part_name,
-                     branch_name=branch_name, raised_on=alert.raised_on)
+        AlertSummary(
+            id=alert.id, kind=alert.kind, part_name=part_name, branch_name=branch_name, raised_on=alert.raised_on,
+            sentence=alert.sentence if currency is None else f"{alert.sentence} {money_note(alert.kind, alert.money_at_stake, currency)}",
+        )
         for alert, part_name, branch_name in rows
     ]
     return items, total
 
 
-def _to_order(db: Session, organization_id: uuid.UUID) -> ToOrderSummary | None:
+def _to_order(db: Session, organization_id: uuid.UUID, can_see_money: bool) -> ToOrderSummary | ToOrderLines | None:
     run = db.scalar(
         select(OrderRun).where(OrderRun.organization_id == organization_id).order_by(OrderRun.created_at.desc()).limit(1)
     )
@@ -132,7 +143,7 @@ def _to_order(db: Session, organization_id: uuid.UUID) -> ToOrderSummary | None:
             OrderSuggestion.status.in_(PENDING_STATUSES),
         )
     ).one()
-    return ToOrderSummary(lines=lines, total_cost=cost)
+    return ToOrderSummary(lines=lines, total_cost=cost) if can_see_money else ToOrderLines(lines=lines)
 
 
 def _late_deliveries(db: Session, organization_id: uuid.UUID, today: date) -> list[LateDelivery]:

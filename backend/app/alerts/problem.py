@@ -39,6 +39,22 @@ def money(centimes: int, currency: str) -> str:
     return f"{round(centimes / 100):,} {currency}"
 
 
+# What each kind's money clause says, after "About <money> ". Kept apart from the sentence itself
+# (app/alerts/sales_rules.py, app/alerts/stock_rules.py) so staff can be shown the same alert
+# without its money (see app/api/alerts.py, app/api/today.py).
+MONEY_SUFFIX = {
+    "sales_spike": "of sales above usual.",
+    "sales_drop": "of sales below usual.",
+    "sold_at_zero": "of stock not counted.",
+    "stock_frozen": "of stock may be missing.",
+    "negative_stock": "of stock to recount.",
+}
+
+
+def money_note(kind: str, at_stake: int, currency: str) -> str:
+    return f"About {money(at_stake, currency)} {MONEY_SUFFIX[kind]}"
+
+
 def day_label(day: date) -> str:
     return f"{day.day} {day:%b}"
 

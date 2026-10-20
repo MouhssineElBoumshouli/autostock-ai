@@ -166,3 +166,26 @@ def test_everyone_can_see_today_including_staff(browser):
     add_member(browser, "staff@shop.ma", "staff")
     staff = member_with_own_password("staff@shop.ma")
     assert staff.get("/api/today").status_code == 200
+
+
+def test_staff_sees_no_money_anywhere_in_the_raw_json(browser):
+    """Checked on the actual JSON, not just what the browser chooses to display."""
+    set_up_shop(browser)
+    shop = shop_id()
+    add_alert(shop, "negative_stock", 14000)
+    add_part(shop, sku="OIL-1", per_week=9, on_hand=6)
+    browser.post("/api/orders/suggestions", json={})
+    add_member(browser, "staff@shop.ma", "staff")
+    staff = member_with_own_password("staff@shop.ma")
+
+    owner_data = browser.get("/api/today").json()
+    assert owner_data["needs_action"][0]["sentence"] == "Something unusual. About 140 MAD of stock to recount."
+
+    staff_data = staff.get("/api/today").json()
+    [staff_alert] = staff_data["needs_action"]
+    assert "money_at_stake" not in staff_alert
+    assert staff_alert["sentence"] == "Something unusual."
+    assert "MAD" not in staff_alert["sentence"]
+    assert staff_data["to_order"] == {"lines": 1}
+    assert "total_cost" not in staff_data["to_order"]
+    assert browser.get("/api/today").json()["to_order"]["total_cost"] > 0
