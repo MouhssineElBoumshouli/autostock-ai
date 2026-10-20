@@ -143,10 +143,29 @@ def test_stock_of_a_part_per_branch(browser, shop):
     assert numbers(ask(browser, "stock of oil filter in rabat")) == {RABAT: 4}
 
 
-def test_stock_of_a_part_the_shop_does_not_have(browser, shop):
-    answer = ask(browser, "stock of unicorn horns")
-    assert answer["sentence"].startswith("I couldn't find a part")
-    assert answer["numbers"] == []
+def test_unknown_words_get_not_sure_and_buttons_instead_of_a_guess(browser, shop):
+    answer = ask(browser, "stock of unicorn horns in rabat")
+    assert answer["question_type"] == "not_sure"
+    assert answer["understood"] is None and answer["numbers"] == []
+    assert answer["sentence"] == "I'm not sure what you mean by “unicorn horns”. Did you mean one of these?"
+    assert answer["suggestions"][0] == {"question_type": "stock_of_part", "label": f"Stock · {RABAT}"}
+    assert len(answer["suggestions"]) == 3
+
+    # The button sends the same question with the type picked: the unknown words are searched as a part.
+    picked = browser.post("/api/ask", json={"question": "stock of unicorn horns in rabat", "question_type": "stock_of_part"})
+    assert picked.json()["understood"] == f"I understood: Stock of unicorn horns · {RABAT}"
+    assert picked.json()["sentence"].startswith("I couldn't find a part")
+
+
+def test_a_picked_type_must_be_a_real_one(browser, shop):
+    for bad in ("drop_tables", "cannot_answer"):
+        assert browser.post("/api/ask", json={"question": "x", "question_type": bad}).status_code == 422
+
+
+def test_every_answer_says_how_the_question_was_read(browser, shop):
+    answer = ask(browser, "oil filters sold last month in rabat")
+    assert answer["understood"] == f"I understood: Sales of oil filters · {RABAT} · last month"
+    assert answer["suggestions"] == []
 
 
 def test_running_out_uses_the_forecast(browser, shop):
@@ -201,12 +220,12 @@ def test_late_deliveries_when_there_are_none(browser, shop):
     assert answer["sentence"] == "No supplier delivery is late."
 
 
-@pytest.mark.parametrize("question", ["who is our best customer?", "delete all old parts", "bonjour"])
+@pytest.mark.parametrize("question", ["who is our best customer?", "delete all old parts", "print me an invoice"])
 def test_questions_we_cannot_answer_get_no_guess(browser, shop, question):
     answer = ask(browser, question)
     assert answer["question_type"] == "cannot_answer"
     assert answer["sentence"] == CANNOT_ANSWER_YET
-    assert answer["numbers"] == []
+    assert answer["numbers"] == [] and answer["understood"] is None
 
 
 # Permissions, scoping, read-only
@@ -267,7 +286,7 @@ def test_too_long_or_empty_questions_are_refused(browser, shop):
     assert browser.post("/api/ask", json={"question": "x" * 301}).status_code == 422
 
 
-# The local model: optional, checked, and only used while it beats the rule
+# The local model: optional, checked, and only asked when the rule is unsure
 
 def test_ai_off_says_so_and_uses_the_rule(browser, shop):
     answer = ask(browser, "best sellers this week")
@@ -275,31 +294,42 @@ def test_ai_off_says_so_and_uses_the_rule(browser, shop):
     assert answer["ai_note"].startswith("AI is off")
 
 
-def test_model_on_but_not_better_than_the_rule_is_not_used(browser, shop, monkeypatch):
+def test_model_is_not_asked_when_the_rule_is_sure(browser, shop, monkeypatch):
     monkeypatch.setattr(llm, "is_on", lambda: True)
     monkeypatch.setattr(llm, "ask_json", lambda *_: pytest.fail("the model should not be asked"))
     answer = ask(browser, "best sellers this week")
     assert answer["understood_by"] == "rule" and answer["ai_note"] is None
 
 
-def test_model_reading_is_used_when_valid(browser, shop, monkeypatch):
+def test_model_reads_what_the_rule_is_unsure_about(browser, shop, monkeypatch):
     monkeypatch.setattr(llm, "is_on", lambda: True)
-    monkeypatch.setattr(understand_module, "MODEL_BEATS_RULE", True)
     monkeypatch.setattr(llm, "ask_json", lambda *_: {
         "type": "sales_of", "part": "oil filter", "category": None, "branch": RABAT, "period": "this_week",
     })
-    answer = ask(browser, "chhal bi3na mn filtre a huile f rbat")
+    answer = ask(browser, "chhal mcha mn filtre a huile f rbat")
     assert answer["understood_by"] == "model"
+    assert answer["understood"] == f"I understood: Sales of oil filter · {RABAT} · this week"
     assert numbers(answer)["Pieces sold"] == 2  # the number comes from the database, not the model
 
 
-def test_bad_model_reading_falls_back_to_the_rule(browser, shop, monkeypatch):
+@pytest.mark.parametrize("reply", [
+    None,  # Ollama didn't answer
+    {"type": "sales_of", "branch": "Paris", "pieces_sold": 9999},  # not allowed
+    {"type": "cannot_answer", "part": None, "category": None, "branch": None, "period": None},
+])
+def test_no_usable_model_reading_means_not_sure(browser, shop, monkeypatch, reply):
     monkeypatch.setattr(llm, "is_on", lambda: True)
-    monkeypatch.setattr(understand_module, "MODEL_BEATS_RULE", True)
-    monkeypatch.setattr(llm, "ask_json", lambda *_: {"type": "sales_of", "branch": "Paris", "pieces_sold": 9999})
-    answer = ask(browser, "how many oil filters did we sell this week")
+    monkeypatch.setattr(llm, "ask_json", lambda *_: reply)
+    answer = ask(browser, "chhal mcha mn filtre a huile")
     assert answer["understood_by"] == "rule"
-    assert numbers(answer)["Pieces sold"] == 5
+    assert answer["question_type"] == "not_sure" and answer["suggestions"]
+
+
+def test_rule_only_reader_never_asks_the_model(browser, shop, monkeypatch):
+    monkeypatch.setattr(llm, "is_on", lambda: True)
+    monkeypatch.setattr(understand_module, "READER", "rule")
+    monkeypatch.setattr(llm, "ask_json", lambda *_: pytest.fail("the model should not be asked"))
+    assert ask(browser, "chhal mcha mn filtre a huile")["question_type"] == "not_sure"
 
 
 def select_part(organization_id: uuid.UUID, name: str) -> uuid.UUID:

@@ -7,12 +7,13 @@ from collections.abc import Callable
 from sqlalchemy.orm import Session
 
 from app.ask.answer_parts import Answer, Asked, shop_today
-from app.ask.question import Question
+from app.ask.question import NOT_SURE, Question
 from app.ask.sales_answers import best_sellers, sales_of, sales_vs_last
 from app.ask.shop_answers import late_deliveries, open_alerts, what_to_order
 from app.ask.stock_answers import dead_stock, forecast_of_part, running_out, stock_of_part
 
 CANNOT_ANSWER_YET = "I can't answer that yet."
+NOT_SURE_SENTENCE = "I'm not sure what you mean{by}. Did you mean one of these?"
 
 ANSWERS: dict[str, Callable[[Asked], Answer]] = {
     "sales_of": sales_of,
@@ -29,6 +30,8 @@ ANSWERS: dict[str, Callable[[Asked], Answer]] = {
 
 
 def answer(db: Session, organization_id: uuid.UUID, question: Question, currency: str | None) -> Answer:
+    if question.type == NOT_SURE:
+        return Answer(NOT_SURE_SENTENCE.format(by=f" by “{question.part}”" if question.part else ""))
     build = ANSWERS.get(question.type)
     if build is None:
         return Answer(CANNOT_ANSWER_YET)

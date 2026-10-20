@@ -9,7 +9,7 @@ from app.alerts.problem import pieces
 from app.ask.answer_parts import (
     SHOWN_ROWS, Answer, Asked, Number, PartPick, branch_id, part_not_found, pick_parts, range_words, where_words,
 )
-from app.ask.periods import DEFAULT_PERIOD, LABELS, day_range, range_before
+from app.ask.periods import LABELS, day_range, period_used, range_before
 from app.models import Part, SaleLine
 
 
@@ -17,7 +17,7 @@ def sales_of(asked: Asked) -> Answer:
     parts = pick_parts(asked)
     if parts is None:
         return part_not_found(asked)
-    period = asked.question.period or DEFAULT_PERIOD
+    period = period_used(asked.question.type, asked.question.period)
     first, last = day_range(period, asked.today)
     sold, value = _sold(asked, parts, branch_id(asked), first, last)
     return Answer(
@@ -34,7 +34,7 @@ def sales_of(asked: Asked) -> Answer:
 
 def best_sellers(asked: Asked) -> Answer:
     parts = pick_parts(asked)
-    period = asked.question.period or DEFAULT_PERIOD
+    period = period_used(asked.question.type, asked.question.period)
     first, last = day_range(period, asked.today)
     quantity = func.sum(SaleLine.quantity)
     rows = asked.db.execute(
@@ -57,7 +57,7 @@ def sales_vs_last(asked: Asked) -> Answer:
     parts = pick_parts(asked)
     if parts is None:
         return part_not_found(asked)
-    period = asked.question.period or "this_week"
+    period = period_used(asked.question.type, asked.question.period)
     first, last = day_range(period, asked.today)
     before_first, before_last = range_before(period, asked.today)
     shop_branch = branch_id(asked)

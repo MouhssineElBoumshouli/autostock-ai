@@ -5,10 +5,16 @@ from datetime import date, timedelta
 
 DayRange = tuple[date, date]
 DEFAULT_PERIOD = "last_30_days"
+DEFAULT_PERIOD_FOR = {"sales_vs_last": "this_week"}
 LABELS = {
     "today": "today", "yesterday": "yesterday", "this_week": "this week", "last_week": "last week",
     "this_month": "this month", "last_month": "last month", "this_year": "this year", "last_30_days": "the last 30 days",
 }
+
+
+def period_used(question_type: str, period: str | None) -> str:
+    """The period asked for, or the one this question type uses when none was asked."""
+    return period or DEFAULT_PERIOD_FOR.get(question_type, DEFAULT_PERIOD)
 
 
 def day_range(period: str, today: date) -> DayRange:
