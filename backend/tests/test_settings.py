@@ -1,22 +1,22 @@
 from tests.helpers import add_member, audit_rows, member_with_own_password, set_up_shop
 
 
-def test_owner_reads_settings_with_mad_by_default(browser):
+def test_owner_reads_settings_with_mad_and_french_by_default(browser):
     set_up_shop(browser)
 
-    assert browser.get("/api/settings").json() == {"name": "Atlas Parts", "currency": "MAD"}
+    assert browser.get("/api/settings").json() == {"name": "Atlas Parts", "currency": "MAD", "language": "fr"}
 
 
 def test_owner_changes_settings_and_it_is_audited(browser):
     set_up_shop(browser)
 
-    response = browser.patch("/api/settings", json={"name": "Atlas Parts Rabat", "currency": "EUR"})
+    response = browser.patch("/api/settings", json={"name": "Atlas Parts Rabat", "currency": "EUR", "language": "ar"})
 
-    assert response.json() == {"name": "Atlas Parts Rabat", "currency": "EUR"}
+    assert response.json() == {"name": "Atlas Parts Rabat", "currency": "EUR", "language": "ar"}
     assert browser.get("/api/auth/me").json()["organization"]["name"] == "Atlas Parts Rabat"
     row = audit_rows("organization.updated")[-1]
-    assert row.before == {"name": "Atlas Parts", "currency": "MAD"}
-    assert row.after == {"name": "Atlas Parts Rabat", "currency": "EUR"}
+    assert row.before == {"name": "Atlas Parts", "currency": "MAD", "language": "fr"}
+    assert row.after == {"name": "Atlas Parts Rabat", "currency": "EUR", "language": "ar"}
 
 
 def test_saving_without_changes_writes_no_audit_row(browser):
@@ -44,4 +44,5 @@ def test_unknown_currency_and_empty_name_are_rejected(browser):
     set_up_shop(browser)
 
     assert browser.patch("/api/settings", json={"currency": "BTC"}).status_code == 422
+    assert browser.patch("/api/settings", json={"language": "de"}).status_code == 422
     assert browser.patch("/api/settings", json={"name": "   "}).status_code == 422

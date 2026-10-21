@@ -31,12 +31,21 @@ PENDING_STATUSES = ("suggested", "cut_by_budget")
 
 
 class AlertSummary(BaseModel):
+    """What staff see: no money. `sentence` is English; the website builds it in the person's
+    language from `kind`, `numbers` and `started_on`."""
+
     id: uuid.UUID
     kind: str
     sentence: str
+    numbers: dict
+    started_on: date
     part_name: str
     branch_name: str
     raised_on: date
+
+
+class AlertSummaryWithMoney(AlertSummary):
+    money_at_stake: int
 
 
 class ToOrderLines(BaseModel):
@@ -79,9 +88,9 @@ class WeeklySales(BaseModel):
 
 
 class TodayOut(BaseModel):
-    needs_action: list[AlertSummary]
+    needs_action: list[AlertSummaryWithMoney | AlertSummary]
     needs_action_total: int
-    worth_a_look: list[AlertSummary]
+    worth_a_look: list[AlertSummaryWithMoney | AlertSummary]
     worth_a_look_total: int
     to_order: ToOrderSummary | ToOrderLines | None
     late_deliveries: list[LateDelivery]
@@ -120,14 +129,20 @@ def _alerts(db: Session, organization_id: uuid.UUID, group: Group, currency: str
         .order_by(Alert.money_at_stake.desc(), Alert.raised_on.desc())
         .limit(SHOWN_ALERTS)
     ).all()
-    items = [
-        AlertSummary(
-            id=alert.id, kind=alert.kind, part_name=part_name, branch_name=branch_name, raised_on=alert.raised_on,
-            sentence=alert.sentence if currency is None else f"{alert.sentence} {money_note(alert.kind, alert.money_at_stake, currency)}",
-        )
-        for alert, part_name, branch_name in rows
-    ]
-    return items, total
+    return [_summary(alert, part_name, branch_name, currency) for alert, part_name, branch_name in rows], total
+
+
+def _summary(alert: Alert, part_name: str, branch_name: str, currency: str | None) -> AlertSummary:
+    fields = dict(
+        id=alert.id, kind=alert.kind, numbers=alert.numbers, started_on=alert.started_on, part_name=part_name,
+        branch_name=branch_name, raised_on=alert.raised_on,
+    )
+    if currency is None:
+        return AlertSummary(**fields, sentence=alert.sentence)
+    return AlertSummaryWithMoney(
+        **fields, sentence=f"{alert.sentence} {money_note(alert.kind, alert.money_at_stake, currency)}",
+        money_at_stake=alert.money_at_stake,
+    )
 
 
 def _to_order(db: Session, organization_id: uuid.UUID, can_see_money: bool) -> ToOrderSummary | ToOrderLines | None:

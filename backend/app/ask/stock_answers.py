@@ -16,7 +16,7 @@ from app.stock_status import DEAD_AFTER_DAYS, is_dead, quantity_on_hand
 
 def stock_of_part(asked: Asked) -> Answer:
     if not asked.question.part:
-        return which_part("how many oil filters in stock")
+        return which_part("which_part_stock", "how many oil filters in stock")
     parts = pick_parts(asked)
     if parts is None:
         return part_not_found(asked)
@@ -36,7 +36,10 @@ def stock_of_part(asked: Asked) -> Answer:
     numbers = [Number(label=name, value=quantity, unit="pieces") for name, quantity in per_branch]
     if parts.part_ids:
         numbers += _per_part_stock(asked, parts, shop_branch)
-    return Answer(f"{parts.title}: {pieces(total)} in stock{where_words(asked)}.", numbers)
+    return Answer(
+        "stock_of_part", {"subject": parts.subject, **asked.place(), "pieces": total},
+        f"{parts.title}: {pieces(total)} in stock{where_words(asked)}.", numbers,
+    )
 
 
 def _per_part_stock(asked: Asked, parts: PartPick, shop_branch: uuid.UUID | None) -> list[Number]:
@@ -70,14 +73,19 @@ def running_out(asked: Asked) -> Answer:
         .order_by(days, Part.sku)
     ).all()
     when = f"{where_words(asked)} within {RUNNING_OUT_WITHIN_DAYS} days"
+    values = {"subject": parts.subject, **asked.place(), "days": RUNNING_OUT_WITHIN_DAYS}
     if not rows:
-        return Answer(f"Nothing in {parts.label} is expected to run out{when}.")
+        return Answer("running_out_none", values, f"Nothing in {parts.label} is expected to run out{when}.")
     return Answer(
+        "running_out",
+        {**values, "count": len(rows), "name": rows[0].name, "sku": rows[0].sku, "pieces": int(rows[0].quantity),
+         "days_left": shown_runs_out_days(rows[0][3])},
         f"{len(rows)} {'part is' if len(rows) == 1 else 'parts are'} expected to run out{when} ({parts.label}). "
         f"First: {rows[0].name} ({rows[0].sku}), {pieces(int(rows[0].quantity))} left, about "
         f"{shown_runs_out_days(rows[0][3])} days.",
-        [Number(label="Parts running out", value=len(rows), unit="count")]
-        + [Number(label=f"{name} ({sku}), days left", value=shown_runs_out_days(left), unit="days")
+        [Number(key="parts_running_out", label="Parts running out", value=len(rows), unit="count")]
+        + [Number(key="days_left", about=f"{name} ({sku})", label=f"{name} ({sku}), days left",
+                  value=shown_runs_out_days(left), unit="days")
            for name, sku, _, left in rows[:SHOWN_ROWS]],
     )
 
@@ -95,17 +103,20 @@ def dead_stock(asked: Asked) -> Answer:
         .order_by((value if asked.currency else on_hand.c.quantity).desc(), Part.sku)
     ).all()
     when = f"no sale in {DEAD_AFTER_DAYS} days"
+    values = {"subject": parts.subject, **asked.place(), "days": DEAD_AFTER_DAYS}
     if not rows:
-        return Answer(f"No dead stock in {parts.label}{where_words(asked)} ({when}).")
+        return Answer("dead_stock_none", values, f"No dead stock in {parts.label}{where_words(asked)} ({when}).")
     total_pieces = sum(int(row.quantity) for row in rows)
     total_value = sum(int(row[3]) for row in rows)
     return Answer(
+        "dead_stock",
+        {**values, "count": len(rows), "pieces": total_pieces, **asked.money_value(total_value)},
         f"{len(rows)} {'part has' if len(rows) == 1 else 'parts have'} stock but {when} ({parts.label}"
         f"{where_words(asked)}): {pieces(total_pieces)} on the shelf{asked.money_words(total_value, ', costing ')}.",
         [
-            Number(label="Dead stock parts", value=len(rows), unit="count"),
-            Number(label="Pieces on the shelf", value=total_pieces, unit="pieces"),
-            *asked.money_number("Value at cost", total_value),
+            Number(key="dead_parts", label="Dead stock parts", value=len(rows), unit="count"),
+            Number(key="pieces_on_shelf", label="Pieces on the shelf", value=total_pieces, unit="pieces"),
+            *asked.money_number("value_at_cost", "Value at cost", total_value),
         ]
         + [Number(label=f"{name} ({sku})", value=int(quantity), unit="pieces") for name, sku, quantity, _ in rows[:SHOWN_ROWS]],
     )
@@ -113,7 +124,7 @@ def dead_stock(asked: Asked) -> Answer:
 
 def forecast_of_part(asked: Asked) -> Answer:
     if not asked.question.part:
-        return which_part("how many brake pads will we sell")
+        return which_part("which_part_forecast", "how many brake pads will we sell")
     parts = pick_parts(asked)
     if parts is None:
         return part_not_found(asked)
@@ -127,16 +138,22 @@ def forecast_of_part(asked: Asked) -> Answer:
         query = query.where(Forecast.branch_id == shop_branch)
     expected, low, high, made_from = asked.db.execute(query).one()
     if expected is None:
-        return Answer(f"No forecast yet for {parts.label}. Forecasts are made after sales are imported.")
+        return Answer(
+            "forecast_none", {"subject": parts.subject},
+            f"No forecast yet for {parts.label}. Forecasts are made after sales are imported.",
+        )
     numbers = [
-        Number(label=f"Expected, next {HORIZON_DAYS} days", value=round(expected), unit="pieces"),
-        Number(label="Likely at least", value=round(low), unit="pieces"),
-        Number(label="Likely at most", value=round(high), unit="pieces"),
-        Number(label="Made from sales up to", value=made_from.isoformat(), unit="date"),
+        Number(key="expected_next_30_days", label=f"Expected, next {HORIZON_DAYS} days", value=round(expected), unit="pieces"),
+        Number(key="likely_at_least", label="Likely at least", value=round(low), unit="pieces"),
+        Number(key="likely_at_most", label="Likely at most", value=round(high), unit="pieces"),
+        Number(key="made_from_sales_up_to", label="Made from sales up to", value=made_from.isoformat(), unit="date"),
     ]
     if parts.part_ids:
         numbers += _per_part_forecast(asked, parts, shop_branch)
     return Answer(
+        "forecast",
+        {"subject": parts.subject, **asked.place(), "pieces": round(expected), "low": round(low), "high": round(high),
+         "days": HORIZON_DAYS, "made_from": made_from.isoformat()},
         f"{parts.title}{where_words(asked)}: about {pieces(round(expected))} expected over the next "
         f"{HORIZON_DAYS} days (likely between {round(low)} and {round(high)}), from sales up to {day_label(made_from)}.",
         numbers,

@@ -1,4 +1,4 @@
-"""Shop settings: name and currency. Only owners can see and change them."""
+"""Shop settings: name, currency and default language. Only owners can see and change them."""
 
 from typing import Literal
 
@@ -10,7 +10,7 @@ from app.api.schemas import NameText
 from app.audit import record_change
 from app.auth.permissions import require_role
 from app.db import get_session
-from app.models import Organization, User
+from app.models import Language, Organization, User
 
 router = APIRouter(prefix="/api/settings")
 owner_only = require_role("owner")
@@ -21,15 +21,17 @@ Currency = Literal["MAD", "EUR", "USD"]
 class ShopSettings(BaseModel):
     name: str
     currency: Currency
+    language: Language
 
 
 class SettingsChange(BaseModel):
     name: NameText | None = None
     currency: Currency | None = None
+    language: Language | None = None
 
 
 def snapshot(organization: Organization) -> dict:
-    return {"name": organization.name, "currency": organization.currency}
+    return {"name": organization.name, "currency": organization.currency, "language": organization.language}
 
 
 @router.get("")
@@ -49,6 +51,8 @@ def change_settings(
         organization.name = body.name
     if body.currency is not None:
         organization.currency = body.currency
+    if body.language is not None:
+        organization.language = body.language
 
     if snapshot(organization) != before:
         record_change(

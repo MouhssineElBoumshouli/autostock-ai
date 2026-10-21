@@ -59,6 +59,7 @@ def test_manager_gets_one_line_per_part_to_order_with_its_reason(browser):
     assert line["quantity"] == line["need"] - 6
     assert line["line_cost"] == line["quantity"] * 7000
     assert line["reason"].startswith("Sells about 9 a week, supplier takes 14 days, 6 left: order ")
+    assert line["sold_last_90_days"] >= 0  # the website rebuilds the reason in French or Arabic from these numbers
     assert run["suggested_cost"] == run["kept_cost"] == line["line_cost"]
 
 
