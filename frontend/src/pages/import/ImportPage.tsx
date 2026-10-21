@@ -42,7 +42,7 @@ export function ImportPage() {
   }
 
   return (
-    <div className="grid gap-8">
+    <div className="grid grid-cols-1 gap-8">
       <PageHeader title={t.nav.importFile} subtitle={t.importFile.subtitle} />
       <StepList current={step} />
 

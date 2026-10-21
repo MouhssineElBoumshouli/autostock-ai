@@ -66,7 +66,7 @@ export function TeamPage() {
   ];
 
   return (
-    <div className="grid gap-8">
+    <div className="grid grid-cols-1 gap-8">
       <PageHeader
         title={t.nav.team}
         subtitle={t.team.subtitle}

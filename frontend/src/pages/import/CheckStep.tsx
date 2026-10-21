@@ -3,7 +3,7 @@ import { FormError } from "@/components/FormError";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { t } from "@/i18n";
+import { t, translateServerMessage } from "@/i18n";
 import { formatNumber } from "@/lib/format";
 
 import { ImportSummaryList } from "./ImportSummaryList";
@@ -61,7 +61,7 @@ export function CheckStep({
               {summary.problems.map((problem) => (
                 <TableRow key={problem.row}>
                   <TableCell className="text-end tabular-nums">{problem.row}</TableCell>
-                  <TableCell className="whitespace-normal">{problem.messages.join(" · ")}</TableCell>
+                  <TableCell className="whitespace-normal">{problem.messages.map(translateServerMessage).join(" · ")}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

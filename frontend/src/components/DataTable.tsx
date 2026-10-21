@@ -134,7 +134,7 @@ export function DataTable<Row>({
               <li
                 key={rowKey(row)}
                 className={cn(
-                  "grid gap-3 px-6 py-4",
+                  "grid grid-cols-1 gap-3 px-6 py-4",
                   onRowClick && "cursor-pointer outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
                 )}
                 {...activation(row)}
@@ -142,9 +142,9 @@ export function DataTable<Row>({
                 <div className="text-title-medium">{primary.cell(row)}</div>
                 <dl className="grid gap-2">
                   {details.map((column) => (
-                    <div key={column.header} className="flex items-center justify-between gap-4">
+                    <div key={column.header} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                       <dt className="text-body-small text-on-surface-variant">{column.header}</dt>
-                      <dd className={cn("text-end", column.align === "end" && "tabular-nums")}>{column.cell(row)}</dd>
+                      <dd className={cn("min-w-0 text-end", column.align === "end" && "tabular-nums")}>{column.cell(row)}</dd>
                     </div>
                   ))}
                 </dl>

@@ -1,7 +1,7 @@
 import type { ActivityItem } from "@/api/activity";
 import type { CareLevel } from "@/api/orders";
 import type { Role } from "@/api/users";
-import { t } from "@/i18n";
+import { isLanguage, languageNames, t } from "@/i18n";
 import { formatNumber } from "@/lib/format";
 
 const words = t.activity.sentences;
@@ -33,6 +33,10 @@ export function activitySentence(item: ActivityItem): string {
           after.order_service_target !== undefined &&
           before.order_service_target !== after.order_service_target &&
           words.orderCareChanged(actor, careLevelName(after.order_service_target)),
+        before.language !== undefined &&
+          before.language !== after.language &&
+          isLanguage(after.language) &&
+          words.languageChanged(actor, languageNames[after.language]),
       ]
         .filter(Boolean)
         .join(" ");

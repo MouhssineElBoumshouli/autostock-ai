@@ -116,7 +116,7 @@ export function ChangePasswordPage() {
     );
   }
   return (
-    <div className="grid gap-8">
+    <div className="grid grid-cols-1 gap-8">
       <PageHeader title={t.changePassword.title} subtitle={t.changePassword.subtitle} />
       <Card className="max-w-md">
         <CardContent>{passwordForm}</CardContent>

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { t } from "@/i18n";
 import { formatMoney, formatNumber } from "@/lib/format";
+import { orderReason } from "@/lib/orderReason";
 
 function wholeNumber(text: string): number | "invalid" {
   return /^\d+$/.test(text.trim()) && Number(text.trim()) > 0 ? Number(text.trim()) : "invalid";
@@ -60,7 +61,7 @@ export function OrderLineRow({ line, canEdit }: { line: OrderLine; canEdit: bool
         <p className="text-body-small text-on-surface-variant">
           {line.part_sku} · {line.branch_name} · {t.orders.columns.inStock} {formatNumber(line.on_hand)}
         </p>
-        <p className="text-body-small text-on-surface-variant">{line.reason}</p>
+        <p className="text-body-small text-on-surface-variant">{orderReason(line)}</p>
         {!line.supplier_id && <p className="text-body-small text-error">{t.orders.noSupplier}</p>}
       </div>
 

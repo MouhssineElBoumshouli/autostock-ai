@@ -11,7 +11,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { t } from "@/i18n";
+import { type Language, languageNames, languages, t } from "@/i18n";
 import { requiredError } from "@/lib/validation";
 
 import { BranchesCard } from "./settings/BranchesCard";
@@ -19,12 +19,12 @@ import { OrderingCard } from "./settings/OrderingCard";
 import { SuppliersCard } from "./settings/SuppliersCard";
 import { SynonymsCard } from "./settings/SynonymsCard";
 
-// Owners only: shop name, currency, branches, suppliers and search words.
+// Owners only: shop name, currency, language, branches, suppliers and search words.
 export function SettingsPage() {
   const settings = useSettings();
 
   return (
-    <div className="grid gap-8">
+    <div className="grid grid-cols-1 gap-8">
       <PageHeader title={t.nav.settings} subtitle={t.settings.subtitle} />
       <Card className="max-w-2xl">
         <CardHeader>
@@ -79,6 +79,22 @@ function SettingsForm({ saved }: { saved: ShopSettings }) {
                 {currencies.map((currency) => (
                   <SelectItem key={currency} value={currency}>
                     {t.settings.currencies[currency]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </FormField>
+        <FormField label={t.settings.language} help={t.settings.languageHelp}>
+          {(field) => (
+            <Select value={form.language} onValueChange={(language) => setForm({ ...form, language: language as Language })}>
+              <SelectTrigger {...field}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {languages.map((language) => (
+                  <SelectItem key={language} value={language} lang={language}>
+                    {languageNames[language]}
                   </SelectItem>
                 ))}
               </SelectContent>

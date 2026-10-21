@@ -1,8 +1,11 @@
 import { Bar, BarChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 
 import type { WeekPoint } from "@/api/today";
-import { t } from "@/i18n";
+import { direction, t } from "@/i18n";
 import { formatMonthDay, formatNumber } from "@/lib/format";
+
+// Arabic reads right to left, so time runs from right (oldest) to left (newest) there.
+const rtl = direction === "rtl";
 
 type ChartRow = { label: string; quantity: number };
 
@@ -15,9 +18,10 @@ export function WeeklySalesChart({ weeks, normal }: { weeks: WeekPoint[]; normal
     // overflow-hidden as a safety net for ResponsiveContainer's own first-measurement hiccups.
     <div className="min-w-0 overflow-hidden">
       <ResponsiveContainer width="100%" height={160}>
-        <BarChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: 4 }} barCategoryGap={4}>
+        <BarChart data={rows} margin={{ top: 4, right: rtl ? 4 : 8, bottom: 0, left: rtl ? 8 : 4 }} barCategoryGap={4}>
           <XAxis
             dataKey="label"
+          reversed={rtl}
             tickLine={false}
             axisLine={{ stroke: "var(--color-outline-variant)" }}
             tick={{ fontSize: 10, fill: "var(--color-on-surface-variant)" }}

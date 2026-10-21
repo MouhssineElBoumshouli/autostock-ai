@@ -120,7 +120,7 @@ export function StockPage() {
 
   if (noPartsAtAll) {
     return (
-      <div className="grid gap-8">
+      <div className="grid grid-cols-1 gap-8">
         <PageHeader title={t.nav.stock} subtitle={t.stock.subtitle} />
         <Card className="py-0">
           <EmptyState
@@ -135,7 +135,7 @@ export function StockPage() {
   }
 
   return (
-    <div className="grid gap-8">
+    <div className="grid grid-cols-1 gap-8">
       <PageHeader title={t.nav.stock} subtitle={t.stock.subtitle} action={importButton} />
       <ForecastStatusBar />
       <StockStats

@@ -2,8 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, apiRequest } from "@/api/client";
 import type { User } from "@/api/users";
+import type { Language } from "@/i18n";
 
-export type Me = { user: User; organization: { id: string; name: string; currency: string; is_demo: boolean } };
+export type Me = {
+  user: User;
+  organization: { id: string; name: string; currency: string; language: Language; is_demo: boolean };
+};
 
 export const meQueryKey = ["me"];
 
@@ -57,6 +61,15 @@ export function useChangePassword() {
   return useMutation({
     mutationFn: (form: { current_password: string; new_password: string }) =>
       apiRequest<Me>("/api/auth/password", { method: "POST", body: form }),
+    onSuccess: (me) => queryClient.setQueryData(meQueryKey, me),
+  });
+}
+
+// Your own language. Null = the shop's.
+export function useChooseLanguage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (language: Language | null) => apiRequest<Me>("/api/auth/language", { method: "PUT", body: { language } }),
     onSuccess: (me) => queryClient.setQueryData(meQueryKey, me),
   });
 }

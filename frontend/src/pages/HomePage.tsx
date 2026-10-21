@@ -28,7 +28,7 @@ export function HomePage() {
   const canReview = me.user.role !== "staff";
 
   return (
-    <div className="grid gap-8">
+    <div className="grid grid-cols-1 gap-8">
       <PageHeader
         title={t.home.greeting(partOfDay(new Date().getHours()), me.user.name.split(" ")[0])}
         subtitle={me.organization.name}

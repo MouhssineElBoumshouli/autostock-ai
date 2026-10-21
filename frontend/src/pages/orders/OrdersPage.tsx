@@ -12,7 +12,7 @@ export function OrdersPage() {
   const canEdit = useSignedIn().user.role !== "staff";
 
   return (
-    <div className="grid gap-8">
+    <div className="grid grid-cols-1 gap-8">
       <PageHeader title={t.nav.orders} subtitle={t.orders.subtitle} />
       <Tabs defaultValue="toOrder">
         <TabsList>

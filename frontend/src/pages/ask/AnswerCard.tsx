@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { t } from "@/i18n";
 
 import { formatAskNumber } from "./askFormat";
+import { answerSentence, numberLabel, understoodHeading, understoodLine } from "./askSentence";
 import { relatedScreen } from "./questionTypes";
 import { UnderstoodChips } from "./UnderstoodChips";
 
@@ -36,6 +37,7 @@ export function AnswerCard({
   const data = entry.data;
   const understood = data.question_type !== "not_sure" && data.question_type !== "cannot_answer";
   const related = understood ? relatedScreen(data.question_type, data.filters, branches) : null;
+  const line = understoodLine(data);
 
   return (
     <Card className="py-0">
@@ -53,8 +55,8 @@ export function AnswerCard({
         )}
 
         <div className="grid gap-1">
-          {data.understood && <p className="text-body-large text-on-surface">{data.understood}</p>}
-          <p className="text-body-large text-on-surface">{data.sentence}</p>
+          {line && <p className="text-body-large text-on-surface">{line}</p>}
+          <p className="text-body-large text-on-surface">{answerSentence(data, currency)}</p>
         </div>
 
         {data.numbers.length > 0 && (
@@ -63,7 +65,7 @@ export function AnswerCard({
               <TableBody>
                 {data.numbers.map((number, index) => (
                   <TableRow key={index}>
-                    <TableCell className="text-on-surface-variant">{number.label}</TableCell>
+                    <TableCell className="text-on-surface-variant">{numberLabel(number)}</TableCell>
                     <TableCell className="text-end font-medium tabular-nums">
                       {formatAskNumber(number, currency)}
                     </TableCell>
@@ -100,7 +102,7 @@ export function AnswerCard({
                   size="sm"
                   onClick={() => onPickType(suggestion.question_type)}
                 >
-                  {suggestion.label}
+                  {understoodHeading(suggestion.question_type, suggestion.filters, suggestion.period)}
                 </Button>
               ))}
             </div>
@@ -112,13 +114,13 @@ export function AnswerCard({
             <Button asChild variant="text" size="sm">
               <Link to={related.to}>
                 {t.ask.relatedScreen[related.labelKey]}
-                <ArrowRightIcon aria-hidden="true" />
+                <ArrowRightIcon aria-hidden="true" className="rtl:rotate-180" />
               </Link>
             </Button>
           </div>
         )}
 
-        {data.ai_note && <p className="text-label-medium text-on-surface-variant">{data.ai_note}</p>}
+        {!data.ai_on && <p className="text-label-medium text-on-surface-variant">{t.ask.aiOff}</p>}
       </CardContent>
     </Card>
   );

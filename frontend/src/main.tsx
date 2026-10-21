@@ -9,7 +9,7 @@ import { RouterProvider } from "react-router/dom";
 import { meQueryKey } from "@/api/auth";
 import { ApiError } from "@/api/client";
 import { Snackbar } from "@/components/ui/snackbar";
-import { direction, locale } from "@/i18n";
+import { direction, language } from "@/i18n";
 import { router } from "@/router";
 
 // If the server says "please log in" (e.g. the session expired), forget who was logged in.
@@ -29,7 +29,7 @@ const queryClient = new QueryClient({
   },
 });
 
-document.documentElement.lang = locale;
+document.documentElement.lang = language;
 document.documentElement.dir = direction;
 
 createRoot(document.getElementById("root")!).render(

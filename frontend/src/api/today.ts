@@ -6,6 +6,9 @@ export type AlertSummary = {
   id: string;
   kind: string;
   sentence: string;
+  numbers: Record<string, unknown>;
+  started_on: string;
+  money_at_stake?: number; // absent for staff
   part_name: string;
   branch_name: string;
   raised_on: string;
