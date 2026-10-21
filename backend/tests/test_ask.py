@@ -79,6 +79,11 @@ def numbers(answer: dict) -> dict:
     return {number["label"]: number["value"] for number in answer["numbers"]}
 
 
+def number_starting(answer: dict, prefix: str):
+    """A number whose label starts with `prefix` (parts carry a random SKU after their name)."""
+    return next(number["value"] for number in answer["numbers"] if number["label"].startswith(prefix))
+
+
 @pytest.fixture
 def shop(browser) -> uuid.UUID:
     """A shop with oil filters and brake pads sold in two branches."""
@@ -91,6 +96,24 @@ def shop(browser) -> uuid.UUID:
     sell(organization_id, oil, MAIN, days_ago=40, quantity=50)  # long ago
     sell(organization_id, pads, MAIN, days_ago=2, quantity=6, unit_price=30000)
     sell(organization_id, pads, MAIN, days_ago=9, quantity=12, unit_price=30000)  # the week before
+    return organization_id
+
+
+@pytest.fixture
+def several_brake_pads_shop(browser) -> uuid.UUID:
+    """Three different parts a search for "brake pads" matches, to test the breakdown shown when
+    a part word is ambiguous."""
+    set_up_shop(browser)
+    organization_id = shop_named(MAIN)
+    front = new_part(organization_id, "Brake pads front", "Brakes")
+    rear = new_part(organization_id, "Brake pads rear", "Brakes")
+    premium = new_part(organization_id, "Brake pads premium", "Brakes")
+    shelve(organization_id, front, MAIN, 30, expected_30d=60)
+    shelve(organization_id, rear, MAIN, 20, expected_30d=40)
+    shelve(organization_id, premium, MAIN, 10, expected_30d=20)
+    sell(organization_id, front, MAIN, days_ago=1, quantity=9)
+    sell(organization_id, rear, MAIN, days_ago=1, quantity=6)
+    sell(organization_id, premium, MAIN, days_ago=1, quantity=3)
     return organization_id
 
 
@@ -143,6 +166,38 @@ def test_stock_of_a_part_per_branch(browser, shop):
     assert numbers(ask(browser, "stock of oil filter in rabat")) == {RABAT: 4}
 
 
+# A part word matching several parts: each gets its own line, besides the total
+
+def test_several_matching_parts_each_get_their_own_stock_line(browser, several_brake_pads_shop):
+    answer = ask(browser, "stock of brake pads")
+    assert answer["filters"] == {"part": "brake pads"}
+    assert numbers(answer)[MAIN] == 60  # the existing per-branch total line, unchanged
+    assert number_starting(answer, "Brake pads front") == 30
+    assert number_starting(answer, "Brake pads rear") == 20
+    assert number_starting(answer, "Brake pads premium") == 10
+
+
+def test_several_matching_parts_each_get_their_own_sales_line(browser, several_brake_pads_shop):
+    answer = ask(browser, "sales of brake pads this week")
+    assert numbers(answer)["Pieces sold"] == 18  # the existing total line, unchanged
+    assert number_starting(answer, "Brake pads front") == 9
+    assert number_starting(answer, "Brake pads rear") == 6
+    assert number_starting(answer, "Brake pads premium") == 3
+
+
+def test_several_matching_parts_each_get_their_own_forecast_line(browser, several_brake_pads_shop):
+    answer = ask(browser, "forecast for brake pads")
+    assert numbers(answer)["Expected, next 30 days"] == 60 + 40 + 20  # the existing total line, unchanged
+    assert number_starting(answer, "Brake pads front") == 60
+    assert number_starting(answer, "Brake pads rear") == 40
+    assert number_starting(answer, "Brake pads premium") == 20
+
+
+def test_a_single_matching_part_keeps_no_extra_breakdown_line(browser, shop):
+    answer = ask(browser, "stock of oil filter")
+    assert not any(number["label"].startswith("Oil filter (") for number in answer["numbers"])
+
+
 def test_unknown_words_get_not_sure_and_buttons_instead_of_a_guess(browser, shop):
     answer = ask(browser, "stock of unicorn horns in rabat")
     assert answer["question_type"] == "not_sure"
@@ -160,6 +215,33 @@ def test_unknown_words_get_not_sure_and_buttons_instead_of_a_guess(browser, shop
 def test_a_picked_type_must_be_a_real_one(browser, shop):
     for bad in ("drop_tables", "cannot_answer"):
         assert browser.post("/api/ask", json={"question": "x", "question_type": bad}).status_code == 422
+
+
+# Changing a filter chip without retyping the question
+
+def test_a_filter_chip_change_keeps_the_type_and_reasks(browser, shop):
+    question = "stock of oil filter in rabat"
+    first = ask(browser, question)
+    assert first["filters"] == {"part": "oil filter", "branch": RABAT}
+    changed = browser.post("/api/ask", json={
+        "question": question, "question_type": "stock_of_part",
+        "filters": {"part": "oil filter"},  # the branch chip was cleared
+    }).json()
+    assert changed["filters"] == {"part": "oil filter"}
+    assert changed["understood"] == "I understood: Stock of oil filter"
+    assert changed["understood_by"] == "rule" and changed["ai_note"].startswith("AI is off")
+
+
+def test_a_filter_chip_needs_the_question_type(browser, shop):
+    response = browser.post("/api/ask", json={"question": "stock of oil filter", "filters": {"branch": RABAT}})
+    assert response.status_code == 422
+
+
+def test_a_filter_chip_value_must_be_real(browser, shop):
+    response = browser.post("/api/ask", json={
+        "question": "stock of oil filter", "question_type": "stock_of_part", "filters": {"branch": "Paris"},
+    })
+    assert response.status_code == 422
 
 
 def test_every_answer_says_how_the_question_was_read(browser, shop):
@@ -185,6 +267,11 @@ def test_dead_stock(browser, shop):
     assert numbers(answer)["Dead stock parts"] == 1
     assert numbers(answer)["Value at cost"] == 3 * 50000
     assert "Radiator" in str(answer["numbers"])
+
+
+@pytest.mark.parametrize("question", ["what is not moving", "ne se vend pas", "ma kaytba3ch"])
+def test_phrases_for_things_not_selling_reach_dead_stock(browser, shop, question):
+    assert ask(browser, question)["question_type"] == "dead_stock"
 
 
 def test_forecast_of_a_part(browser, shop):

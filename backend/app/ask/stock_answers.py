@@ -1,10 +1,13 @@
 """Answers about stock: how many on the shelf, what runs out soon, dead stock, and forecasts."""
 
+import uuid
+
 from sqlalchemy import func, select
 
 from app.alerts.problem import day_label, pieces
 from app.ask.answer_parts import (
-    SHOWN_ROWS, Answer, Asked, Number, branch_id, part_not_found, pick_parts, where_words, which_part,
+    SHOWN_PARTS, SHOWN_ROWS, Answer, Asked, Number, PartPick, branch_id, part_not_found, pick_parts, where_words,
+    which_part,
 )
 from app.models import Branch, Forecast, Part, StockLevel
 from app.runs_out import HORIZON_DAYS, RUNNING_OUT_WITHIN_DAYS, expected_30d_subquery, shown_runs_out_days
@@ -30,10 +33,24 @@ def stock_of_part(asked: Asked) -> Answer:
         query = query.where(Branch.id == shop_branch)
     per_branch = [(name, int(quantity)) for name, quantity in asked.db.execute(query)]
     total = sum(quantity for _, quantity in per_branch)
-    return Answer(
-        f"{parts.title}: {pieces(total)} in stock{where_words(asked)}.",
-        [Number(label=name, value=quantity, unit="pieces") for name, quantity in per_branch],
-    )
+    numbers = [Number(label=name, value=quantity, unit="pieces") for name, quantity in per_branch]
+    if parts.part_ids:
+        numbers += _per_part_stock(asked, parts, shop_branch)
+    return Answer(f"{parts.title}: {pieces(total)} in stock{where_words(asked)}.", numbers)
+
+
+def _per_part_stock(asked: Asked, parts: PartPick, shop_branch: uuid.UUID | None) -> list[Number]:
+    """One line per matched part (top SHOWN_PARTS, most in stock first), scoped to the branch
+    asked about if any, else summed over every branch."""
+    on_hand = quantity_on_hand(asked.organization_id, shop_branch)
+    rows = asked.db.execute(
+        select(Part.name, Part.sku, on_hand.c.quantity)
+        .join(on_hand, on_hand.c.part_id == Part.id)
+        .where(Part.organization_id == asked.organization_id, parts.condition)
+        .order_by(on_hand.c.quantity.desc(), Part.sku)
+        .limit(SHOWN_PARTS)
+    ).all()
+    return [Number(label=f"{name} ({sku})", value=int(quantity), unit="pieces") for name, sku, quantity in rows]
 
 
 def running_out(asked: Asked) -> Answer:
@@ -111,13 +128,33 @@ def forecast_of_part(asked: Asked) -> Answer:
     expected, low, high, made_from = asked.db.execute(query).one()
     if expected is None:
         return Answer(f"No forecast yet for {parts.label}. Forecasts are made after sales are imported.")
+    numbers = [
+        Number(label=f"Expected, next {HORIZON_DAYS} days", value=round(expected), unit="pieces"),
+        Number(label="Likely at least", value=round(low), unit="pieces"),
+        Number(label="Likely at most", value=round(high), unit="pieces"),
+        Number(label="Made from sales up to", value=made_from.isoformat(), unit="date"),
+    ]
+    if parts.part_ids:
+        numbers += _per_part_forecast(asked, parts, shop_branch)
     return Answer(
         f"{parts.title}{where_words(asked)}: about {pieces(round(expected))} expected over the next "
         f"{HORIZON_DAYS} days (likely between {round(low)} and {round(high)}), from sales up to {day_label(made_from)}.",
-        [
-            Number(label=f"Expected, next {HORIZON_DAYS} days", value=round(expected), unit="pieces"),
-            Number(label="Likely at least", value=round(low), unit="pieces"),
-            Number(label="Likely at most", value=round(high), unit="pieces"),
-            Number(label="Made from sales up to", value=made_from.isoformat(), unit="date"),
-        ],
+        numbers,
     )
+
+
+def _per_part_forecast(asked: Asked, parts: PartPick, shop_branch: uuid.UUID | None) -> list[Number]:
+    """One line per matched part (top SHOWN_PARTS, most expected first)."""
+    expected = func.sum(Forecast.quantity)
+    query = (
+        select(Part.name, Part.sku, expected)
+        .join(Part, Part.id == Forecast.part_id)
+        .where(Forecast.organization_id == asked.organization_id, Forecast.horizon_days == HORIZON_DAYS, parts.condition)
+        .group_by(Part.id, Part.name, Part.sku)
+        .order_by(expected.desc(), Part.sku)
+        .limit(SHOWN_PARTS)
+    )
+    if shop_branch:
+        query = query.where(Forecast.branch_id == shop_branch)
+    rows = asked.db.execute(query).all()
+    return [Number(label=f"{name} ({sku})", value=round(quantity), unit="pieces") for name, sku, quantity in rows]

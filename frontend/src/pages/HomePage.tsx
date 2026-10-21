@@ -9,6 +9,7 @@ import { t } from "@/i18n";
 import { LowStockCard } from "@/pages/stock/LowStockCard";
 import { StockStats } from "@/pages/stock/StockStats";
 
+import { AskYourShopCard } from "./home/AskYourShopCard";
 import { LateDeliveriesCard } from "./home/LateDeliveriesCard";
 import { NeedsActionCard } from "./home/NeedsActionCard";
 import { ToOrderCard } from "./home/ToOrderCard";
@@ -69,6 +70,7 @@ function Today({ canReview }: { canReview: boolean }) {
         partsToOrder={data.to_order?.lines ?? 0}
         lateDeliveries={data.late_deliveries.length}
       />
+      <AskYourShopCard />
       <div className="grid gap-4 lg:grid-cols-2">
         <NeedsActionCard alerts={data.needs_action} total={data.needs_action_total} canReview={canReview} />
         <div className="grid gap-4">

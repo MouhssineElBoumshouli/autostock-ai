@@ -6,15 +6,16 @@ app/ask). The answer and its numbers always come from the app's own queries, nev
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.ai import llm
 from app.ask.answer_parts import Number
 from app.ask.answers import answer
-from app.ask.question import QUESTION_TYPES, Question
-from app.ask.understand import understand, understand_as
+from app.ask.question import QUESTION_TYPES, Question, checked_question
+from app.ask.understand import shop_words, understand, understand_as
 from app.ask.understood_line import heading, understood_line
 from app.auth.permissions import require_role
 from app.db import get_session
@@ -29,7 +30,8 @@ BEST_GUESS = "Best guess. "
 
 class AskIn(BaseModel):
     question: str = Field(min_length=1, max_length=300)
-    question_type: str | None = None  # set by a "Did you mean" button
+    question_type: str | None = None  # set by a "Did you mean" button, or to keep the type while changing a filter
+    filters: dict[str, str] | None = None  # set by a filter chip: replaces the filters for question_type
 
     @field_validator("question_type")
     @classmethod
@@ -64,21 +66,30 @@ def ask(body: AskIn, user: User = Depends(anyone), db: Session = Depends(get_ses
     currency = None
     if user.role != "staff":
         currency = db.scalar(select(Organization.currency).where(Organization.id == user.organization_id))
-    if body.question_type:
+    if body.filters is not None:
+        # A filter chip was changed: keep the question type, replace its filters, nothing re-read.
+        if not body.question_type:
+            raise HTTPException(422, "A filter needs the question type it belongs to.")
+        question = checked_question({"type": body.question_type, **body.filters}, shop_words(db, user.organization_id))
+        if question is None:
+            raise HTTPException(422, "That isn't a filter this question type takes.")
+        understood_by, ai_on = "rule", llm.is_on()
+    elif body.question_type:
         understood = understand_as(db, user.organization_id, body.question, body.question_type)
+        question, understood_by, ai_on = understood.question, understood.understood_by, understood.ai_on
     else:
         understood = understand(db, user.organization_id, body.question)
-    question = understood.question
+        question, understood_by, ai_on = understood.question, understood.understood_by, understood.ai_on
     result = answer(db, user.organization_id, question, currency)
     line = understood_line(question)
-    if line and understood.understood_by == "model":
+    if line and understood_by == "model":
         line = BEST_GUESS + line
     return AskOut(
         understood=line,
         question_type=question.type,
-        filters=understood.question.filters(),
-        understood_by=understood.understood_by,
-        ai_note=None if understood.ai_on else AI_OFF,
+        filters=question.filters(),
+        understood_by=understood_by,
+        ai_note=None if ai_on else AI_OFF,
         sentence=result.sentence,
         numbers=result.numbers,
         suggestions=[_suggestion(question, question_type) for question_type in question.suggestions],
