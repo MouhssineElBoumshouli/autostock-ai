@@ -82,7 +82,7 @@ export function UploadStep({
               <span className="grid gap-0.5">
                 <span className="text-title-small break-all">{file.name}</span>
                 <span className="text-body-small text-on-surface-variant">
-                  {formatNumber(Math.ceil(file.size / 1024))} KB · {t.importFile.changeFile}
+                  {t.importFile.fileSize(formatNumber(Math.ceil(file.size / 1024)))} · {t.importFile.changeFile}
                 </span>
               </span>
             ) : (

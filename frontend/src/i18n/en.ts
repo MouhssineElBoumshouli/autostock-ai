@@ -334,6 +334,7 @@ export const en = {
     },
     fileLabel: "File",
     fileHelp: "Excel (.xlsx) or CSV, up to 10 MB.",
+    fileSize: (kilobytes: string) => `${kilobytes} KB`,
     chooseFile: "Choose a file",
     changeFile: "Choose another file",
     fileTooBig: "The file is larger than 10 MB. Split it into smaller files.",

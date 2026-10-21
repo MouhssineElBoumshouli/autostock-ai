@@ -54,7 +54,8 @@ export function LowStockCard() {
                   <span className="text-body-small text-on-surface-variant">{part.sku}</span>
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
-                  <span className="text-body-medium tabular-nums">
+                  {/* "1 / 3" reads left to right in Arabic too, like any fraction. */}
+                  <span dir="ltr" className="text-body-medium tabular-nums">
                     {formatNumber(part.quantity)}
                     <span className="text-on-surface-variant"> / {formatNumber(part.min_stock)}</span>
                   </span>

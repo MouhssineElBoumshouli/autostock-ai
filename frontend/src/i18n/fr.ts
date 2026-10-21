@@ -318,6 +318,7 @@ export const fr: typeof en = {
     },
     fileLabel: "Fichier",
     fileHelp: "Excel (.xlsx) ou CSV, 10 Mo maximum.",
+    fileSize: (kilobytes: string) => `${kilobytes} Ko`,
     chooseFile: "Choisir un fichier",
     changeFile: "Choisir un autre fichier",
     fileTooBig: "Le fichier dépasse 10 Mo. Découpez-le en plusieurs fichiers.",

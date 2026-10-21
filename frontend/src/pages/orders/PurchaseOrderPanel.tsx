@@ -102,7 +102,10 @@ function PurchaseOrderDetails({ po, canEdit }: { po: PurchaseOrder; canEdit: boo
                 </p>
                 {po.status !== "draft" && (
                   <p className="text-body-small text-on-surface-variant">
-                    {t.purchaseOrders.receivedQuantity}: {formatNumber(line.received_quantity)} / {formatNumber(line.quantity)}
+                    {t.purchaseOrders.receivedQuantity}:{" "}
+                    <bdi dir="ltr">
+                      {formatNumber(line.received_quantity)} / {formatNumber(line.quantity)}
+                    </bdi>
                   </p>
                 )}
               </div>

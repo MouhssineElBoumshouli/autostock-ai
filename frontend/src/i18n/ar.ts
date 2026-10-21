@@ -326,6 +326,7 @@ export const ar: typeof en = {
     },
     fileLabel: "الملف",
     fileHelp: "Excel (.xlsx) أو CSV، حتى 10 ميغابايت.",
+    fileSize: (kilobytes: string) => `${kilobytes} كيلوبايت`,
     chooseFile: "اختيار ملف",
     changeFile: "اختيار ملف آخر",
     fileTooBig: "الملف أكبر من 10 ميغابايت. قسّمه إلى ملفات أصغر.",
