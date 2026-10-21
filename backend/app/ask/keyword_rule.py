@@ -60,7 +60,7 @@ TYPE_PHRASES = [
                       "sold the most", "sells the most", "sell the most", "most sold", "meilleures ventes",
                       "plus vendus", "plus vendu", "part le plus", "se vend le plus", "الاكثر مبيعا", "اكثر مبيعا",
                       "بيعت اكثر", "kaytba3 bzaf", "كيتباع بزاف", "tba3 ktar", "تباع كثر"]),
-    ("dead_stock", ["dead", "not selling", "sitting on the shelf", "never sells", "ne se vendent plus",
+    ("dead_stock", ["dead", "not selling", "not moving", "sitting on the shelf", "never sells", "ne se vendent plus",
                     "ne se vend pas", "dorment", "qui dort", "mort", "invendus", "الراكد", "راكد", "لا تباع", "لم تبع",
                     "ma kaytba3ch", "ma katbi3ch", "ناعسه", "bayta", "بايته", "ناعسين"]),
     ("stock_of_part", ["in stock", "stock", "stok", "left", "still have", "do we have", "remaining", "reste",

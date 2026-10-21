@@ -7,7 +7,8 @@ from sqlalchemy import func, select
 
 from app.alerts.problem import pieces
 from app.ask.answer_parts import (
-    SHOWN_ROWS, Answer, Asked, Number, PartPick, branch_id, part_not_found, pick_parts, range_words, where_words,
+    SHOWN_PARTS, SHOWN_ROWS, Answer, Asked, Number, PartPick, branch_id, part_not_found, pick_parts, range_words,
+    where_words,
 )
 from app.ask.periods import LABELS, day_range, period_used, range_before
 from app.models import Part, SaleLine
@@ -19,17 +20,33 @@ def sales_of(asked: Asked) -> Answer:
         return part_not_found(asked)
     period = period_used(asked.question.type, asked.question.period)
     first, last = day_range(period, asked.today)
-    sold, value = _sold(asked, parts, branch_id(asked), first, last)
+    shop_branch = branch_id(asked)
+    sold, value = _sold(asked, parts, shop_branch, first, last)
+    numbers = [
+        Number(label="Pieces sold", value=sold, unit="pieces"),
+        *asked.money_number("Sales value", value),
+        Number(label="From", value=first.isoformat(), unit="date"),
+        Number(label="To", value=last.isoformat(), unit="date"),
+    ]
+    if parts.part_ids:
+        numbers += _per_part_sales(asked, parts, shop_branch, first, last)
     return Answer(
         f"{parts.title}: {pieces(sold)} sold{where_words(asked)} {LABELS[period]} "
         f"({range_words(first, last)}){asked.money_words(value)}.",
-        [
-            Number(label="Pieces sold", value=sold, unit="pieces"),
-            *asked.money_number("Sales value", value),
-            Number(label="From", value=first.isoformat(), unit="date"),
-            Number(label="To", value=last.isoformat(), unit="date"),
-        ],
+        numbers,
     )
+
+
+def _per_part_sales(asked: Asked, parts: PartPick, shop_branch: uuid.UUID | None, first: date, last: date) -> list[Number]:
+    """One line per matched part (top SHOWN_PARTS, most sold first)."""
+    quantity = func.coalesce(func.sum(SaleLine.quantity), 0)
+    rows = asked.db.execute(
+        _sales_query(asked, parts, shop_branch, first, last, Part.name, Part.sku, quantity)
+        .group_by(Part.id, Part.name, Part.sku)
+        .order_by(quantity.desc(), Part.sku)
+        .limit(SHOWN_PARTS)
+    ).all()
+    return [Number(label=f"{name} ({sku})", value=int(sold), unit="pieces") for name, sku, sold in rows]
 
 
 def best_sellers(asked: Asked) -> Answer:

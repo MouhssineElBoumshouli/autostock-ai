@@ -16,6 +16,7 @@ from app.search.part_search import find_parts
 
 Unit = Literal["pieces", "money", "count", "days", "date", "percent", "text"]
 SHOWN_ROWS = 5
+SHOWN_PARTS = 10  # a part word matching several parts: how many get their own line, besides the total
 
 
 class Number(BaseModel):
@@ -53,6 +54,7 @@ class Asked:
 class PartPick:
     condition: ColumnElement  # on Part
     label: str  # "Oil filter (12 parts)", "the Brakes category", "all parts"
+    part_ids: tuple[uuid.UUID, ...] = ()  # set only when a part word matched more than one part
 
     @property
     def title(self) -> str:
@@ -76,7 +78,10 @@ def pick_parts(asked: Asked) -> PartPick | None:
         ids = [part_id for part_id, _ in result.matches]
         names = sorted(set(asked.db.scalars(select(Part.name).where(Part.id.in_(ids)))))
         label = names[0] if len(names) == 1 else f"parts matching “{question.part}”"
-        return PartPick(Part.id.in_(ids), label if len(ids) == 1 else f"{label} ({len(ids)} parts)")
+        return PartPick(
+            Part.id.in_(ids), label if len(ids) == 1 else f"{label} ({len(ids)} parts)",
+            part_ids=tuple(ids) if len(ids) > 1 else (),
+        )
     if question.category:
         return PartPick(Part.category == question.category, f"the {question.category} category")
     return PartPick(true(), "all parts")
