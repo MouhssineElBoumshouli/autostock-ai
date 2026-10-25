@@ -72,7 +72,7 @@ export const fr: typeof en = {
     },
     runningOutSoon: "Bientôt en rupture",
     searchLabel: "Rechercher une pièce",
-    searchPlaceholder: "Rechercher une pièce",
+    searchPlaceholder: "Rechercher",
     closestParts: "Aucun résultat exact. Pièces les plus proches :",
     outOfStockEquivalent: (quantity: string, brand: string) => `En rupture. ${quantity} disponibles chez ${brand}.`,
     filters: {
@@ -112,7 +112,7 @@ export const fr: typeof en = {
     runsOut: {
       alreadyOut: "Déjà en rupture",
       overSixty: "Plus de 60 jours",
-      aboutDays: (days: string) => `Environ ${days} jours`,
+      aboutDays: (days: string) => `Environ ${days}`,
     },
     forecastStatus: {
       updated: (time: string) => `Prévisions mises à jour ${time}`,
@@ -177,8 +177,8 @@ export const fr: typeof en = {
         `En rupture, ${sold} vendues en 90 jours, aucune vente depuis 4 semaines : commander ${quantity} pour l’avoir en rayon.`,
       slowSkip: "Aucune vente depuis 4 semaines : pas commandée.",
       forecast: (w) =>
-        `${w.rate}, livraison en ${w.deliveryDays} jours, ${w.onHand} en stock${w.onOrder ? `, ${w.onOrder} déjà commandées` : ""} : ` +
-        `commander ${w.quantity}${w.packSize ? ` (par ${w.packSize})` : ""} pour couvrir ${w.days} jours avec une marge de sécurité de ${w.cushion}.`,
+        `${w.rate}, livraison en ${w.deliveryDays}, ${w.onHand} en stock${w.onOrder ? `, ${w.onOrder} déjà commandées` : ""} : ` +
+        `commander ${w.quantity}${w.packSize ? ` (par ${w.packSize})` : ""} pour couvrir ${w.days} avec une marge de sécurité de ${w.cushion}.`,
       cutByBudget: "Retirée pour rester dans le budget.",
     },
     settings: {
@@ -241,7 +241,7 @@ export const fr: typeof en = {
     minStockHelp: "À ce nombre ou en dessous, la pièce passe en « Stock bas ».",
     supplier: "Fournisseur",
     noSupplier: "Aucun fournisseur",
-    deliveryDays: (days: number) => `Livre en ${days} jours`,
+    deliveryDays: (days: string) => `Livre en ${days}`,
     lastSales: "10 dernières ventes",
     noSales: "Aucune vente enregistrée pour l’instant.",
     sold: (quantity: string) => `${quantity} vendues`,
@@ -295,7 +295,7 @@ export const fr: typeof en = {
       link: "Lier une pièce",
       linkTitle: "Lier une pièce équivalente",
       linkHelp: "Cherchez la même pièce, vendue sous une autre marque.",
-      searchPlaceholder: "Désignation, référence ou référence OEM",
+      searchPlaceholder: "Nom ou référence",
       searching: "Recherche…",
       noResults: "Aucune pièce trouvée.",
       linked: (name: string) => `Liée à ${name}.`,
@@ -684,7 +684,7 @@ export const fr: typeof en = {
   ask: {
     subtitle: "Posez une question sur votre magasin, avec vos propres mots.",
     inputLabel: "Posez une question sur votre magasin",
-    inputPlaceholder: "par ex. Qu’est-ce qui va manquer ?",
+    inputPlaceholder: "Ex. : ruptures ?",
     submit: "Demander",
     thinking: "Réflexion…",
     emptyTitle: "Posez n’importe quelle question sur votre magasin",
@@ -792,7 +792,7 @@ export const fr: typeof en = {
         `Aucune rupture prévue pour ${w.subject}${inBranch(w.branch)} dans les ${w.days} prochains jours.`,
       running_out: (w: AnswerWords) =>
         `${plural(w.count, "1 pièce risque", `${w.shownCount} pièces risquent`)} d’être en rupture${inBranch(w.branch)} sous ${w.days} jours (${w.subject}). ` +
-        `La première : ${w.name} (${w.sku}), ${w.pieces} restantes, environ ${w.daysLeft} jours.`,
+        `La première : ${w.name} (${w.sku}), ${w.pieces} restantes, environ ${w.daysLeft}.`,
       dead_stock_none: (w: AnswerWords) =>
         `Aucun stock dormant pour ${w.subject}${inBranch(w.branch)} (aucune vente en ${w.days} jours).`,
       dead_stock: (w: AnswerWords) =>
@@ -815,7 +815,7 @@ export const fr: typeof en = {
         `La plus récente : ${w.part} à ${w.alertBranch} : ${w.alert}`,
       late_deliveries_none: () => "Aucune livraison fournisseur en retard.",
       late_deliveries: (w: AnswerWords) =>
-        `${plural(w.count, "1 livraison est", `${w.shownCount} livraisons sont`)} en retard. La plus en retard : ${w.orderNumber} de ${w.supplier}, ${w.days} jours.`,
+        `${plural(w.count, "1 livraison est", `${w.shownCount} livraisons sont`)} en retard. La plus en retard : ${w.orderNumber} de ${w.supplier}, ${w.daysLate}.`,
     },
     numberLabels: {
       pieces_sold: "Pièces vendues",
@@ -848,7 +848,7 @@ export const fr: typeof en = {
     },
     homeBox: {
       inputLabel: "Interrogez votre magasin",
-      placeholder: "Interrogez votre magasin…",
+      placeholder: "Votre question…",
       submit: "Demander",
     },
   },

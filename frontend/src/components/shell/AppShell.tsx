@@ -60,12 +60,15 @@ export function AppShell() {
             >
               <MenuIcon aria-hidden="true" />
             </Button>
-            <p className="min-w-0 truncate px-2 text-title-large">
-              <span className="text-on-surface-variant max-sm:hidden">{me.organization.name}</span>
-              <span aria-hidden="true" className="px-2 text-on-surface-variant max-sm:hidden">
+            {/* The shop's name shrinks first (cut at its own end, in its own direction); the page name stays whole. */}
+            <p className="flex min-w-0 items-center px-2 text-title-large">
+              <span dir="auto" className="min-w-0 truncate text-on-surface-variant max-sm:hidden">
+                {me.organization.name}
+              </span>
+              <span aria-hidden="true" className="shrink-0 px-2 text-on-surface-variant max-sm:hidden">
                 /
               </span>
-              <span>{title}</span>
+              <span className="min-w-0 truncate">{title}</span>
             </p>
           </header>
           <main id="content" tabIndex={-1} className="mx-auto max-w-6xl px-4 pt-2 pb-12 outline-none sm:px-6 lg:px-8">

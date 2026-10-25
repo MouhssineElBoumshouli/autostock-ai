@@ -17,7 +17,8 @@ export type AnswerWords = {
   beforeRange: string;
   percent: number | null;
   days: string;
-  daysLeft: string;
+  daysLeft: string; // "4 days"
+  daysLate: string; // "3 days"
   low: string;
   high: string;
   madeFrom: string;
@@ -119,7 +120,7 @@ export const en = {
     runsOut: {
       alreadyOut: "Already out",
       overSixty: "Over 60 days",
-      aboutDays: (days: string) => `About ${days} days`,
+      aboutDays: (days: string) => `About ${days}`,
     },
     forecastStatus: {
       updated: (time: string) => `Forecasts updated ${time}`,
@@ -194,8 +195,8 @@ export const en = {
         days: string;
         cushion: string;
       }) =>
-        `${w.rate}, supplier takes ${w.deliveryDays} days, ${w.onHand} left${w.onOrder ? `, ${w.onOrder} already ordered` : ""}: ` +
-        `order ${w.quantity}${w.packSize ? ` (packs of ${w.packSize})` : ""} to cover the next ${w.days} days with a safety cushion of ${w.cushion}.`,
+        `${w.rate}, supplier takes ${w.deliveryDays}, ${w.onHand} left${w.onOrder ? `, ${w.onOrder} already ordered` : ""}: ` +
+        `order ${w.quantity}${w.packSize ? ` (packs of ${w.packSize})` : ""} to cover the next ${w.days} with a safety cushion of ${w.cushion}.`,
       cutByBudget: "Cut to stay within the budget.",
     },
     settings: {
@@ -258,7 +259,7 @@ export const en = {
     minStockHelp: "At or below this number, the part shows as Low stock.",
     supplier: "Supplier",
     noSupplier: "No supplier",
-    deliveryDays: (days: number) => `Delivers in ${days} days`,
+    deliveryDays: (days: string) => `Delivers in ${days}`,
     lastSales: "Last 10 sales",
     noSales: "No sales recorded yet.",
     sold: (quantity: string) => `${quantity} sold`,
@@ -810,7 +811,7 @@ export const en = {
         `Nothing in ${w.subject} is expected to run out${inBranch(w.branch)} within ${w.days} days.`,
       running_out: (w: AnswerWords) =>
         `${w.shownCount} ${w.count === 1 ? "part is" : "parts are"} expected to run out${inBranch(w.branch)} within ${w.days} days (${w.subject}). ` +
-        `First: ${w.name} (${w.sku}), ${w.pieces} left, about ${w.daysLeft} days.`,
+        `First: ${w.name} (${w.sku}), ${w.pieces} left, about ${w.daysLeft}.`,
       dead_stock_none: (w: AnswerWords) => `No dead stock in ${w.subject}${inBranch(w.branch)} (no sale in ${w.days} days).`,
       dead_stock: (w: AnswerWords) =>
         `${w.shownCount} ${w.count === 1 ? "part has" : "parts have"} stock but no sale in ${w.days} days (${w.subject}${inBranch(w.branch)}): ` +
@@ -831,7 +832,7 @@ export const en = {
         `Newest: ${w.part} in ${w.alertBranch}: ${w.alert}`,
       late_deliveries_none: () => "No supplier delivery is late.",
       late_deliveries: (w: AnswerWords) =>
-        `${w.shownCount} ${w.count === 1 ? "delivery is" : "deliveries are"} late. Most late: ${w.orderNumber} from ${w.supplier}, ${w.days} days.`,
+        `${w.shownCount} ${w.count === 1 ? "delivery is" : "deliveries are"} late. Most late: ${w.orderNumber} from ${w.supplier}, ${w.daysLate}.`,
     } as Record<string, (w: AnswerWords) => string>,
     // Labels of the real numbers under an answer.
     numberLabels: {

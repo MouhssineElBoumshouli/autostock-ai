@@ -42,7 +42,9 @@ export function UserMenu({ onNavigate }: { onNavigate?: () => void }) {
           {initials(user.name)}
         </span>
         <span className="grid min-w-0 flex-1 md:max-xl:hidden">
-          <span className="truncate text-label-large">{user.name}</span>
+          <span dir="auto" className="truncate text-label-large">
+            {user.name}
+          </span>
           <span className="truncate text-body-small text-on-surface-variant">{t.roles[user.role]}</span>
         </span>
         <ChevronsUpDownIcon aria-hidden="true" className="me-2 size-5 shrink-0 text-on-surface-variant md:max-xl:hidden" />

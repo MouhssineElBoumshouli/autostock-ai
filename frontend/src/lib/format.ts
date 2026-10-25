@@ -12,6 +12,17 @@ const dateTime =
     ? new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", timeZone })
     : new Intl.DateTimeFormat(numberLocale, { dateStyle: "short", timeStyle: "short", timeZone });
 
+// Arabic fonts have no narrow space, so "88 200" would show as "88200": Arabic gets a normal fixed space.
+function spaced(text: string): string {
+  return language === "ar" ? text.replace(/ /g, " ") : text;
+}
+
+// A shop's own words (a part, a supplier, a branch) inside a sentence keep their own direction:
+// "Brake pads - Dacia Logan" stays left to right inside an Arabic sentence.
+export function isolate(text: string): string {
+  return `⁨${text}⁩`;
+}
+
 // Arabic text runs right to left: an isolate keeps "1 250,00 DH" or "21/10/2026" in one piece inside it.
 function keepTogether(text: string): string {
   return language === "ar" ? `⁦${text}⁩` : text;
@@ -19,7 +30,7 @@ function keepTogether(text: string): string {
 
 // Quantities are always shown as whole numbers with thousands separators: 3892 -> "3,892" or "3 892".
 export function formatNumber(value: number): string {
-  return wholeNumber.format(value);
+  return keepTogether(spaced(wholeNumber.format(value)));
 }
 
 // "2026-10-18T12:30:00Z" -> "Oct 18, 2026, 1:30 PM" / "18/10/2026 13:30", in Moroccan time.
@@ -83,7 +94,7 @@ function moneyFormat(currency: string, whole: boolean): Intl.NumberFormat {
 // `whole` drops the centimes, for rough amounts: "About 140 DH".
 export function formatMoney(centimes: number | null | undefined, currency: string, whole = false): string {
   if (centimes === null || centimes === undefined) return "—";
-  const amount = moneyFormat(currency, whole).format(whole ? Math.round(centimes / 100) : centimes / 100);
+  const amount = spaced(moneyFormat(currency, whole).format(whole ? Math.round(centimes / 100) : centimes / 100));
   return keepTogether(language !== "en" && currency === "MAD" ? `${amount} DH` : amount);
 }
 

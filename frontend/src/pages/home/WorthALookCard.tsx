@@ -32,7 +32,7 @@ export function WorthALookCard({ alerts, total }: { alerts: AlertSummary[]; tota
             <li key={alert.id} className="grid gap-0.5 px-6 py-3">
               <p className="text-body-medium">{alertSentence(alert, currency)}</p>
               <p className="text-body-small text-on-surface-variant">
-                {alert.part_name} · {alert.branch_name}
+                <bdi dir="auto">{alert.part_name}</bdi> · <bdi dir="auto">{alert.branch_name}</bdi>
               </p>
             </li>
           ))}

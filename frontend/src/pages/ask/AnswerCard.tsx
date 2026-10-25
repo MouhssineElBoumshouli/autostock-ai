@@ -65,7 +65,9 @@ export function AnswerCard({
               <TableBody>
                 {data.numbers.map((number, index) => (
                   <TableRow key={index}>
-                    <TableCell className="text-on-surface-variant">{numberLabel(number)}</TableCell>
+                    <TableCell dir={number.key ? undefined : "auto"} className="text-on-surface-variant">
+                      {numberLabel(number)}
+                    </TableCell>
                     <TableCell className="text-end font-medium tabular-nums">
                       {formatAskNumber(number, currency)}
                     </TableCell>

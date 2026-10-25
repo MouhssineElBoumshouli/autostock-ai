@@ -38,7 +38,7 @@ def what_to_order(asked: Asked) -> Answer:
     total_cost = sum(row.line_cost for row in rows)
     return Answer(
         "what_to_order",
-        {**values, "lines": len(rows), "pieces": total_pieces, **asked.money_value(total_cost)},
+        {**values, "count": len(rows), "pieces": total_pieces, **asked.money_value(total_cost)},
         f"To order for {parts.label}{where_words(asked)}: {len(rows)} {'line' if len(rows) == 1 else 'lines'}, "
         f"{pieces(total_pieces)}{asked.money_words(total_cost, ', costing ')} ({made_on}).",
         [

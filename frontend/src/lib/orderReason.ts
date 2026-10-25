@@ -3,6 +3,7 @@ import { t } from "@/i18n";
 import { formatNumber } from "@/lib/format";
 
 const words = t.orders.reasons;
+const days = (count: number) => t.common.days(count, formatNumber(count));
 
 // "Sells about 9 a week", or a month for slow sellers. Mirrors backend/app/ordering/reasons.py.
 function sellingRate(expected: number, days: number): string {
@@ -24,12 +25,12 @@ export function orderReason(line: OrderLine): string {
   } else {
     reason = words.forecast({
       rate: sellingRate(line.expected, line.days_covered),
-      deliveryDays: formatNumber(line.delivery_days),
+      deliveryDays: days(line.delivery_days),
       onHand: formatNumber(line.on_hand),
       onOrder: line.on_order ? formatNumber(line.on_order) : null,
       quantity,
       packSize: line.pack_size > 1 ? formatNumber(line.pack_size) : null,
-      days: formatNumber(line.days_covered),
+      days: days(line.days_covered),
       cushion: formatNumber(Math.round(line.cushion)),
     });
   }

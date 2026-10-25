@@ -25,7 +25,7 @@ export function PurchaseOrdersTab({ canEdit }: { canEdit: boolean }) {
 
   const columns: Column<PurchaseOrderSummary>[] = [
     { header: t.purchaseOrders.columns.orderNumber, primary: true, cell: (po) => po.order_number },
-    { header: t.purchaseOrders.columns.supplier, cell: (po) => po.supplier_name },
+    { header: t.purchaseOrders.columns.supplier, cell: (po) => <bdi dir="auto">{po.supplier_name}</bdi> },
     { header: t.purchaseOrders.columns.status, cell: (po) => <Badge variant={badgeVariant[po.status]}>{t.purchaseOrders.statuses[po.status]}</Badge> },
     { header: t.purchaseOrders.columns.lines, align: "end", cell: (po) => formatNumber(po.line_count) },
     { header: t.purchaseOrders.columns.total, align: "end", cell: (po) => formatMoney(po.total_cost, currency) },

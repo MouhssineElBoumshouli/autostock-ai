@@ -51,6 +51,7 @@ export function TeamPage() {
     },
     {
       header: t.team.columns.lastLogin,
+      className: "hidden xl:table-cell",
       cell: (user) => (user.last_login_at ? formatDateTime(user.last_login_at) : t.common.never),
     },
     {

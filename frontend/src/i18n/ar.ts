@@ -121,7 +121,7 @@ export const ar: typeof en = {
     runsOut: {
       alreadyOut: "نفدت",
       overSixty: "أكثر من 60 يومًا",
-      aboutDays: (days: string) => `حوالي ${days} يومًا`,
+      aboutDays: (days: string) => `حوالي ${days}`,
     },
     forecastStatus: {
       updated: (time: string) => `تم تحديث التوقعات ${time}`,
@@ -186,8 +186,8 @@ export const ar: typeof en = {
         `نفد المخزون، بيع منها ${sold} خلال 90 يومًا، ولا بيع منذ 4 أسابيع: اطلب ${quantity} لتكون متوفرة على الرف.`,
       slowSkip: "لا بيع منذ 4 أسابيع: لم تُطلب.",
       forecast: (w) =>
-        `${w.rate}، المورد يسلّم خلال ${w.deliveryDays} يومًا، المتبقي ${w.onHand}${w.onOrder ? `، و${w.onOrder} مطلوبة مسبقًا` : ""}: ` +
-        `اطلب ${w.quantity}${w.packSize ? ` (عبوات من ${w.packSize})` : ""} لتغطية ${w.days} يومًا القادمة مع هامش أمان قدره ${w.cushion}.`,
+        `${w.rate}، المورد يسلّم خلال ${w.deliveryDays}، المتبقي ${w.onHand}${w.onOrder ? `، و${w.onOrder} مطلوبة مسبقًا` : ""}: ` +
+        `اطلب ${w.quantity}${w.packSize ? ` (عبوات من ${w.packSize})` : ""} لتغطية ${w.days} القادمة مع هامش أمان قدره ${w.cushion}.`,
       cutByBudget: "حُذف للبقاء ضمن الميزانية.",
     },
     settings: {
@@ -250,7 +250,7 @@ export const ar: typeof en = {
     minStockHelp: "عند هذا العدد أو أقل، تظهر القطعة كمخزون منخفض.",
     supplier: "المورد",
     noSupplier: "بدون مورد",
-    deliveryDays: (days: number) => `يسلّم خلال ${days} يومًا`,
+    deliveryDays: (days: string) => `يسلّم خلال ${days}`,
     lastSales: "آخر 10 مبيعات",
     noSales: "لا توجد مبيعات مسجلة بعد.",
     sold: (quantity: string) => `بيع ${quantity}`,
@@ -303,7 +303,7 @@ export const ar: typeof en = {
       link: "ربط قطعة",
       linkTitle: "ربط قطعة معادلة",
       linkHelp: "ابحث عن نفس القطعة المباعة بعلامة أخرى.",
-      searchPlaceholder: "ابحث بالاسم أو المرجع أو مرجع OEM",
+      searchPlaceholder: "الاسم أو المرجع",
       searching: "جارٍ البحث…",
       noResults: "لم يُعثر على قطع.",
       linked: (name: string) => `تم الربط بـ${name}.`,
@@ -691,7 +691,7 @@ export const ar: typeof en = {
   ask: {
     subtitle: "اطرح سؤالًا عن متجرك بكلماتك الخاصة.",
     inputLabel: "اطرح سؤالًا عن متجرك",
-    inputPlaceholder: "مثال: ما الذي سينفد قريبًا؟",
+    inputPlaceholder: "مثال: ما الذي سينفد؟",
     submit: "اسأل",
     thinking: "جارٍ التفكير…",
     emptyTitle: "اسأل أي شيء عن متجرك",
@@ -797,7 +797,7 @@ export const ar: typeof en = {
         `لا يُتوقع نفاد أي شيء من ${w.subject}${inBranch(w.branch)} خلال ${w.days} يومًا.`,
       running_out: (w: AnswerWords) =>
         `${parts(w.count, w.shownCount)} يُتوقع نفادها${inBranch(w.branch)} خلال ${w.days} يومًا (${w.subject}). ` +
-        `الأولى: ${w.name} (${w.sku})، تبقّى ${w.pieces}، حوالي ${w.daysLeft} يومًا.`,
+        `الأولى: ${w.name} (${w.sku})، تبقّى ${w.pieces}، حوالي ${w.daysLeft}.`,
       dead_stock_none: (w: AnswerWords) =>
         `لا يوجد مخزون راكد في ${w.subject}${inBranch(w.branch)} (بدون بيع منذ ${w.days} يومًا).`,
       dead_stock: (w: AnswerWords) =>
@@ -818,7 +818,7 @@ export const ar: typeof en = {
         `الأحدث: ${w.part} في ${w.alertBranch}: ${w.alert}`,
       late_deliveries_none: () => "لا يوجد تسليم متأخر من الموردين.",
       late_deliveries: (w: AnswerWords) =>
-        `${counted(w.count, w.shownCount, "تسليم واحد متأخر", "تسليمان متأخران", "تسليمات متأخرة", "تسليمًا متأخرًا")}. الأكثر تأخرًا: ${w.orderNumber} من ${w.supplier}، ${w.days} يومًا.`,
+        `${counted(w.count, w.shownCount, "تسليم واحد متأخر", "تسليمان متأخران", "تسليمات متأخرة", "تسليمًا متأخرًا")}. الأكثر تأخرًا: ${w.orderNumber} من ${w.supplier}، ${w.daysLate}.`,
     },
     numberLabels: {
       pieces_sold: "القطع المبيعة",

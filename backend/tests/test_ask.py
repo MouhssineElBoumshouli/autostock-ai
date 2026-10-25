@@ -352,6 +352,7 @@ def test_staff_see_what_to_order_without_its_cost(browser):
     assert numbers(answer)["Lines to order"] == 1
     assert "Total cost" not in numbers(answer) and "MAD" not in answer["sentence"]
     assert answer["key"] == "what_to_order" and "money" not in answer["values"]
+    assert answer["values"]["count"] == 1
 
 
 def test_logged_out_people_cannot_ask(browser):

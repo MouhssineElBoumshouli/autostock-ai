@@ -46,7 +46,7 @@ export function AlertRow({
         {alert.group && <Badge variant="neutral">{t.alertsPage.groups[alert.group]}</Badge>}
         <p className="text-body-large">{alertSentence(alert, currency)}</p>
         <p className="text-body-small text-on-surface-variant">
-          {alert.part_name} · {alert.branch_name}
+          <bdi dir="auto">{alert.part_name}</bdi> · <bdi dir="auto">{alert.branch_name}</bdi>
         </p>
         {status !== "open" && reviewedByName && (
           <p className="text-body-small text-on-surface-variant">

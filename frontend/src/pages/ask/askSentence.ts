@@ -1,7 +1,7 @@
 import type { AskFilters, AskNumber, AskOut } from "@/api/ask";
 import { type AnswerWords, t } from "@/i18n";
 import { alertSentence } from "@/lib/alertSentence";
-import { formatDayRange, formatMoney, formatMonthDay, formatNumber } from "@/lib/format";
+import { formatDayRange, formatMoney, formatMonthDay, formatNumber, isolate } from "@/lib/format";
 
 type Subject = { kind: "part" | "matching" | "category" | "all"; name?: string; words?: string; count?: number };
 
@@ -10,11 +10,11 @@ function subjectWords(subject: Subject | undefined): string {
   const count = subject?.count === undefined ? null : formatNumber(subject.count);
   switch (subject?.kind) {
     case "part":
-      return words.part(subject.name ?? "", count);
+      return words.part(isolate(subject.name ?? ""), count);
     case "matching":
-      return words.matching(subject.words ?? "", count ?? "");
+      return words.matching(isolate(subject.words ?? ""), count ?? "");
     case "category":
-      return words.category(subject.name ?? "");
+      return words.category(isolate(subject.name ?? ""));
     default:
       return words.all;
   }
@@ -40,30 +40,31 @@ export function answerSentence(data: AskOut, currency: string): string {
   const words: AnswerWords = {
     subject,
     Subject: capitalized(subject),
-    branch: (v.branch as string | undefined) ?? null,
+    branch: v.branch ? isolate(String(v.branch)) : null,
     period: t.ask.periodWords[v.period as string] ?? "",
     range: v.range ? formatDayRange(String(v.range)) : "",
     pieces: pieces(v.pieces),
     money: typeof v.money === "number" ? formatMoney(v.money, currency, true) : null,
     count: asNumber(v.count),
     shownCount: formatNumber(asNumber(v.count)),
-    name: String(v.name ?? ""),
-    sku: String(v.sku ?? ""),
+    name: isolate(String(v.name ?? "")),
+    sku: isolate(String(v.sku ?? "")),
     beforePieces: pieces(v.before_pieces),
     beforeRange: v.before_range ? formatDayRange(String(v.before_range)) : "",
     percent: typeof v.percent === "number" ? v.percent : null,
     days: formatNumber(asNumber(v.days)),
-    daysLeft: formatNumber(asNumber(v.days_left)),
+    daysLeft: t.common.days(asNumber(v.days_left), formatNumber(asNumber(v.days_left))),
+    daysLate: t.common.days(asNumber(v.days), formatNumber(asNumber(v.days))),
     low: formatNumber(asNumber(v.low)),
     high: formatNumber(asNumber(v.high)),
     madeFrom: v.made_from ? formatMonthDay(String(v.made_from)) : "",
     madeOn: v.made_on ? formatMonthDay(String(v.made_on)) : "",
-    part: String(v.part ?? ""),
-    alertBranch: String(v.alert_branch ?? ""),
+    part: isolate(String(v.part ?? "")),
+    alertBranch: isolate(String(v.alert_branch ?? "")),
     alert: alert ? alertSentence({ ...alert, sentence: "" }, currency) : "",
-    orderNumber: String(v.order_number ?? ""),
-    supplier: String(v.supplier ?? ""),
-    words: (v.words as string | undefined) ?? null,
+    orderNumber: isolate(String(v.order_number ?? "")),
+    supplier: isolate(String(v.supplier ?? "")),
+    words: v.words ? isolate(String(v.words)) : null,
   };
   return build(words);
 }
@@ -72,9 +73,13 @@ export function answerSentence(data: AskOut, currency: string): string {
 export function understoodHeading(questionType: string, filters: AskFilters, period: string | null): string {
   const build = t.ask.headings[questionType];
   if (!build) return questionType;
-  const subject = filters.part ?? (filters.category ? t.ask.categorySubject(filters.category) : null);
+  const subject = filters.part
+    ? isolate(filters.part)
+    : filters.category
+      ? t.ask.categorySubject(isolate(filters.category))
+      : null;
   const pieces = [build(subject)];
-  if (filters.branch) pieces.push(filters.branch);
+  if (filters.branch) pieces.push(isolate(filters.branch));
   if (period) pieces.push(t.ask.periodWords[period] ?? period);
   return pieces.join(" · ");
 }
@@ -89,6 +94,6 @@ export function understoodLine(data: AskOut): string | null {
 export function numberLabel(number: AskNumber): string {
   if (!number.key) return number.label;
   const about = t.ask.numberLabelsAbout[number.key];
-  if (about) return about(number.about ?? "");
+  if (about) return about(isolate(number.about ?? ""));
   return t.ask.numberLabels[number.key] ?? number.label;
 }
