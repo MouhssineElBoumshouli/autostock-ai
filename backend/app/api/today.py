@@ -104,20 +104,20 @@ Group = Literal["needs_action", "worth_a_look"]
 def today(user: User = Depends(anyone), db: Session = Depends(get_session)) -> TodayOut:
     can_see_money = user.role != "staff"
     currency = db.scalar(select(Organization.currency).where(Organization.id == user.organization_id)) if can_see_money else None
-    needs_action, needs_action_total = _alerts(db, user.organization_id, NEEDS_ACTION, currency)
-    worth_a_look, worth_a_look_total = _alerts(db, user.organization_id, WORTH_A_LOOK, currency)
+    needs_action, needs_action_total = open_alert_group(db, user.organization_id, NEEDS_ACTION, currency)
+    worth_a_look, worth_a_look_total = open_alert_group(db, user.organization_id, WORTH_A_LOOK, currency)
     return TodayOut(
         needs_action=needs_action,
         needs_action_total=needs_action_total,
         worth_a_look=worth_a_look,
         worth_a_look_total=worth_a_look_total,
-        to_order=_to_order(db, user.organization_id, can_see_money),
+        to_order=to_order_summary(db, user.organization_id, can_see_money),
         late_deliveries=find_late_deliveries(db, user.organization_id, date.today()),
-        weekly_sales=_weekly_sales(db, user.organization_id),
+        weekly_sales=weekly_sales(db, user.organization_id),
     )
 
 
-def _alerts(db: Session, organization_id: uuid.UUID, group: Group, currency: str | None) -> tuple[list[AlertSummary], int]:
+def open_alert_group(db: Session, organization_id: uuid.UUID, group: Group, currency: str | None) -> tuple[list[AlertSummary], int]:
     filters = [Alert.organization_id == organization_id, Alert.status == "open"]
     filters.append(Alert.kind.in_(SALES_KINDS) if group == WORTH_A_LOOK else Alert.kind.not_in(SALES_KINDS))
     total = db.scalar(select(func.count()).select_from(Alert).where(*filters)) or 0
@@ -145,7 +145,7 @@ def _summary(alert: Alert, part_name: str, branch_name: str, currency: str | Non
     )
 
 
-def _to_order(db: Session, organization_id: uuid.UUID, can_see_money: bool) -> ToOrderSummary | ToOrderLines | None:
+def to_order_summary(db: Session, organization_id: uuid.UUID, can_see_money: bool) -> ToOrderSummary | ToOrderLines | None:
     run = db.scalar(
         select(OrderRun).where(OrderRun.organization_id == organization_id).order_by(OrderRun.created_at.desc()).limit(1)
     )
@@ -185,7 +185,7 @@ def find_late_deliveries(db: Session, organization_id: uuid.UUID, today: date) -
     return late
 
 
-def _weekly_sales(db: Session, organization_id: uuid.UUID) -> WeeklySales | None:
+def weekly_sales(db: Session, organization_id: uuid.UUID) -> WeeklySales | None:
     last_day = db.scalar(select(func.max(SaleLine.sold_on)).where(SaleLine.organization_id == organization_id))
     if last_day is None:
         return None

@@ -21,7 +21,7 @@ def sales_of(asked: Asked) -> Answer:
     period = period_used(asked.question.type, asked.question.period)
     first, last = day_range(period, asked.today)
     shop_branch = branch_id(asked)
-    sold, value = _sold(asked, parts, shop_branch, first, last)
+    sold, value = pieces_and_value(asked, parts, shop_branch, first, last)
     numbers = [
         Number(key="pieces_sold", label="Pieces sold", value=sold, unit="pieces"),
         *asked.money_number("sales_value", "Sales value", value),
@@ -84,8 +84,8 @@ def sales_vs_last(asked: Asked) -> Answer:
     first, last = day_range(period, asked.today)
     before_first, before_last = range_before(period, asked.today)
     shop_branch = branch_id(asked)
-    now, now_value = _sold(asked, parts, shop_branch, first, last)
-    before, before_value = _sold(asked, parts, shop_branch, before_first, before_last)
+    now, now_value = pieces_and_value(asked, parts, shop_branch, first, last)
+    before, before_value = pieces_and_value(asked, parts, shop_branch, before_first, before_last)
     percent = None if before == 0 else round(100 * (now - before) / before)
     if percent is None:
         change = "with no sales in the period before"
@@ -118,7 +118,7 @@ def _sales_query(asked: Asked, parts: PartPick, shop_branch: uuid.UUID | None, f
     return query.where(SaleLine.branch_id == shop_branch) if shop_branch else query
 
 
-def _sold(asked: Asked, parts: PartPick, shop_branch: uuid.UUID | None, first: date, last: date) -> tuple[int, int]:
+def pieces_and_value(asked: Asked, parts: PartPick, shop_branch: uuid.UUID | None, first: date, last: date) -> tuple[int, int]:
     """Pieces sold and their sales value in centimes (lines without a price count as 0)."""
     quantity, value = asked.db.execute(
         _sales_query(

@@ -49,11 +49,11 @@ def range_before(period: str, today: date) -> DayRange:
         end = first - timedelta(days=1)
         return end.replace(day=1), end
     if period == "this_year":
-        return _same_day_year_before(first), _same_day_year_before(last)
+        return same_day_year_before(first), same_day_year_before(last)
     previous_first = (first - timedelta(days=1)).replace(day=1)
     previous_last = min(previous_first + (last - first), first - timedelta(days=1))
     return previous_first, previous_last
 
 
-def _same_day_year_before(day: date) -> date:
+def same_day_year_before(day: date) -> date:
     return day.replace(year=day.year - 1, day=28) if (day.month, day.day) == (2, 29) else day.replace(year=day.year - 1)
