@@ -77,7 +77,11 @@ export function AssistantCard({
         ) : done && !done.checked ? (
           <div className="grid gap-2">
             <p className="text-body-medium text-on-surface-variant">
-              {lookups.length ? t.ask.assistant.notChecked : t.ask.assistant.noLookup}
+              {lookups.length
+                ? t.ask.assistant.notChecked
+                : done.question?.type === "cannot_answer"
+                  ? answerSentence({ key: "cannot_answer", values: {}, sentence: "" }, currency)
+                  : t.ask.assistant.noLookup}
             </p>
             {lookups.map((lookup, index) => (
               <p key={index} className="text-body-large text-on-surface">
