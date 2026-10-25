@@ -719,6 +719,10 @@ export const ar: typeof en = {
       late_deliveries: "تسليمات متأخرة",
       forecast_of_part: "التوقع",
       sales_vs_last: "المبيعات مقارنة بالفترة السابقة",
+      today_briefing: "ملخص اليوم",
+      compare_branches: "مقارنة الفروع",
+      explain_part_change: "ما الذي تغير",
+      part_details: "تفاصيل القطعة",
     },
     filters: {
       category: "الفئة",

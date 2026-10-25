@@ -57,19 +57,28 @@ export type AssistantEvent =
   | { type: "text"; text: string }
   // checked=false: a number in the written answer didn't match the shop's data, so the app's own
   // sentences from `lookups` are shown instead of the text.
-  | { type: "done"; checked: boolean; text: string; wrong_numbers: string[]; lookups: AssistantLookup[] };
-export type AssistantTurn = { question: string; answer: string };
+  | {
+      type: "done";
+      checked: boolean;
+      text: string;
+      wrong_numbers: string[];
+      read_by: "rule" | "model" | "follow_up";
+      question: AskedBefore | null; // what the app understood; sent back so a follow-up can change it
+      lookups: AssistantLookup[];
+    };
+export type AskedBefore = { type: string; filters: AskFilters };
 
-// Sends the question and calls `onEvent` for each event as the server writes it (newline-delimited JSON).
+// Sends the question (and the one before, for follow-ups) and calls `onEvent` for each event as the
+// server writes it (newline-delimited JSON).
 export async function askAssistant(
   question: string,
-  earlier: AssistantTurn[],
+  previous: AskedBefore | null,
   onEvent: (event: AssistantEvent) => void,
 ): Promise<void> {
   const response = await fetch("/api/ask/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, earlier }),
+    body: JSON.stringify({ question, previous }),
   });
   if (!response.ok || !response.body) throw new ApiError(response.status, t.states.somethingWrong);
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();

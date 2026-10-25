@@ -744,6 +744,10 @@ export const en = {
       late_deliveries: "Late deliveries",
       forecast_of_part: "Forecast",
       sales_vs_last: "Sales vs. last period",
+      today_briefing: "Today's briefing",
+      compare_branches: "Branches compared",
+      explain_part_change: "What changed",
+      part_details: "Part details",
     },
     filters: {
       category: "Category",

@@ -712,6 +712,10 @@ export const fr: typeof en = {
       late_deliveries: "Livraisons en retard",
       forecast_of_part: "Prévision",
       sales_vs_last: "Ventes vs. période précédente",
+      today_briefing: "Le point du jour",
+      compare_branches: "Agences comparées",
+      explain_part_change: "Ce qui a changé",
+      part_details: "Détails de la pièce",
     },
     filters: {
       category: "Famille",

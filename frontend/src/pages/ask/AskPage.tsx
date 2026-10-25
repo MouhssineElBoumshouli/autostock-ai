@@ -2,7 +2,7 @@ import { InfoIcon, MessageCircleQuestionIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
-import { type AskRequest, type AssistantTurn, askAssistant, useAiOn, useAsk } from "@/api/ask";
+import { type AskRequest, type AskedBefore, askAssistant, useAiOn, useAsk } from "@/api/ask";
 import { useStockFilterChoices } from "@/api/stock";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
@@ -18,7 +18,6 @@ import { type AssistantEntry, AssistantCard } from "./AssistantCard";
 import { QuestionForm } from "./QuestionForm";
 
 const HISTORY_LIMIT = 10;
-const EARLIER_TURNS = 3; // what the server keeps of a conversation (backend/app/ask/assistant.py)
 
 type RuleEntry = HistoryEntry & { kind: "rule" };
 type Entry = RuleEntry | AssistantEntry;
@@ -32,7 +31,8 @@ export function AskPage() {
   const aiOn = useAiOn();
   const ask = useAsk();
   const [history, setHistory] = useState<Entry[]>([]);
-  const [conversation, setConversation] = useState<AssistantTurn[]>([]);
+  // The last question the app understood in this conversation: "and in Rabat?" changes it.
+  const [previous, setPrevious] = useState<AskedBefore | null>(null);
   const [writing, setWriting] = useState(false);
   const [lastRule, setLastRule] = useState<{ request: AskRequest; question: string } | null>(null);
   const [params, setParams] = useSearchParams();
@@ -59,7 +59,7 @@ export function AskPage() {
     addEntry({ id, kind: "assistant", question, lookingUp: [], text: "", done: null, failed: false });
     setWriting(true);
     try {
-      await askAssistant(question, conversation.slice(-EARLIER_TURNS), (event) => {
+      await askAssistant(question, previous, (event) => {
         if (event.type === "ai_off") {
           setHistory((previous) => previous.filter((entry) => entry.id !== id));
           void aiOn.refetch();
@@ -70,8 +70,7 @@ export function AskPage() {
           update(id, (entry) => ({ ...entry, text: entry.text + event.text }));
         } else {
           update(id, (entry) => ({ ...entry, done: event }));
-          const answer = event.checked ? event.text : event.lookups.map((lookup) => lookup.sentence).join(" ");
-          setConversation((previous) => [...previous, { question, answer }].slice(-EARLIER_TURNS));
+          if (event.question && event.question.type !== "cannot_answer") setPrevious(event.question);
         }
       });
     } catch {
@@ -87,7 +86,7 @@ export function AskPage() {
   }
 
   function newConversation() {
-    setConversation([]);
+    setPrevious(null);
     setHistory([]);
   }
 
@@ -117,7 +116,7 @@ export function AskPage() {
       )}
       <QuestionForm onAsk={submit} asking={thinking || writing} />
 
-      {conversation.length > 0 && !aiOff && (
+      {previous && !aiOff && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-body-medium text-on-surface-variant">{t.ask.assistant.followUpHint}</p>
           <Button variant="text" size="sm" onClick={newConversation} disabled={writing}>
