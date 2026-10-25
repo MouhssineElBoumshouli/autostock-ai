@@ -1,8 +1,8 @@
 import type { ActivityItem } from "@/api/activity";
 import type { CareLevel } from "@/api/orders";
 import type { Role } from "@/api/users";
-import { t } from "@/i18n";
-import { formatNumber } from "@/lib/format";
+import { isLanguage, languageNames, t } from "@/i18n";
+import { formatNumber, isolate } from "@/lib/format";
 
 const words = t.activity.sentences;
 
@@ -16,23 +16,27 @@ function careLevelName(level: unknown): string {
 
 // Turns one audit log row into a plain sentence, e.g. "Sara changed Youssef's role from Staff to Manager."
 export function activitySentence(item: ActivityItem): string {
-  const actor = item.actor?.name ?? t.activity.someone;
-  const target = item.target?.name ?? t.activity.someone;
+  const actor = item.actor ? isolate(item.actor.name) : t.activity.someone;
+  const target = item.target ? isolate(item.target.name) : t.activity.someone;
   const self = item.actor !== null && item.actor.id === item.target?.id;
   const before = item.before ?? {};
   const after = item.after ?? {};
 
   switch (item.action) {
     case "organization.created":
-      return words.shopCreated(actor, String(after.name ?? t.activity.shop));
+      return words.shopCreated(actor, isolate(String(after.name ?? t.activity.shop)));
     case "organization.updated":
       return [
-        before.name !== after.name && words.shopRenamed(actor, String(before.name), String(after.name)),
+        before.name !== after.name && words.shopRenamed(actor, isolate(String(before.name)), isolate(String(after.name))),
         before.currency !== after.currency && words.currencyChanged(actor, String(before.currency), String(after.currency)),
         before.order_service_target !== undefined &&
           after.order_service_target !== undefined &&
           before.order_service_target !== after.order_service_target &&
           words.orderCareChanged(actor, careLevelName(after.order_service_target)),
+        before.language !== undefined &&
+          before.language !== after.language &&
+          isLanguage(after.language) &&
+          words.languageChanged(actor, languageNames[after.language]),
       ]
         .filter(Boolean)
         .join(" ");
@@ -63,33 +67,33 @@ export function activitySentence(item: ActivityItem): string {
       return words.passwordReset(actor, target);
     case "import.saved":
       return after.kind === "sales"
-        ? words.importedSales(actor, String(after.file_name), formatNumber(Number(after.new_sales ?? 0)))
+        ? words.importedSales(actor, isolate(String(after.file_name)), formatNumber(Number(after.new_sales ?? 0)))
         : after.kind === "equivalents"
-          ? words.importedEquivalents(actor, String(after.file_name), formatNumber(Number(after.new_equivalents ?? 0)))
+          ? words.importedEquivalents(actor, isolate(String(after.file_name)), formatNumber(Number(after.new_equivalents ?? 0)))
           : words.importedParts(
               actor,
-              String(after.file_name),
+              isolate(String(after.file_name)),
               formatNumber(Number(after.new_parts ?? 0)),
               formatNumber(Number(after.updated_parts ?? 0)),
             );
     case "part.updated":
-      return words.partEdited(actor, String(after.name), String(after.sku));
+      return words.partEdited(actor, isolate(String(after.name)), isolate(String(after.sku)));
     case "part_equivalent.linked":
-      return words.partsLinked(actor, String(after.part), String(after.other_part));
+      return words.partsLinked(actor, isolate(String(after.part)), isolate(String(after.other_part)));
     case "part_equivalent.removed":
-      return words.partsUnlinked(actor, String(before.part), String(before.other_part));
+      return words.partsUnlinked(actor, isolate(String(before.part)), isolate(String(before.other_part)));
     case "user.logged_in":
       return words.loggedIn(actor);
     case "branch.renamed":
-      return words.branchRenamed(actor, String(before.name), String(after.name));
+      return words.branchRenamed(actor, isolate(String(before.name)), isolate(String(after.name)));
     case "branch.merged":
-      return words.branchMerged(actor, String(after.from), String(after.into));
+      return words.branchMerged(actor, isolate(String(after.from)), isolate(String(after.into)));
     case "branch.removed":
-      return words.branchRemoved(actor, String(before.name));
+      return words.branchRemoved(actor, isolate(String(before.name)));
     case "supplier.merged":
-      return words.supplierMerged(actor, String(after.from), String(after.into));
+      return words.supplierMerged(actor, isolate(String(after.from)), isolate(String(after.into)));
     case "supplier.removed":
-      return words.supplierRemoved(actor, String(before.name));
+      return words.supplierRemoved(actor, isolate(String(before.name)));
     case "forecast.requested":
       return words.forecastRequested(actor);
     case "order_suggestions.created":
@@ -97,27 +101,27 @@ export function activitySentence(item: ActivityItem): string {
         ? words.suggestionsCreated(actor, formatNumber(Number(after.lines ?? 0)), formatNumber(Number(after.cut ?? 0)))
         : words.suggestionsCreatedEmpty(actor);
     case "order_suggestion.approved":
-      return words.orderApproved(actor, formatNumber(Number(after.quantity ?? 0)), String(after.part), String(after.branch));
+      return words.orderApproved(actor, formatNumber(Number(after.quantity ?? 0)), isolate(String(after.part)), isolate(String(after.branch)));
     case "order_suggestion.rejected":
-      return words.orderRejected(actor, String(after.part), String(after.branch));
+      return words.orderRejected(actor, isolate(String(after.part)), isolate(String(after.branch)));
     case "purchase_order.created":
-      return words.purchaseOrderCreated(actor, String(after.order_number), String(after.supplier));
+      return words.purchaseOrderCreated(actor, isolate(String(after.order_number)), isolate(String(after.supplier)));
     case "purchase_order.sent":
-      return words.purchaseOrderSent(actor, String(after.order_number), String(after.supplier));
+      return words.purchaseOrderSent(actor, isolate(String(after.order_number)), isolate(String(after.supplier)));
     case "purchase_order.received":
-      return words.purchaseOrderReceived(actor, String(after.order_number), String(after.supplier));
+      return words.purchaseOrderReceived(actor, isolate(String(after.order_number)), isolate(String(after.supplier)));
     case "stock_level.received":
       return words.stockReceived(
         actor,
         formatNumber(Number(after.quantity) - Number(before.quantity)),
-        String(after.part),
-        String(after.branch),
-        String(after.order_number),
+        isolate(String(after.part)),
+        isolate(String(after.branch)),
+        isolate(String(after.order_number)),
       );
     case "alert.reviewed":
       return after.status === "not_a_problem"
-        ? words.alertNotAProblem(actor, String(after.part), String(after.branch))
-        : words.alertLookedAt(actor, String(after.part), String(after.branch));
+        ? words.alertNotAProblem(actor, isolate(String(after.part)), isolate(String(after.branch)))
+        : words.alertLookedAt(actor, isolate(String(after.part)), isolate(String(after.branch)));
     default:
       return words.otherChange(actor);
   }

@@ -26,9 +26,15 @@ def heading(question: Question) -> str:
     pieces = [with_subject.format(subject) if subject else without_subject]
     if question.branch:
         pieces.append(question.branch)
-    if "period" in QUESTION_TYPES[question.type]:
-        pieces.append(LABELS[period_used(question.type, question.period)])
+    period = shown_period(question)
+    if period:
+        pieces.append(LABELS[period])
     return " · ".join(pieces)
+
+
+def shown_period(question: Question) -> str | None:
+    """The period the heading shows: the one used, for question types that take a period."""
+    return period_used(question.type, question.period) if "period" in QUESTION_TYPES[question.type] else None
 
 
 def understood_line(question: Question) -> str | None:

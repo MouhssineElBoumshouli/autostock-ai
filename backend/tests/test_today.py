@@ -180,6 +180,7 @@ def test_staff_sees_no_money_anywhere_in_the_raw_json(browser):
 
     owner_data = browser.get("/api/today").json()
     assert owner_data["needs_action"][0]["sentence"] == "Something unusual. About 140 MAD of stock to recount."
+    assert owner_data["needs_action"][0]["money_at_stake"] == 14000
 
     staff_data = staff.get("/api/today").json()
     [staff_alert] = staff_data["needs_action"]

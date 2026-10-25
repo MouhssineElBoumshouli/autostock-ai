@@ -12,7 +12,7 @@ from app.auth.passwords import check_password_rules, hash_password, password_mat
 from app.auth.permissions import require_role
 from app.auth.sessions import COOKIE_NAME, end_other_sessions, end_session, start_session
 from app.db import get_session, utc_now
-from app.models import Organization, User
+from app.models import Language, Organization, User
 
 router = APIRouter(prefix="/api/auth")
 
@@ -26,6 +26,10 @@ class LoginRequest(BaseModel):
     password: PasswordText
 
 
+class LanguageChoice(BaseModel):
+    language: Language | None  # None = follow the shop's language
+
+
 class PasswordChange(BaseModel):
     current_password: PasswordText
     new_password: PasswordText
@@ -36,7 +40,8 @@ def describe_me(db: Session, user: User) -> Me:
     return Me(
         user=UserOut.of(user),
         organization=OrganizationOut(
-            id=organization.id, name=organization.name, currency=organization.currency, is_demo=organization.is_demo
+            id=organization.id, name=organization.name, currency=organization.currency,
+            language=organization.language, is_demo=organization.is_demo,
         ),
     )
 
@@ -100,3 +105,15 @@ def change_password(
     db.commit()
     return describe_me(db, user)
 
+
+
+@router.put("/language")
+def choose_language(
+    body: LanguageChoice,
+    user: User = Depends(require_role(before_password_change=True)),
+    db: Session = Depends(get_session),
+) -> Me:
+    """Your own language. A personal preference, not shop data, so it isn't in the activity log."""
+    user.language = body.language
+    db.commit()
+    return describe_me(db, user)

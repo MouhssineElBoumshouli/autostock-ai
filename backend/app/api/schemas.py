@@ -6,7 +6,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, StringConstraints
 
-from app.models import Role, User
+from app.models import Language, Role, User
 
 
 class UserOut(BaseModel):
@@ -17,6 +17,7 @@ class UserOut(BaseModel):
     is_active: bool
     must_change_password: bool
     last_login_at: datetime | None
+    language: Language | None  # None = the shop's language
 
     @classmethod
     def of(cls, user: User) -> "UserOut":
@@ -27,6 +28,7 @@ class OrganizationOut(BaseModel):
     id: uuid.UUID
     name: str
     currency: str
+    language: Language
     is_demo: bool
 
 

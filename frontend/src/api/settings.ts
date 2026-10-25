@@ -2,10 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { meQueryKey } from "@/api/auth";
 import { apiRequest } from "@/api/client";
+import type { Language } from "@/i18n";
 
 export const currencies = ["MAD", "EUR", "USD"] as const;
 export type Currency = (typeof currencies)[number];
-export type ShopSettings = { name: string; currency: Currency };
+export type ShopSettings = { name: string; currency: Currency; language: Language };
 
 const settingsQueryKey = ["settings"];
 

@@ -14,21 +14,31 @@ from app.ask.question import Question
 from app.models import Branch, Part, SaleLine
 from app.search.part_search import find_parts
 
-Unit = Literal["pieces", "money", "count", "days", "date", "percent", "text"]
+Unit = Literal["pieces", "money", "count", "days", "date", "date_range", "percent", "text", "alert_kind"]
 SHOWN_ROWS = 5
 SHOWN_PARTS = 10  # a part word matching several parts: how many get their own line, besides the total
 
 
 class Number(BaseModel):
-    """One real number the answer used. Money is in centimes."""
+    """One real number the answer used. Money is in centimes, a date is "2026-10-21", a date
+    range is "2026-10-01/2026-10-21". `key` names a fixed label ("pieces_sold") that the website
+    shows in the person's language, with `about` (a part, an order) when the label is about one.
+    Without a key, `label` is the shop's own words (a part, a branch) and is shown as it is."""
 
     label: str
     value: int | float | str
     unit: Unit
+    key: str | None = None
+    about: str | None = None
 
 
 @dataclass
 class Answer:
+    """`sentence` is English. The website builds the same sentence in the person's language from
+    `key` and `values` (the real numbers and names it says), see frontend/src/i18n."""
+
+    key: str
+    values: dict
     sentence: str
     numbers: list[Number] = field(default_factory=list)
 
@@ -46,14 +56,23 @@ class Asked:
     def money_words(self, centimes: int, before: str = ", worth ") -> str:
         return f"{before}{money(centimes, self.currency)}" if self.currency else ""
 
-    def money_number(self, label: str, centimes: int) -> list[Number]:
-        return [Number(label=label, value=centimes, unit="money")] if self.currency else []
+    def money_number(self, key: str, label: str, centimes: int) -> list[Number]:
+        return [Number(key=key, label=label, value=centimes, unit="money")] if self.currency else []
+
+    def money_value(self, centimes: int) -> dict:
+        """{"money": centimes} for people who see money, else nothing."""
+        return {"money": centimes} if self.currency else {}
+
+    def place(self) -> dict:
+        """{"branch": name} when the question is about one branch."""
+        return {"branch": self.question.branch} if self.question.branch else {}
 
 
 @dataclass
 class PartPick:
     condition: ColumnElement  # on Part
     label: str  # "Oil filter (12 parts)", "the Brakes category", "all parts"
+    subject: dict  # the same for the website: {"kind": "part" | "matching" | "category" | "all", ...}
     part_ids: tuple[uuid.UUID, ...] = ()  # set only when a part word matched more than one part
 
     @property
@@ -78,13 +97,19 @@ def pick_parts(asked: Asked) -> PartPick | None:
         ids = [part_id for part_id, _ in result.matches]
         names = sorted(set(asked.db.scalars(select(Part.name).where(Part.id.in_(ids)))))
         label = names[0] if len(names) == 1 else f"parts matching “{question.part}”"
+        subject = {"kind": "part", "name": names[0]} if len(names) == 1 else {"kind": "matching", "words": question.part}
+        if len(ids) > 1:
+            subject["count"] = len(ids)
         return PartPick(
-            Part.id.in_(ids), label if len(ids) == 1 else f"{label} ({len(ids)} parts)",
+            Part.id.in_(ids), label if len(ids) == 1 else f"{label} ({len(ids)} parts)", subject,
             part_ids=tuple(ids) if len(ids) > 1 else (),
         )
     if question.category:
-        return PartPick(Part.category == question.category, f"the {question.category} category")
-    return PartPick(true(), "all parts")
+        return PartPick(
+            Part.category == question.category, f"the {question.category} category",
+            {"kind": "category", "name": question.category},
+        )
+    return PartPick(true(), "all parts", {"kind": "all"})
 
 
 def branch_id(asked: Asked) -> uuid.UUID | None:
@@ -103,9 +128,17 @@ def range_words(first: date, last: date) -> str:
     return day_label(first) if first == last else f"{day_label(first)} – {day_label(last)}"
 
 
+def date_range(first: date, last: date) -> str:
+    return f"{first.isoformat()}/{last.isoformat()}"
+
+
 def part_not_found(asked: Asked) -> Answer:
-    return Answer(f"I couldn't find a part matching “{asked.question.part}”. Try its name or part number.")
+    return Answer(
+        "part_not_found", {"part": asked.question.part},
+        f"I couldn't find a part matching “{asked.question.part}”. Try its name or part number.",
+    )
 
 
-def which_part(example: str) -> Answer:
-    return Answer(f"Which part? For example: “{example}”.")
+def which_part(key: str, example: str) -> Answer:
+    """`key` is which_part_stock or which_part_forecast: each shows its own example question."""
+    return Answer(key, {}, f"Which part? For example: “{example}”.")

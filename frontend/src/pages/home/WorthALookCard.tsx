@@ -3,12 +3,15 @@ import { Link } from "react-router";
 
 import type { AlertSummary } from "@/api/today";
 import { EmptyState } from "@/components/EmptyState";
+import { useSignedIn } from "@/components/SignedIn";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardHeader, CardTitle } from "@/components/ui/card";
 import { t } from "@/i18n";
+import { alertSentence } from "@/lib/alertSentence";
 
 // Sales spikes and drops: good to know, nothing to fix. Smaller and below the action items.
 export function WorthALookCard({ alerts, total }: { alerts: AlertSummary[]; total: number }) {
+  const currency = useSignedIn().organization.currency;
   return (
     <Card className="gap-2 pb-2">
       <CardHeader>
@@ -27,9 +30,9 @@ export function WorthALookCard({ alerts, total }: { alerts: AlertSummary[]; tota
         <ul className="divide-y">
           {alerts.map((alert) => (
             <li key={alert.id} className="grid gap-0.5 px-6 py-3">
-              <p className="text-body-medium">{alert.sentence}</p>
+              <p className="text-body-medium">{alertSentence(alert, currency)}</p>
               <p className="text-body-small text-on-surface-variant">
-                {alert.part_name} · {alert.branch_name}
+                <bdi dir="auto">{alert.part_name}</bdi> · <bdi dir="auto">{alert.branch_name}</bdi>
               </p>
             </li>
           ))}

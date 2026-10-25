@@ -42,7 +42,7 @@ export function StatCard({
         <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-full sm:size-10", iconTones[tone])}>
           <Icon aria-hidden="true" className="size-4 sm:size-5" />
         </span>
-        <span className="truncate text-label-large text-on-surface-variant sm:text-title-small">{label}</span>
+        <span className="min-w-0 text-label-large leading-tight text-on-surface-variant sm:text-title-small">{label}</span>
       </div>
       {loading ? (
         <div className="grid gap-2 py-1" aria-busy="true">

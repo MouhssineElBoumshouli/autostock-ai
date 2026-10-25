@@ -131,6 +131,12 @@ def test_sales_of_a_part_with_branch_and_period(browser, shop):
     assert numbers(answer)["Pieces sold"] == 5
     assert numbers(answer)["Sales value"] == 5 * 10000
     assert "5 pieces" in answer["sentence"] and "MAD" in answer["sentence"]
+    # What the website needs to say the same sentence in French or Arabic.
+    assert answer["key"] == "sales_of"
+    assert answer["values"]["subject"] == {"kind": "part", "name": "Oil filter"}
+    assert answer["values"]["pieces"] == 5 and answer["values"]["money"] == 5 * 10000
+    assert answer["values"]["period"] == "this_week" and answer["period"] == "this_week"
+    assert {number["key"] for number in answer["numbers"]} == {"pieces_sold", "sales_value", "from", "to"}
 
     in_rabat = ask(browser, "oil filters sold this week in rabat")
     assert numbers(in_rabat)["Pieces sold"] == 2
@@ -154,6 +160,8 @@ def test_sales_vs_the_period_before(browser, shop):
     assert numbers(answer)["Pieces sold, this period"] == 6
     assert numbers(answer)["Pieces sold, period before"] == 12
     assert "down 50%" in answer["sentence"]
+    assert answer["key"] == "sales_vs_last" and answer["values"]["percent"] == -50
+    assert numbers(answer)["This period"].count("/") == 1
 
 
 def test_stock_of_a_part_per_branch(browser, shop):
@@ -203,7 +211,10 @@ def test_unknown_words_get_not_sure_and_buttons_instead_of_a_guess(browser, shop
     assert answer["question_type"] == "not_sure"
     assert answer["understood"] is None and answer["numbers"] == []
     assert answer["sentence"] == "I'm not sure what you mean by “unicorn horns”. Did you mean one of these?"
-    assert answer["suggestions"][0] == {"question_type": "stock_of_part", "label": f"Stock · {RABAT}"}
+    assert answer["suggestions"][0] == {
+        "question_type": "stock_of_part", "label": f"Stock · {RABAT}", "filters": {"branch": RABAT}, "period": None,
+    }
+    assert answer["key"] == "not_sure" and answer["values"] == {"words": "unicorn horns"}
     assert len(answer["suggestions"]) == 3
 
     # The button sends the same question with the type picked: the unknown words are searched as a part.
@@ -299,6 +310,8 @@ def test_open_alerts(browser, shop):
     add_alert(shop, "sales_drop", 10, status="looked_at")  # reviewed: not open
     answer = ask(browser, "any alerts?")
     assert numbers(answer)["Open alerts"] == 2
+    assert answer["key"] == "open_alerts" and answer["values"]["alert"]["kind"] in {"negative_stock", "sales_spike"}
+    assert {number["value"] for number in answer["numbers"] if number["unit"] == "alert_kind"} == {"negative_stock", "sales_spike"}
 
 
 def test_late_deliveries_when_there_are_none(browser, shop):
@@ -327,6 +340,7 @@ def test_staff_get_the_same_answers_without_money(browser, shop):
         assert answer["numbers"], question
         assert all(number["unit"] != "money" for number in answer["numbers"]), question
         assert "MAD" not in answer["sentence"], question
+        assert "money" not in answer["values"], question
     assert numbers(ask(staff, "how many oil filters did we sell this week"))["Pieces sold"] == 5
 
 
@@ -337,6 +351,8 @@ def test_staff_see_what_to_order_without_its_cost(browser):
     answer = ask(staff_browser(browser), "what should I order and how much will it cost")
     assert numbers(answer)["Lines to order"] == 1
     assert "Total cost" not in numbers(answer) and "MAD" not in answer["sentence"]
+    assert answer["key"] == "what_to_order" and "money" not in answer["values"]
+    assert answer["values"]["count"] == 1
 
 
 def test_logged_out_people_cannot_ask(browser):

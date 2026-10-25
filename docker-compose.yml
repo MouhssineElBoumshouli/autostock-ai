@@ -49,6 +49,8 @@ services:
     volumes:
       - ./frontend:/app
       - web_node_modules:/app/node_modules
+      # Read-only, for `npm test`: it checks every server message has a French and an Arabic version.
+      - ./backend/app:/backend/app:ro
     depends_on:
       - api
 

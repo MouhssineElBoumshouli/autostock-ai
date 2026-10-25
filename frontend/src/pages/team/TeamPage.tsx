@@ -51,6 +51,7 @@ export function TeamPage() {
     },
     {
       header: t.team.columns.lastLogin,
+      className: "hidden xl:table-cell",
       cell: (user) => (user.last_login_at ? formatDateTime(user.last_login_at) : t.common.never),
     },
     {
@@ -66,7 +67,7 @@ export function TeamPage() {
   ];
 
   return (
-    <div className="grid gap-8">
+    <div className="grid grid-cols-1 gap-8">
       <PageHeader
         title={t.nav.team}
         subtitle={t.team.subtitle}

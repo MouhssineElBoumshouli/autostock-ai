@@ -7,8 +7,8 @@ from sqlalchemy import func, select
 
 from app.alerts.problem import pieces
 from app.ask.answer_parts import (
-    SHOWN_PARTS, SHOWN_ROWS, Answer, Asked, Number, PartPick, branch_id, part_not_found, pick_parts, range_words,
-    where_words,
+    SHOWN_PARTS, SHOWN_ROWS, Answer, Asked, Number, PartPick, branch_id, date_range, part_not_found, pick_parts,
+    range_words, where_words,
 )
 from app.ask.periods import LABELS, day_range, period_used, range_before
 from app.models import Part, SaleLine
@@ -23,14 +23,17 @@ def sales_of(asked: Asked) -> Answer:
     shop_branch = branch_id(asked)
     sold, value = _sold(asked, parts, shop_branch, first, last)
     numbers = [
-        Number(label="Pieces sold", value=sold, unit="pieces"),
-        *asked.money_number("Sales value", value),
-        Number(label="From", value=first.isoformat(), unit="date"),
-        Number(label="To", value=last.isoformat(), unit="date"),
+        Number(key="pieces_sold", label="Pieces sold", value=sold, unit="pieces"),
+        *asked.money_number("sales_value", "Sales value", value),
+        Number(key="from", label="From", value=first.isoformat(), unit="date"),
+        Number(key="to", label="To", value=last.isoformat(), unit="date"),
     ]
     if parts.part_ids:
         numbers += _per_part_sales(asked, parts, shop_branch, first, last)
     return Answer(
+        "sales_of",
+        {"subject": parts.subject, **asked.place(), "period": period, "range": date_range(first, last),
+         "pieces": sold, **asked.money_value(value)},
         f"{parts.title}: {pieces(sold)} sold{where_words(asked)} {LABELS[period]} "
         f"({range_words(first, last)}){asked.money_words(value)}.",
         numbers,
@@ -61,10 +64,13 @@ def best_sellers(asked: Asked) -> Answer:
         .limit(SHOWN_ROWS)
     ).all()
     when = f"{where_words(asked)} {LABELS[period]} ({range_words(first, last)})"
+    values = {"subject": parts.subject, **asked.place(), "period": period, "range": date_range(first, last)}
     if not rows:
-        return Answer(f"No sales for {parts.label}{when}.")
+        return Answer("best_sellers_none", values, f"No sales for {parts.label}{when}.")
     name, sku, sold = rows[0]
     return Answer(
+        "best_sellers",
+        {**values, "name": name, "sku": sku, "pieces": int(sold)},
         f"Best seller for {parts.label}{when}: {name} ({sku}), {pieces(int(sold))}.",
         [Number(label=f"{name} ({sku})", value=int(sold), unit="pieces") for name, sku, sold in rows],
     )
@@ -80,22 +86,25 @@ def sales_vs_last(asked: Asked) -> Answer:
     shop_branch = branch_id(asked)
     now, now_value = _sold(asked, parts, shop_branch, first, last)
     before, before_value = _sold(asked, parts, shop_branch, before_first, before_last)
-    if before == 0:
+    percent = None if before == 0 else round(100 * (now - before) / before)
+    if percent is None:
         change = "with no sales in the period before"
     else:
-        percent = round(100 * (now - before) / before)
         change = "the same as" if percent == 0 else f"{'up' if percent > 0 else 'down'} {abs(percent)}% on"
         change += f" {range_words(before_first, before_last)} ({pieces(before)})"
     return Answer(
+        "sales_vs_last",
+        {"subject": parts.subject, **asked.place(), "period": period, "range": date_range(first, last),
+         "pieces": now, "before_pieces": before, "before_range": date_range(before_first, before_last), "percent": percent},
         f"{parts.title}{where_words(asked)}, {LABELS[period]} ({range_words(first, last)}): "
         f"{pieces(now)}, {change}.",
         [
-            Number(label="Pieces sold, this period", value=now, unit="pieces"),
-            Number(label="Pieces sold, period before", value=before, unit="pieces"),
-            *asked.money_number("Sales value, this period", now_value),
-            *asked.money_number("Sales value, period before", before_value),
-            Number(label="This period", value=f"{first.isoformat()} to {last.isoformat()}", unit="text"),
-            Number(label="Period before", value=f"{before_first.isoformat()} to {before_last.isoformat()}", unit="text"),
+            Number(key="pieces_now", label="Pieces sold, this period", value=now, unit="pieces"),
+            Number(key="pieces_before", label="Pieces sold, period before", value=before, unit="pieces"),
+            *asked.money_number("value_now", "Sales value, this period", now_value),
+            *asked.money_number("value_before", "Sales value, period before", before_value),
+            Number(key="this_period", label="This period", value=date_range(first, last), unit="date_range"),
+            Number(key="period_before", label="Period before", value=date_range(before_first, before_last), unit="date_range"),
         ],
     )
 

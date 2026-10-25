@@ -9,7 +9,7 @@ from app.models.forecast import Forecast, ForecastRun
 from app.models.import_mapping import ImportMapping
 from app.models.login_failure import LoginFailure
 from app.models.order_suggestion import OrderRun, OrderSuggestion
-from app.models.organization import Organization
+from app.models.organization import Language, Organization
 from app.models.part import Part
 from app.models.part_equivalent import EQUIVALENT_SOURCES, EquivalentSource, PartEquivalent
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderLine
@@ -37,6 +37,7 @@ __all__ = [
     "LoginFailure",
     "OrderRun",
     "OrderSuggestion",
+    "Language",
     "Organization",
     "Part",
     "PartEquivalent",

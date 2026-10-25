@@ -19,7 +19,7 @@ export function RoleSelect({ user }: { user: User }) {
 
   return (
     <Select value={user.role} onValueChange={changeRole} disabled={changeUser.isPending}>
-      <SelectTrigger aria-label={t.team.changeRoleLabel(user.name)} className="h-9 w-32">
+      <SelectTrigger aria-label={t.team.changeRoleLabel(user.name)} className="h-9 w-36">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

@@ -1,4 +1,38 @@
-// All English text shown to users. French and Arabic files will follow the same shape.
+// All English text shown to users. fr.ts and ar.ts have exactly the same shape (checked by `npm test`).
+
+// The words an Ask answer is built from, already formatted by src/pages/ask/askSentence.ts.
+export type AnswerWords = {
+  subject: string; // "all parts", "Oil filter (3 parts)", "the Brakes category"
+  Subject: string; // the same with a capital first letter, to start a sentence
+  branch: string | null;
+  period: string; // "this week"
+  range: string; // "Oct 14 – Oct 20"
+  pieces: string; // "5 pieces"
+  money: string | null; // null for people who don't see money
+  count: number;
+  shownCount: string;
+  name: string;
+  sku: string;
+  beforePieces: string;
+  beforeRange: string;
+  percent: number | null;
+  days: string;
+  daysLeft: string; // "4 days"
+  daysLate: string; // "3 days"
+  low: string;
+  high: string;
+  madeFrom: string;
+  madeOn: string;
+  part: string;
+  alertBranch: string;
+  alert: string;
+  orderNumber: string;
+  supplier: string;
+  words: string | null;
+};
+
+const inBranch = (branch: string | null) => (branch ? ` in ${branch}` : "");
+
 export const en = {
   appName: "AutoStock AI",
   common: {
@@ -21,6 +55,8 @@ export const en = {
     you: "you",
     showPassword: "Show password",
     hidePassword: "Hide password",
+    pieces: (count: number, shown: string) => (count === 1 ? "1 piece" : `${shown} pieces`),
+    days: (count: number, shown: string) => (count === 1 ? "1 day" : `${shown} days`),
   },
   states: {
     loadFailed: "We couldn't load this. Check your connection and try again.",
@@ -84,7 +120,7 @@ export const en = {
     runsOut: {
       alreadyOut: "Already out",
       overSixty: "Over 60 days",
-      aboutDays: (days: string) => `About ${days} days`,
+      aboutDays: (days: string) => `About ${days}`,
     },
     forecastStatus: {
       updated: (time: string) => `Forecasts updated ${time}`,
@@ -141,6 +177,28 @@ export const en = {
     approved: "Approved.",
     rejected: "Rejected.",
     approvedAll: (count: string) => `Approved ${count} lines.`,
+    // Why this part and this number. Mirrors backend/app/ordering/reasons.py.
+    reasons: {
+      sellsPerWeek: (n: string) => `Sells about ${n} a week`,
+      sellsPerMonth: (n: string) => `Sells about ${n} a month`,
+      sellsLessThanMonthly: "Sells less than 1 a month",
+      slowOutOfStock: (sold: string, quantity: string) =>
+        `Out of stock, sold ${sold} in the last 90 days, no sale in 4 weeks: order ${quantity} to have it on the shelf.`,
+      slowSkip: "No sale in 4 weeks: not ordered.",
+      forecast: (w: {
+        rate: string;
+        deliveryDays: string;
+        onHand: string;
+        onOrder: string | null;
+        quantity: string;
+        packSize: string | null;
+        days: string;
+        cushion: string;
+      }) =>
+        `${w.rate}, supplier takes ${w.deliveryDays}, ${w.onHand} left${w.onOrder ? `, ${w.onOrder} already ordered` : ""}: ` +
+        `order ${w.quantity}${w.packSize ? ` (packs of ${w.packSize})` : ""} to cover the next ${w.days} with a safety cushion of ${w.cushion}.`,
+      cutByBudget: "Cut to stay within the budget.",
+    },
     settings: {
       title: "How careful should orders be?",
       levels: {
@@ -201,7 +259,7 @@ export const en = {
     minStockHelp: "At or below this number, the part shows as Low stock.",
     supplier: "Supplier",
     noSupplier: "No supplier",
-    deliveryDays: (days: number) => `Delivers in ${days} days`,
+    deliveryDays: (days: string) => `Delivers in ${days}`,
     lastSales: "Last 10 sales",
     noSales: "No sales recorded yet.",
     sold: (quantity: string) => `${quantity} sold`,
@@ -277,6 +335,7 @@ export const en = {
     },
     fileLabel: "File",
     fileHelp: "Excel (.xlsx) or CSV, up to 10 MB.",
+    fileSize: (kilobytes: string) => `${kilobytes} KB`,
     chooseFile: "Choose a file",
     changeFile: "Choose another file",
     fileTooBig: "The file is larger than 10 MB. Split it into smaller files.",
@@ -396,6 +455,7 @@ export const en = {
   },
   account: {
     menuLabel: (name: string) => `Account menu for ${name}`,
+    language: "Language",
     changePassword: "Change password",
     logOut: "Log out",
   },
@@ -501,6 +561,7 @@ export const en = {
       supplierMerged: (actor: string, from: string, into: string) => `${actor} merged supplier ${from} into ${into}.`,
       supplierRemoved: (actor: string, name: string) => `${actor} removed supplier ${name}.`,
       orderCareChanged: (actor: string, level: string) => `${actor} changed how careful orders should be to "${level}".`,
+      languageChanged: (actor: string, language: string) => `${actor} changed the shop's language to ${language}.`,
       forecastRequested: (actor: string) => `${actor} asked for forecasts to be recalculated.`,
       suggestionsCreated: (actor: string, lines: string, cut: string) =>
         `${actor} worked out what to order: ${lines} lines to decide on, ${cut} cut by the budget.`,
@@ -533,6 +594,8 @@ export const en = {
     currency: "Currency",
     currencyHelp: "Prices and costs are shown in this currency.",
     currencies: { MAD: "MAD · Moroccan dirham", EUR: "EUR · Euro", USD: "USD · US dollar" },
+    language: "Language",
+    languageHelp: "Everyone sees the app in this language, unless they choose their own in their account menu.",
     saved: "Settings saved.",
     branches: {
       title: "Branches",
@@ -612,6 +675,30 @@ export const en = {
     nothingMatches: "No alerts match these filters.",
     markedBy: (name: string) => `Marked by ${name}`,
   },
+  // Built from each alert's own numbers. Mirrors backend/app/alerts/sales_rules.py and stock_rules.py.
+  alerts: {
+    kinds: {
+      sales_spike: "Sales much higher than usual",
+      sales_drop: "Sales much lower than usual",
+      sold_at_zero: "Sold while stock showed 0",
+      stock_frozen: "Stock count not moving",
+      negative_stock: "Stock below zero",
+    } as Record<string, string>,
+    sales: (sold: string, day: string, low: string, high: string) =>
+      `Sold ${sold} in the 7 days to ${day}, usually ${low} to ${high}.`,
+    negativeStock: (quantity: string, day: string) =>
+      `Stock shows ${quantity} since ${day}: below zero is impossible, so the count is wrong.`,
+    soldAtZero: (pieces: string, days: string, day: string) => `Sold ${pieces} on ${days} since ${day} while stock showed 0.`,
+    stockFrozen: (quantity: string, day: string, pieces: string) =>
+      `Stock stuck at ${quantity} since ${day} while ${pieces} were sold.`,
+    money: {
+      sales_spike: (money: string) => `About ${money} of sales above usual.`,
+      sales_drop: (money: string) => `About ${money} of sales below usual.`,
+      sold_at_zero: (money: string) => `About ${money} of stock not counted.`,
+      stock_frozen: (money: string) => `About ${money} of stock may be missing.`,
+      negative_stock: (money: string) => `About ${money} of stock to recount.`,
+    } as Record<string, (money: string) => string>,
+  },
   ask: {
     subtitle: "Ask a question about your shop, in your own words.",
     inputLabel: "Ask a question about your shop",
@@ -666,7 +753,117 @@ export const en = {
       orders: "Open What to order",
       alerts: "Open Alerts",
     },
-    days: (n: number) => `${n} ${n === 1 ? "day" : "days"}`,
+    bestGuess: "Best guess.",
+    aiOff: "AI is off: questions are read with simple keyword rules.",
+    understood: (heading: string) => `I understood: ${heading}`,
+    // "Sales of brake pads": the heading of the "I understood" line. Mirrors backend/app/ask/understood_line.py.
+    headings: {
+      sales_of: (subject: string | null) => (subject ? `Sales of ${subject}` : "Sales"),
+      best_sellers: (subject: string | null) => (subject ? `Best sellers in ${subject}` : "Best sellers"),
+      running_out: (subject: string | null) => (subject ? `Running out soon in ${subject}` : "Running out soon"),
+      what_to_order: (subject: string | null) => (subject ? `What to order in ${subject}` : "What to order"),
+      stock_of_part: (subject: string | null) => (subject ? `Stock of ${subject}` : "Stock"),
+      dead_stock: (subject: string | null) => (subject ? `Dead stock in ${subject}` : "Dead stock"),
+      open_alerts: (subject: string | null) => (subject ? `Open alerts for ${subject}` : "Open alerts"),
+      late_deliveries: () => "Late deliveries",
+      forecast_of_part: (subject: string | null) =>
+        subject ? `Forecast of ${subject} for the next 30 days` : "Forecast for the next 30 days",
+      sales_vs_last: (subject: string | null) =>
+        subject ? `Sales of ${subject} compared with the period before` : "Sales compared with the period before",
+    } as Record<string, (subject: string | null) => string>,
+    categorySubject: (category: string) => `${category} (category)`,
+    periodWords: {
+      today: "today",
+      yesterday: "yesterday",
+      this_week: "this week",
+      last_week: "last week",
+      this_month: "this month",
+      last_month: "last month",
+      this_year: "this year",
+      last_30_days: "the last 30 days",
+    } as Record<string, string>,
+    // What an answer is about, inside a sentence.
+    subjects: {
+      part: (name: string, count: string | null) => (count ? `${name} (${count} parts)` : name),
+      matching: (words: string, count: string) => `parts matching “${words}” (${count} parts)`,
+      category: (name: string) => `the ${name} category`,
+      all: "all parts",
+    },
+    // One sentence per answer key. Mirrors the English sentences in backend/app/ask.
+    answers: {
+      not_sure: (w: AnswerWords) => `I'm not sure what you mean${w.words ? ` by “${w.words}”` : ""}. Did you mean one of these?`,
+      cannot_answer: () => "I can't answer that yet.",
+      part_not_found: (w: AnswerWords) => `I couldn't find a part matching “${w.part}”. Try its name or part number.`,
+      which_part_stock: () => "Which part? For example: “how many oil filters in stock”.",
+      which_part_forecast: () => "Which part? For example: “how many brake pads will we sell”.",
+      sales_of: (w: AnswerWords) =>
+        `${w.Subject}: ${w.pieces} sold${inBranch(w.branch)} ${w.period} (${w.range})${w.money ? `, worth ${w.money}` : ""}.`,
+      best_sellers_none: (w: AnswerWords) => `No sales for ${w.subject}${inBranch(w.branch)} ${w.period} (${w.range}).`,
+      best_sellers: (w: AnswerWords) =>
+        `Best seller for ${w.subject}${inBranch(w.branch)} ${w.period} (${w.range}): ${w.name} (${w.sku}), ${w.pieces}.`,
+      sales_vs_last: (w: AnswerWords) =>
+        `${w.Subject}${inBranch(w.branch)}, ${w.period} (${w.range}): ${w.pieces}, ` +
+        (w.percent === null
+          ? "with no sales in the period before."
+          : `${w.percent === 0 ? "the same as" : `${w.percent > 0 ? "up" : "down"} ${Math.abs(w.percent)}% on`} ${w.beforeRange} (${w.beforePieces}).`),
+      stock_of_part: (w: AnswerWords) => `${w.Subject}: ${w.pieces} in stock${inBranch(w.branch)}.`,
+      running_out_none: (w: AnswerWords) =>
+        `Nothing in ${w.subject} is expected to run out${inBranch(w.branch)} within ${w.days} days.`,
+      running_out: (w: AnswerWords) =>
+        `${w.shownCount} ${w.count === 1 ? "part is" : "parts are"} expected to run out${inBranch(w.branch)} within ${w.days} days (${w.subject}). ` +
+        `First: ${w.name} (${w.sku}), ${w.pieces} left, about ${w.daysLeft}.`,
+      dead_stock_none: (w: AnswerWords) => `No dead stock in ${w.subject}${inBranch(w.branch)} (no sale in ${w.days} days).`,
+      dead_stock: (w: AnswerWords) =>
+        `${w.shownCount} ${w.count === 1 ? "part has" : "parts have"} stock but no sale in ${w.days} days (${w.subject}${inBranch(w.branch)}): ` +
+        `${w.pieces} on the shelf${w.money ? `, costing ${w.money}` : ""}.`,
+      forecast_none: (w: AnswerWords) => `No forecast yet for ${w.subject}. Forecasts are made after sales are imported.`,
+      forecast: (w: AnswerWords) =>
+        `${w.Subject}${inBranch(w.branch)}: about ${w.pieces} expected over the next ${w.days} days ` +
+        `(likely between ${w.low} and ${w.high}), from sales up to ${w.madeFrom}.`,
+      what_to_order_no_run: () => "There is no order suggestion yet. A manager can make one on the Orders page.",
+      what_to_order_none: (w: AnswerWords) =>
+        `Nothing left to order for ${w.subject}${inBranch(w.branch)} (latest suggestion, ${w.madeOn}).`,
+      what_to_order: (w: AnswerWords) =>
+        `To order for ${w.subject}${inBranch(w.branch)}: ${w.shownCount} ${w.count === 1 ? "line" : "lines"}, ` +
+        `${w.pieces}${w.money ? `, costing ${w.money}` : ""} (latest suggestion, ${w.madeOn}).`,
+      open_alerts_none: (w: AnswerWords) => `No open alerts for ${w.subject}${inBranch(w.branch)}.`,
+      open_alerts: (w: AnswerWords) =>
+        `${w.shownCount} open ${w.count === 1 ? "alert" : "alerts"} for ${w.subject}${inBranch(w.branch)}. ` +
+        `Newest: ${w.part} in ${w.alertBranch}: ${w.alert}`,
+      late_deliveries_none: () => "No supplier delivery is late.",
+      late_deliveries: (w: AnswerWords) =>
+        `${w.shownCount} ${w.count === 1 ? "delivery is" : "deliveries are"} late. Most late: ${w.orderNumber} from ${w.supplier}, ${w.daysLate}.`,
+    } as Record<string, (w: AnswerWords) => string>,
+    // Labels of the real numbers under an answer.
+    numberLabels: {
+      pieces_sold: "Pieces sold",
+      sales_value: "Sales value",
+      from: "From",
+      to: "To",
+      pieces_now: "Pieces sold, this period",
+      pieces_before: "Pieces sold, period before",
+      value_now: "Sales value, this period",
+      value_before: "Sales value, period before",
+      this_period: "This period",
+      period_before: "Period before",
+      parts_running_out: "Parts running out",
+      dead_parts: "Dead stock parts",
+      pieces_on_shelf: "Pieces on the shelf",
+      value_at_cost: "Value at cost",
+      expected_next_30_days: "Expected, next 30 days",
+      likely_at_least: "Likely at least",
+      likely_at_most: "Likely at most",
+      made_from_sales_up_to: "Made from sales up to",
+      lines_to_order: "Lines to order",
+      pieces_to_order: "Pieces to order",
+      total_cost: "Total cost",
+      open_alerts: "Open alerts",
+      late_deliveries: "Late deliveries",
+    } as Record<string, string>,
+    numberLabelsAbout: {
+      days_left: (about: string) => `${about}, days left`,
+      days_late: (about: string) => `${about}, days late`,
+    } as Record<string, (about: string) => string>,
     homeBox: {
       inputLabel: "Ask your shop",
       placeholder: "Ask your shop…",
@@ -676,5 +873,10 @@ export const en = {
   notFound: {
     title: "Page not found",
     description: "The link may be old or mistyped.",
+  },
+  // The server's messages are written in English, so English needs no table. See translateServerMessage.
+  serverMessages: {
+    fixed: {} as Record<string, string>,
+    patterns: {} as Record<string, (...parts: string[]) => string>,
   },
 };

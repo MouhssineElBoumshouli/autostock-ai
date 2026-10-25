@@ -13,7 +13,7 @@ import { StockBadge } from "@/components/StockBadge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { t } from "@/i18n";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, isolate } from "@/lib/format";
 
 import { ForecastStatusBar } from "./ForecastStatusBar";
 import { PartPanel } from "./PartPanel";
@@ -62,24 +62,35 @@ export function StockPage() {
       sortKey: "name",
       cell: (part) => (
         <span className="block max-w-48 xl:max-w-72">
-          <span className="block truncate font-medium">{part.name}</span>
+          <span dir="auto" className="block truncate font-medium">
+            {part.name}
+          </span>
           {part.equivalent_note && (
             <span className="mt-0.5 flex items-center gap-1 text-body-small font-medium text-primary">
               <ReplaceIcon aria-hidden="true" className="size-3.5 shrink-0" />
               <span className="truncate">
-                {t.stock.outOfStockEquivalent(formatNumber(part.equivalent_note.quantity), part.equivalent_note.brand)}
+                {t.stock.outOfStockEquivalent(formatNumber(part.equivalent_note.quantity), isolate(part.equivalent_note.brand))}
               </span>
             </span>
           )}
         </span>
       ),
     },
-    { header: t.stock.columns.sku, sortKey: "sku", cell: (part) => <span className="text-on-surface-variant">{part.sku}</span> },
+    {
+      header: t.stock.columns.sku,
+      sortKey: "sku",
+      className: "hidden lg:table-cell",
+      cell: (part) => (
+        <span dir="auto" className="text-on-surface-variant">
+          {part.sku}
+        </span>
+      ),
+    },
     {
       header: t.stock.columns.brand,
       sortKey: "brand",
-      className: "hidden xl:table-cell",
-      cell: (part) => part.brand ?? "—",
+      className: "hidden 2xl:table-cell",
+      cell: (part) => <bdi dir="auto">{part.brand ?? "—"}</bdi>,
     },
     { header: t.stock.columns.inStock, sortKey: "quantity", align: "end", cell: (part) => formatNumber(part.quantity) },
     {
@@ -94,12 +105,13 @@ export function StockPage() {
       header: t.stock.columns.supplier,
       sortKey: "supplier",
       className: "hidden 2xl:table-cell",
-      cell: (part) => part.supplier ?? "—",
+      cell: (part) => <bdi dir="auto">{part.supplier ?? "—"}</bdi>,
     },
     {
       header: t.stock.columns.next30Days,
       sortKey: "expected_30d",
       align: "end",
+      className: "hidden xl:table-cell",
       cell: (part) => formatNumber(part.expected_30d),
     },
     { header: t.stock.columns.runsOutIn, sortKey: "runs_out_days", cell: (part) => runsOutLabel(part) },
@@ -120,7 +132,7 @@ export function StockPage() {
 
   if (noPartsAtAll) {
     return (
-      <div className="grid gap-8">
+      <div className="grid grid-cols-1 gap-8">
         <PageHeader title={t.nav.stock} subtitle={t.stock.subtitle} />
         <Card className="py-0">
           <EmptyState
@@ -135,7 +147,7 @@ export function StockPage() {
   }
 
   return (
-    <div className="grid gap-8">
+    <div className="grid grid-cols-1 gap-8">
       <PageHeader title={t.nav.stock} subtitle={t.stock.subtitle} action={importButton} />
       <ForecastStatusBar />
       <StockStats
@@ -190,5 +202,5 @@ export function StockPage() {
 function runsOutLabel(part: PartRow): string {
   if (part.status === "out") return t.stock.runsOut.alreadyOut;
   if (part.runs_out_days === null) return t.stock.runsOut.overSixty;
-  return t.stock.runsOut.aboutDays(formatNumber(part.runs_out_days));
+  return t.stock.runsOut.aboutDays(t.common.days(part.runs_out_days, formatNumber(part.runs_out_days)));
 }

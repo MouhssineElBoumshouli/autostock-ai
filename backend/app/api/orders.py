@@ -52,11 +52,12 @@ class LineOut(BaseModel):
     expected: float
     cushion: float
     need: int
+    sold_last_90_days: int
     unit_cost: int | None
     line_cost: int
     missed_sales_prevented: float
     value_per_dirham: float | None
-    reason: str
+    reason: str  # English; the website builds it in the person's language from the numbers above
 
 
 class RunOut(BaseModel):
@@ -183,6 +184,7 @@ def _line_out(db: Session, line: OrderSuggestion, names: dict[uuid.UUID, tuple[s
         rule=line.rule, quantity=line.quantity, approved_quantity=line.approved_quantity, on_hand=line.on_hand,
         on_order=line.on_order, pack_size=line.pack_size, delivery_days=line.delivery_days,
         days_covered=line.days_covered, expected=line.expected, cushion=line.cushion, need=line.need,
+        sold_last_90_days=line.sold_last_90_days,
         unit_cost=line.unit_cost, line_cost=line.line_cost, missed_sales_prevented=line.missed_sales_prevented,
         value_per_dirham=line.value_per_dirham, reason=line.reason,
     )

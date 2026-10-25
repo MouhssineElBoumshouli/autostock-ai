@@ -78,7 +78,9 @@ function PurchaseOrderDetails({ po, canEdit }: { po: PurchaseOrder; canEdit: boo
       <header className="flex items-start gap-3 border-b p-6">
         <div className="grid min-w-0 flex-1 gap-1">
           <SheetTitle className="text-headline-small">{po.order_number}</SheetTitle>
-          <p className="text-body-medium text-on-surface-variant">{po.supplier_name}</p>
+          <p dir="auto" className="text-body-medium text-on-surface-variant">
+            {po.supplier_name}
+          </p>
           <div className="mt-1">
             <Badge variant={badgeVariant[po.status]}>{t.purchaseOrders.statuses[po.status]}</Badge>
           </div>
@@ -96,13 +98,18 @@ function PurchaseOrderDetails({ po, canEdit }: { po: PurchaseOrder; canEdit: boo
           {po.lines.map((line) => (
             <li key={line.id} className="grid gap-2 p-4 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-6">
               <div className="min-w-0 grid gap-0.5">
-                <p className="font-medium">{line.part_name}</p>
+                <p dir="auto" className="font-medium">
+                  {line.part_name}
+                </p>
                 <p className="text-body-small text-on-surface-variant">
-                  {line.part_sku} · {line.branch_name}
+                  <bdi dir="auto">{line.part_sku}</bdi> · <bdi dir="auto">{line.branch_name}</bdi>
                 </p>
                 {po.status !== "draft" && (
                   <p className="text-body-small text-on-surface-variant">
-                    {t.purchaseOrders.receivedQuantity}: {formatNumber(line.received_quantity)} / {formatNumber(line.quantity)}
+                    {t.purchaseOrders.receivedQuantity}:{" "}
+                    <bdi dir="ltr">
+                      {formatNumber(line.received_quantity)} / {formatNumber(line.quantity)}
+                    </bdi>
                   </p>
                 )}
               </div>

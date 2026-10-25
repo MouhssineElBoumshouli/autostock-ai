@@ -50,11 +50,16 @@ export function LowStockCard() {
                 className="flex items-center justify-between gap-4 px-6 py-3 hover:bg-on-surface/8"
               >
                 <span className="grid min-w-0">
-                  <span className="truncate text-title-small">{part.name}</span>
-                  <span className="text-body-small text-on-surface-variant">{part.sku}</span>
+                  <span dir="auto" className="truncate text-title-small">
+                    {part.name}
+                  </span>
+                  <span dir="auto" className="text-body-small text-on-surface-variant">
+                    {part.sku}
+                  </span>
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
-                  <span className="text-body-medium tabular-nums">
+                  {/* "1 / 3" reads left to right in Arabic too, like any fraction. */}
+                  <span dir="ltr" className="text-body-medium tabular-nums">
                     {formatNumber(part.quantity)}
                     <span className="text-on-surface-variant"> / {formatNumber(part.min_stock)}</span>
                   </span>

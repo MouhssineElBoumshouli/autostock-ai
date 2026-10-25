@@ -35,7 +35,7 @@ export function WeeklySalesCard({ sales }: { sales: WeeklySales | null }) {
               <ul className="grid gap-1">
                 {sales.top_parts.map((part) => (
                   <li key={part.part_id} className="min-w-0 flex items-center justify-between gap-4 text-body-medium">
-                    <span className="min-w-0 truncate">
+                    <span dir="auto" className="min-w-0 truncate">
                       {part.name} <span className="text-on-surface-variant">{part.sku}</span>
                     </span>
                     <span className="shrink-0 tabular-nums">{formatNumber(part.quantity)}</span>

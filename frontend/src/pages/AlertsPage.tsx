@@ -38,7 +38,7 @@ export function AlertsPage() {
   }
 
   return (
-    <div className="grid gap-8">
+    <div className="grid grid-cols-1 gap-8">
       <PageHeader title={t.nav.alerts} subtitle={t.alertsPage.subtitle} />
 
       <div className="flex flex-wrap gap-2">

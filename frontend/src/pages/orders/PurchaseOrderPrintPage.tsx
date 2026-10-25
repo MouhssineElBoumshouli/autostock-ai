@@ -60,7 +60,9 @@ export function PurchaseOrderPrintPage() {
         </div>
         <div className="text-end">
           <p className="text-title-medium">{t.purchaseOrders.print.supplier}</p>
-          <p className="text-body-medium">{order.supplier_name}</p>
+          <p dir="auto" className="text-body-medium">
+            {order.supplier_name}
+          </p>
           {order.supplier_phone && <p className="text-body-medium">{order.supplier_phone}</p>}
           {order.supplier_email && <p className="text-body-medium">{order.supplier_email}</p>}
         </div>
@@ -80,8 +82,12 @@ export function PurchaseOrderPrintPage() {
         <tbody>
           {order.lines.map((line) => (
             <tr key={line.id} className="border-b border-black/10">
-              <td className="py-2 pe-3">{line.part_name}</td>
-              <td className="px-3 py-2">{line.part_sku}</td>
+              <td className="py-2 pe-3">
+                <bdi dir="auto">{line.part_name}</bdi>
+              </td>
+              <td className="px-3 py-2">
+                <bdi dir="auto">{line.part_sku}</bdi>
+              </td>
               <td className="px-3 py-2">{line.branch_name}</td>
               <td className="px-3 py-2 text-end tabular-nums">{formatNumber(line.quantity)}</td>
               <td className="px-3 py-2 text-end tabular-nums">{formatMoney(line.unit_cost, me.organization.currency)}</td>

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { t } from "@/i18n";
 import { formatMoney, formatNumber } from "@/lib/format";
+import { orderReason } from "@/lib/orderReason";
 
 function wholeNumber(text: string): number | "invalid" {
   return /^\d+$/.test(text.trim()) && Number(text.trim()) > 0 ? Number(text.trim()) : "invalid";
@@ -54,13 +55,15 @@ export function OrderLineRow({ line, canEdit }: { line: OrderLine; canEdit: bool
     <li className="grid gap-3 p-4 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-6">
       <div className="min-w-0 grid gap-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="font-medium">{line.part_name}</p>
+          <p dir="auto" className="font-medium">
+            {line.part_name}
+          </p>
           <Badge variant={badgeVariant[line.status]}>{t.orders.statuses[line.status]}</Badge>
         </div>
         <p className="text-body-small text-on-surface-variant">
-          {line.part_sku} · {line.branch_name} · {t.orders.columns.inStock} {formatNumber(line.on_hand)}
+          <bdi dir="auto">{line.part_sku}</bdi> · <bdi dir="auto">{line.branch_name}</bdi> · {t.orders.columns.inStock} {formatNumber(line.on_hand)}
         </p>
-        <p className="text-body-small text-on-surface-variant">{line.reason}</p>
+        <p className="text-body-small text-on-surface-variant">{orderReason(line)}</p>
         {!line.supplier_id && <p className="text-body-small text-error">{t.orders.noSupplier}</p>}
       </div>
 

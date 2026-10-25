@@ -31,10 +31,11 @@ ANSWERS: dict[str, Callable[[Asked], Answer]] = {
 
 def answer(db: Session, organization_id: uuid.UUID, question: Question, currency: str | None) -> Answer:
     if question.type == NOT_SURE:
-        return Answer(NOT_SURE_SENTENCE.format(by=f" by “{question.part}”" if question.part else ""))
+        values = {"words": question.part} if question.part else {}
+        return Answer("not_sure", values, NOT_SURE_SENTENCE.format(by=f" by “{question.part}”" if question.part else ""))
     build = ANSWERS.get(question.type)
     if build is None:
-        return Answer(CANNOT_ANSWER_YET)
+        return Answer("cannot_answer", {}, CANNOT_ANSWER_YET)
     result = build(Asked(db, organization_id, question, shop_today(db, organization_id), currency))
     if currency is None:
         result.numbers = [number for number in result.numbers if number.unit != "money"]

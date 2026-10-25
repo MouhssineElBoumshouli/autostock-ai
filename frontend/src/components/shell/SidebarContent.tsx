@@ -15,7 +15,9 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <img src="/favicon.svg" alt="" className="size-9 shrink-0" />
         <span className="grid min-w-0 md:max-xl:sr-only">
           <span className="text-title-medium">{t.appName}</span>
-          <span className="truncate text-body-small text-on-surface-variant">{shop}</span>
+          <span dir="auto" className="truncate text-body-small text-on-surface-variant">
+            {shop}
+          </span>
         </span>
       </div>
       <SidebarNav onNavigate={onNavigate} />

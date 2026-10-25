@@ -1,4 +1,4 @@
-import { t } from "@/i18n";
+import { t, translateServerMessage } from "@/i18n";
 
 // An error from the server, with its plain-words message ready to show.
 export class ApiError extends Error {
@@ -29,7 +29,7 @@ async function readMessage(response: Response): Promise<string> {
   try {
     const body = await response.json();
     // Our own errors carry a sentence; validation errors from the framework carry a list.
-    return typeof body.detail === "string" ? body.detail : t.states.somethingWrong;
+    return typeof body.detail === "string" ? translateServerMessage(body.detail) : t.states.somethingWrong;
   } catch {
     return t.states.somethingWrong;
   }

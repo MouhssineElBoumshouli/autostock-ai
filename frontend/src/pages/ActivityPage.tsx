@@ -37,7 +37,7 @@ export function ActivityPage() {
   const data = activity.data;
 
   return (
-    <div className="grid gap-8">
+    <div className="grid grid-cols-1 gap-8">
       <PageHeader title={t.nav.activity} subtitle={t.activity.subtitle} />
 
       <div className="flex flex-wrap gap-2">

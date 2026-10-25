@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 
 import { useMe } from "@/api/auth";
@@ -5,13 +6,19 @@ import { CenteredCard } from "@/components/CenteredCard";
 import { ErrorState } from "@/components/ErrorState";
 import { SignedInContext } from "@/components/SignedIn";
 import { Skeleton } from "@/components/ui/skeleton";
-import { t } from "@/i18n";
+import { showLanguage, t } from "@/i18n";
 
 // Wraps every private page. Not logged in: go to login, then come back here.
 export function RequireLogin() {
   const me = useMe();
   const location = useLocation();
   const here = encodeURIComponent(location.pathname + location.search);
+  const wantedLanguage = me.data ? (me.data.user.language ?? me.data.organization.language) : null;
+
+  // The person's own language, else the shop's. A different one than this page was built in reloads it.
+  useEffect(() => {
+    if (wantedLanguage) showLanguage(wantedLanguage);
+  }, [wantedLanguage]);
 
   if (me.isPending) {
     return (

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiRequest } from "@/api/client";
+import type { Language } from "@/i18n";
 
 export type Role = "owner" | "manager" | "staff";
 export const roles: Role[] = ["owner", "manager", "staff"];
@@ -13,6 +14,7 @@ export type User = {
   is_active: boolean;
   must_change_password: boolean;
   last_login_at: string | null;
+  language: Language | null; // null = the shop's language
 };
 
 const usersQueryKey = ["users"];

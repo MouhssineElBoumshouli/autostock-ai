@@ -16,7 +16,7 @@ from app.ask.answer_parts import Number
 from app.ask.answers import answer
 from app.ask.question import QUESTION_TYPES, Question, checked_question
 from app.ask.understand import shop_words, understand, understand_as
-from app.ask.understood_line import heading, understood_line
+from app.ask.understood_line import heading, shown_period, understood_line
 from app.auth.permissions import require_role
 from app.db import get_session
 from app.models import Organization, User
@@ -45,7 +45,9 @@ class Suggestion(BaseModel):
     """A "Did you mean" button: send the same question again with this question_type."""
 
     question_type: str
-    label: str
+    label: str  # English; the website builds it from the type, filters and period
+    filters: dict[str, str]
+    period: str | None
 
 
 class AskOut(BaseModel):
@@ -56,6 +58,12 @@ class AskOut(BaseModel):
     filters: dict[str, str]
     understood_by: Literal["model", "rule"]
     ai_note: str | None  # AI_OFF when the local model isn't running
+    ai_on: bool
+    period: str | None  # the period the "I understood" line shows, if this question type takes one
+    # `sentence` and `understood` are English. The website builds them in the person's language from
+    # `key` + `values` and from the type, filters and period above (frontend/src/i18n).
+    key: str
+    values: dict
     sentence: str
     numbers: list[Number]
     suggestions: list[Suggestion]  # when we weren't sure, or the reading is the model's best guess
@@ -90,6 +98,10 @@ def ask(body: AskIn, user: User = Depends(anyone), db: Session = Depends(get_ses
         filters=question.filters(),
         understood_by=understood_by,
         ai_note=None if ai_on else AI_OFF,
+        ai_on=ai_on,
+        period=shown_period(question) if question.type in QUESTION_TYPES else None,
+        key=result.key,
+        values=result.values,
         sentence=result.sentence,
         numbers=result.numbers,
         suggestions=[_suggestion(question, question_type) for question_type in question.suggestions],
@@ -100,4 +112,5 @@ def _suggestion(question: Question, question_type: str) -> Suggestion:
     """Labeled with what was understood so far: "Stock · Rabat - Agdal"."""
     used = QUESTION_TYPES[question_type]
     kept = {name: value for name, value in question.filters().items() if name in used and name != "part"}
-    return Suggestion(question_type=question_type, label=heading(Question(question_type, **kept)))
+    suggested = Question(question_type, **kept)
+    return Suggestion(question_type=question_type, label=heading(suggested), filters=kept, period=shown_period(suggested))

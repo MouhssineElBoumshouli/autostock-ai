@@ -26,11 +26,12 @@ export type OrderLine = {
   expected: number;
   cushion: number;
   need: number;
+  sold_last_90_days: number;
   unit_cost: number | null;
   line_cost: number;
   missed_sales_prevented: number;
   value_per_dirham: number | null;
-  reason: string;
+  reason: string; // English; screens show orderReason(line) instead
 };
 
 export type OrderRun = {

@@ -41,9 +41,9 @@ export function SupplierSection({
 
   return (
     <Card className="py-0">
-      <CardHeader className="flex-row items-center justify-between gap-4 border-b py-4">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b py-4">
         <CardTitle>{supplierName ?? t.orders.noSupplierGroup}</CardTitle>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="tabular-nums text-body-medium text-on-surface-variant">{t.orders.supplierTotal(formatMoney(total, currency))}</span>
           {canEdit && supplierId && pending.length > 1 && (
             <Button size="sm" variant="tonal" disabled={approveAll.isPending} onClick={approveAllForSupplier}>

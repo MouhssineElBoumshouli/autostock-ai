@@ -114,8 +114,10 @@ function PartDetails({
     <div className="flex min-h-full flex-col">
       <header className="flex items-start gap-3 border-b p-6">
         <div className="grid min-w-0 flex-1 gap-1">
-          <SheetTitle className="text-headline-small">{part.name}</SheetTitle>
-          <p className="text-body-medium text-on-surface-variant">
+          <SheetTitle dir="auto" className="text-headline-small">
+            {part.name}
+          </SheetTitle>
+          <p dir="auto" className="text-body-medium text-on-surface-variant">
             {[part.sku, part.brand].filter(Boolean).join(" · ")}
           </p>
           <div className="mt-1">
@@ -167,7 +169,9 @@ function PartDetails({
         <Section title={t.part.supplier}>
           {part.supplier ? (
             <div className="grid gap-1 rounded-md border px-4 py-3 text-body-medium">
-              <p className="font-medium">{part.supplier.name}</p>
+              <p dir="auto" className="font-medium">
+                {part.supplier.name}
+              </p>
               {part.supplier.phone && (
                 <a href={`tel:${part.supplier.phone}`} className="w-fit text-on-surface-variant hover:text-on-surface">
                   {part.supplier.phone}
@@ -179,7 +183,7 @@ function PartDetails({
                 </a>
               )}
               {part.supplier.delivery_days !== null && (
-                <p className="text-on-surface-variant">{t.part.deliveryDays(part.supplier.delivery_days)}</p>
+                <p className="text-on-surface-variant">{t.part.deliveryDays(t.common.days(part.supplier.delivery_days, formatNumber(part.supplier.delivery_days)))}</p>
               )}
             </div>
           ) : (
@@ -264,8 +268,10 @@ function EquivalentRow({
     <li className="grid gap-1.5 px-4 py-3 text-body-medium">
       <div className="flex items-start justify-between gap-3">
         <div className="grid min-w-0 gap-0.5">
-          <p className="font-medium">{equivalent.name}</p>
-          <p className="text-body-small text-on-surface-variant">
+          <p dir="auto" className="font-medium">
+            {equivalent.name}
+          </p>
+          <p dir="auto" className="text-body-small text-on-surface-variant">
             {[equivalent.sku, equivalent.brand].filter(Boolean).join(" · ")}
           </p>
         </div>
@@ -399,8 +405,10 @@ function LinkPartSearch({
                   className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-start hover:bg-on-surface/8"
                 >
                   <span className="grid min-w-0 gap-0.5">
-                    <span className="truncate text-body-medium">{row.name}</span>
-                    <span className="truncate text-body-small text-on-surface-variant">
+                    <span dir="auto" className="truncate text-body-medium">
+                      {row.name}
+                    </span>
+                    <span dir="auto" className="truncate text-body-small text-on-surface-variant">
                       {[row.sku, row.brand].filter(Boolean).join(" · ")}
                     </span>
                   </span>

@@ -74,9 +74,13 @@ export function EntityManagerCard({
             <ul className="divide-y border-t">
               {items!.map((item) => (
                 <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 px-6 py-3">
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <span className="text-body-large">{item.name}</span>
-                    {item.in_use && <Badge variant="neutral">{usedNote}</Badge>}
+                    {item.in_use && (
+                      <Badge variant="neutral" className="h-auto min-h-6 py-0.5 whitespace-normal">
+                        {usedNote}
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex gap-1">
                     <RenameButton item={item} rename={rename} />

@@ -25,7 +25,7 @@ export function LateDeliveriesCard({ deliveries }: { deliveries: LateDelivery[] 
             <li key={delivery.id} className="flex items-center justify-between gap-4 px-6 py-3">
               <span className="grid gap-0.5">
                 <span className="text-body-large">
-                  {delivery.order_number} · {delivery.supplier_name}
+                  <bdi dir="auto">{delivery.order_number}</bdi> · <bdi dir="auto">{delivery.supplier_name}</bdi>
                 </span>
                 <span className="text-body-small text-on-surface-variant">
                   {t.home.lateDeliveries.sentOn(formatDay(delivery.sent_at.slice(0, 10)))}

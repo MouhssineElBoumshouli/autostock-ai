@@ -1,8 +1,11 @@
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 
 import type { HorizonForecast } from "@/api/forecasts";
-import { t } from "@/i18n";
+import { direction, t } from "@/i18n";
 import { formatMonthDay, formatNumber } from "@/lib/format";
+
+// Arabic reads right to left, so time runs from right (oldest) to left (newest) there.
+const rtl = direction === "rtl";
 
 type ChartRow = { label: string; actual?: number; base?: number; belowPoint?: number; abovePoint?: number; tooltip: string };
 
@@ -28,9 +31,10 @@ export function ForecastChart({ weeks, horizon }: { weeks: { week_start: string;
 
   return (
     <ResponsiveContainer width="100%" height={160}>
-      <BarChart data={rows} margin={{ top: 4, right: 28, bottom: 0, left: 4 }} barCategoryGap={4}>
+      <BarChart data={rows} margin={{ top: 4, right: rtl ? 4 : 28, bottom: 0, left: rtl ? 28 : 4 }} barCategoryGap={4}>
         <XAxis
           dataKey="label"
+          reversed={rtl}
           tickLine={false}
           axisLine={{ stroke: "var(--color-outline-variant)" }}
           tick={{ fontSize: 10, fill: "var(--color-on-surface-variant)" }}
