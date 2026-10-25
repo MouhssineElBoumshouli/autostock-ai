@@ -758,6 +758,10 @@ export const ar: typeof en = {
         subject ? `توقع ${subject} للـ30 يومًا القادمة` : "التوقع للـ30 يومًا القادمة",
       sales_vs_last: (subject: string | null) =>
         subject ? `مبيعات ${subject} مقارنة بالفترة السابقة` : "المبيعات مقارنة بالفترة السابقة",
+      today_briefing: () => "ملخص اليوم",
+      compare_branches: (subject: string | null) => (subject ? `مقارنة الفروع، ${subject}` : "مقارنة الفروع"),
+      explain_part_change: (subject: string | null) => (subject ? `ما الذي تغير في ${subject}` : "ما الذي تغير"),
+      part_details: (subject: string | null) => (subject ? `تفاصيل ${subject}` : "تفاصيل القطعة"),
     },
     categorySubject: (category: string) => `${category} (فئة)`,
     periodWords: {
@@ -819,6 +823,19 @@ export const ar: typeof en = {
       late_deliveries_none: () => "لا يوجد تسليم متأخر من الموردين.",
       late_deliveries: (w: AnswerWords) =>
         `${counted(w.count, w.shownCount, "تسليم واحد متأخر", "تسليمان متأخران", "تسليمات متأخرة", "تسليمًا متأخرًا")}. الأكثر تأخرًا: ${w.orderNumber} من ${w.supplier}، ${w.daysLate}.`,
+      today_briefing: (w: AnswerWords) =>
+        `هذا الأسبوع (${w.range}): بيع ${w.pieces}، والأسبوع العادي ${w.normalWeek}. تنبيهات تحتاج إجراء: ${w.needsAction}، ` +
+        `تستحق نظرة: ${w.worthALook}. للطلب: ${w.lines} أسطر. تسليمات متأخرة: ${w.late}. قطع ستنفد قريبًا: ${w.runningOut}.`,
+      compare_branches: (w: AnswerWords) =>
+        `مبيعات ${w.subject}، ${w.period} (${w.range})، من الأكثر مبيعًا: ${w.branchList}. مقارنة بـ ${w.beforeRange}.`,
+      explain_part_change: (w: AnswerWords) =>
+        `${w.Subject}${inBranch(w.branch)}، ${w.period} (${w.range}): ${w.pieces}، ` +
+        `${w.percent === null ? "بدون مبيعات قبلها" : w.percent === 0 ? "نفس" : `${w.percent > 0 ? "بارتفاع" : "بانخفاض"} ${Math.abs(w.percent)}% مقارنة بـ`} ` +
+        `${w.beforeRange} (${w.beforePieces}). نفس الأيام من السنة الماضية: ${w.lastYear}. أيام نفاد المخزون (لكل فرع): ${w.outNow} الآن، ` +
+        `${w.outBefore} قبل. في المخزون الآن: ${w.inStock}. المتوقع في 30 يومًا: ${w.expected}.`,
+      part_details: (w: AnswerWords) =>
+        `${w.Subject}${inBranch(w.branch)}: ${w.inStock} في المخزون، ${w.sold30} مباعة في آخر 30 يومًا، ` +
+        `ونحو ${w.expected} متوقعة في الـ30 يومًا القادمة. الأكثر مبيعًا: ${w.name} (${w.sku}).`,
     },
     numberLabels: {
       pieces_sold: "القطع المبيعة",
@@ -844,10 +861,32 @@ export const ar: typeof en = {
       total_cost: "التكلفة الإجمالية",
       open_alerts: "التنبيهات المفتوحة",
       late_deliveries: "التسليمات المتأخرة",
+      pieces_this_week: "القطع المباعة هذا الأسبوع",
+      normal_week: "أسبوع عادي",
+      needs_action: "تنبيهات تحتاج إجراء",
+      worth_a_look: "تستحق نظرة",
+      same_days_last_year: "نفس الأيام من السنة الماضية",
+      days_out_of_stock_now: "أيام نفاد المخزون، هذه الفترة",
+      days_out_of_stock_before: "أيام نفاد المخزون، الفترة السابقة",
+      in_stock: "في المخزون الآن",
+      matching_parts: "القطع المطابقة",
+      sold_last_30_days: "المباع، آخر 30 يومًا",
     },
     numberLabelsAbout: {
       days_left: (about: string) => `${about}، الأيام المتبقية`,
       days_late: (about: string) => `${about}، أيام التأخير`,
+    },
+    assistant: {
+      aiOffNote: "الذكاء الاصطناعي متوقف: تُقرأ الأسئلة بكلمات مفتاحية بسيطة، فاسأل ببساطة («مخزون الفرامل في الرباط»).",
+      lookingUp: "بحث",
+      writing: "جارٍ الكتابة…",
+      basedOn: "بناءً على:",
+      notChecked: "لم أتمكن من التحقق من كل رقم في الجواب المكتوب مقارنة ببياناتك، فهذه أرقام متجرك مباشرة:",
+      noLookup: "لم أتمكن من الإجابة من بيانات متجرك. حاول طرح السؤال بطريقة أخرى.",
+      newConversation: "محادثة جديدة",
+      followUpHint: "أسئلة المتابعة تحتفظ بالمحادثة: «وفي الرباط؟»، «لماذا؟»",
+      change: (percent: number | null) =>
+        percent === null ? "بدون مبيعات قبلها" : percent === 0 ? "بدون تغيير" : `${percent > 0 ? "بارتفاع" : "بانخفاض"} ${Math.abs(percent)}%`,
     },
     homeBox: {
       inputLabel: "اسأل متجرك",

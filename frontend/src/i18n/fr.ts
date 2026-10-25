@@ -751,6 +751,10 @@ export const fr: typeof en = {
         subject ? `Prévision de ${subject} sur les 30 prochains jours` : "Prévision sur les 30 prochains jours",
       sales_vs_last: (subject: string | null) =>
         subject ? `Ventes de ${subject} par rapport à la période précédente` : "Ventes par rapport à la période précédente",
+      today_briefing: () => "Le point du jour",
+      compare_branches: (subject: string | null) => (subject ? `Agences comparées, ${subject}` : "Agences comparées"),
+      explain_part_change: (subject: string | null) => (subject ? `Ce qui a changé pour ${subject}` : "Ce qui a changé"),
+      part_details: (subject: string | null) => (subject ? `Détails de ${subject}` : "Détails de la pièce"),
     },
     categorySubject: (category: string) => `${category} (famille)`,
     periodWords: {
@@ -816,6 +820,19 @@ export const fr: typeof en = {
       late_deliveries_none: () => "Aucune livraison fournisseur en retard.",
       late_deliveries: (w: AnswerWords) =>
         `${plural(w.count, "1 livraison est", `${w.shownCount} livraisons sont`)} en retard. La plus en retard : ${w.orderNumber} de ${w.supplier}, ${w.daysLate}.`,
+      today_briefing: (w: AnswerWords) =>
+        `Cette semaine (${w.range}) : ${w.pieces} vendues, une semaine normale c’est ${w.normalWeek}. ${w.needsAction} alertes à traiter, ` +
+        `${w.worthALook} à surveiller. À commander : ${w.lines} lignes. Livraisons en retard : ${w.late}. Bientôt en rupture : ${w.runningOut} pièces.`,
+      compare_branches: (w: AnswerWords) =>
+        `Ventes de ${w.subject}, ${w.period} (${w.range}), de la plus vendeuse à la moins vendeuse : ${w.branchList}. Comparé à ${w.beforeRange}.`,
+      explain_part_change: (w: AnswerWords) =>
+        `${w.Subject}${inBranch(w.branch)}, ${w.period} (${w.range}) : ${w.pieces}, ` +
+        `${w.percent === null ? "aucune vente avant" : w.percent === 0 ? "autant que" : `${w.percent > 0 ? "en hausse de" : "en baisse de"} ${Math.abs(w.percent)} % par rapport à`} ` +
+        `${w.beforeRange} (${w.beforePieces}). Mêmes jours l’an dernier : ${w.lastYear}. Jours en rupture (par agence) : ${w.outNow} maintenant, ` +
+        `${w.outBefore} avant. En stock : ${w.inStock}. Attendu sur 30 jours : ${w.expected}.`,
+      part_details: (w: AnswerWords) =>
+        `${w.Subject}${inBranch(w.branch)} : ${w.inStock} en stock, ${w.sold30} vendues sur 30 jours, ` +
+        `environ ${w.expected} attendues sur les 30 prochains jours. Meilleure vente : ${w.name} (${w.sku}).`,
     },
     numberLabels: {
       pieces_sold: "Pièces vendues",
@@ -841,10 +858,37 @@ export const fr: typeof en = {
       total_cost: "Coût total",
       open_alerts: "Alertes ouvertes",
       late_deliveries: "Livraisons en retard",
+      pieces_this_week: "Pièces vendues cette semaine",
+      normal_week: "Une semaine normale",
+      needs_action: "Alertes à traiter",
+      worth_a_look: "À surveiller",
+      same_days_last_year: "Mêmes jours l’an dernier",
+      days_out_of_stock_now: "Jours en rupture, cette période",
+      days_out_of_stock_before: "Jours en rupture, période précédente",
+      in_stock: "En stock",
+      matching_parts: "Pièces trouvées",
+      sold_last_30_days: "Vendues, 30 derniers jours",
     },
     numberLabelsAbout: {
       days_left: (about: string) => `${about}, jours restants`,
       days_late: (about: string) => `${about}, jours de retard`,
+    },
+    assistant: {
+      aiOffNote: "L’IA est éteinte : les questions sont lues avec de simples mots-clés, posez-les simplement (« stock des plaquettes à Rabat »).",
+      lookingUp: "Recherche",
+      writing: "Rédaction…",
+      basedOn: "D’après :",
+      notChecked:
+        "Je n’ai pas pu vérifier chaque chiffre de la réponse rédigée avec vos données, voici donc directement les chiffres de votre magasin :",
+      noLookup: "Je n’ai pas pu répondre à partir des données de votre magasin. Essayez de poser la question autrement.",
+      newConversation: "Nouvelle conversation",
+      followUpHint: "Les questions de suite gardent la conversation : « et à Rabat ? », « pourquoi ? »",
+      change: (percent: number | null) =>
+        percent === null
+          ? "aucune vente avant"
+          : percent === 0
+            ? "stable"
+            : `${percent > 0 ? "en hausse de" : "en baisse de"} ${Math.abs(percent)} %`,
     },
     homeBox: {
       inputLabel: "Interrogez votre magasin",

@@ -29,6 +29,20 @@ export type AnswerWords = {
   orderNumber: string;
   supplier: string;
   words: string | null;
+  // The assistant's own lookups (briefing, branches compared, a part's story and details).
+  normalWeek: string;
+  needsAction: string;
+  worthALook: string;
+  lines: string;
+  late: string;
+  runningOut: string;
+  branchList: string; // "Casablanca - Maarif 976 pieces (up 3%), Rabat - Agdal …"
+  lastYear: string;
+  outNow: string;
+  outBefore: string;
+  inStock: string;
+  expected: string;
+  sold30: string;
 };
 
 const inBranch = (branch: string | null) => (branch ? ` in ${branch}` : "");
@@ -770,6 +784,10 @@ export const en = {
         subject ? `Forecast of ${subject} for the next 30 days` : "Forecast for the next 30 days",
       sales_vs_last: (subject: string | null) =>
         subject ? `Sales of ${subject} compared with the period before` : "Sales compared with the period before",
+      today_briefing: () => "Today's briefing",
+      compare_branches: (subject: string | null) => (subject ? `Branches compared, ${subject}` : "Branches compared"),
+      explain_part_change: (subject: string | null) => (subject ? `What changed for ${subject}` : "What changed"),
+      part_details: (subject: string | null) => (subject ? `Details of ${subject}` : "Part details"),
     } as Record<string, (subject: string | null) => string>,
     categorySubject: (category: string) => `${category} (category)`,
     periodWords: {
@@ -833,6 +851,19 @@ export const en = {
       late_deliveries_none: () => "No supplier delivery is late.",
       late_deliveries: (w: AnswerWords) =>
         `${w.shownCount} ${w.count === 1 ? "delivery is" : "deliveries are"} late. Most late: ${w.orderNumber} from ${w.supplier}, ${w.daysLate}.`,
+      today_briefing: (w: AnswerWords) =>
+        `This week (${w.range}): ${w.pieces} sold, a normal week is ${w.normalWeek}. ${w.needsAction} alerts need action, ` +
+        `${w.worthALook} are worth a look. To order: ${w.lines} lines. Late deliveries: ${w.late}. Running out soon: ${w.runningOut} parts.`,
+      compare_branches: (w: AnswerWords) =>
+        `Sales of ${w.subject}, ${w.period} (${w.range}), most sold first: ${w.branchList}. Compared with ${w.beforeRange}.`,
+      explain_part_change: (w: AnswerWords) =>
+        `${w.Subject}${inBranch(w.branch)}, ${w.period} (${w.range}): ${w.pieces}, ` +
+        `${w.percent === null ? "no sales before" : w.percent === 0 ? "the same as" : `${w.percent > 0 ? "up" : "down"} ${Math.abs(w.percent)}% on`} ` +
+        `${w.beforeRange} (${w.beforePieces}). Same days last year: ${w.lastYear}. Days out of stock (per branch): ${w.outNow} now, ` +
+        `${w.outBefore} before. In stock now: ${w.inStock}. Expected next 30 days: ${w.expected}.`,
+      part_details: (w: AnswerWords) =>
+        `${w.Subject}${inBranch(w.branch)}: ${w.inStock} in stock, ${w.sold30} sold in the last 30 days, ` +
+        `about ${w.expected} expected in the next 30 days. Best seller: ${w.name} (${w.sku}).`,
     } as Record<string, (w: AnswerWords) => string>,
     // Labels of the real numbers under an answer.
     numberLabels: {
@@ -859,11 +890,33 @@ export const en = {
       total_cost: "Total cost",
       open_alerts: "Open alerts",
       late_deliveries: "Late deliveries",
+      pieces_this_week: "Pieces sold this week",
+      normal_week: "A normal week",
+      needs_action: "Alerts that need action",
+      worth_a_look: "Worth a look",
+      same_days_last_year: "Same days last year",
+      days_out_of_stock_now: "Days out of stock, this period",
+      days_out_of_stock_before: "Days out of stock, period before",
+      in_stock: "In stock now",
+      matching_parts: "Matching parts",
+      sold_last_30_days: "Sold, last 30 days",
     } as Record<string, string>,
     numberLabelsAbout: {
       days_left: (about: string) => `${about}, days left`,
       days_late: (about: string) => `${about}, days late`,
     } as Record<string, (about: string) => string>,
+    assistant: {
+      aiOffNote: "AI is off: questions are read with simple keyword rules, so ask them simply (“stock of brake pads in Rabat”).",
+      lookingUp: "Looking up",
+      writing: "Writing…",
+      basedOn: "Based on:",
+      notChecked: "I couldn't check every number in the written answer against your data, so here are your shop's numbers directly:",
+      noLookup: "I couldn't answer that from your shop's data. Try asking it another way.",
+      newConversation: "New conversation",
+      followUpHint: "Follow-up questions keep the conversation: “and in Rabat?”, “why?”",
+      change: (percent: number | null) =>
+        percent === null ? "no sales before" : percent === 0 ? "the same" : `${percent > 0 ? "up" : "down"} ${Math.abs(percent)}%`,
+    },
     homeBox: {
       inputLabel: "Ask your shop",
       placeholder: "Ask your shop…",
