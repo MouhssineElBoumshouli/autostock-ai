@@ -48,6 +48,7 @@ AI must be useful and measurable, never decoration.
 - Forecasts are always compared against a simple baseline (for example "average of the last 4 weeks"). Show the measured result honestly. If the model does not beat the baseline for a part, use the baseline and say so.
 - The AI never places orders or changes data by itself. A person approves.
 - Every AI answer about the shop shows the real numbers it used.
+- The model may write answers, but every number must be checked against real data before it's shown.
 - **Everything must be free, forever.** No paid APIs, no API keys, no cloud AI services. All AI runs on the shop's own computer with free, open-source tools (scikit-learn, small local models).
 - Prefer classic machine learning we train and measure ourselves over large language models.
 - If a feature truly needs a language model, it uses an optional local model through Ollama (free), in one module: `backend/app/ai/llm.py`. If Ollama isn't installed, the feature says "AI is off" and the rest of the app works.
