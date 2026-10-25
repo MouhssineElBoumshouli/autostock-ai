@@ -1,5 +1,6 @@
-"""The "Ask your shop" assistant: read-only lookups the model may call, every written number checked
-against them before it is shown, follow-ups, money hidden from staff, each shop sees only its own data.
+"""The "Ask your shop" assistant: the app reads the question (rule, follow-up, or the model as strict
+JSON), runs one read-only lookup, and the model writes the answer from its facts; every written number
+is checked before it is shown. Also: money hidden from staff, each shop sees only its own data.
 
 The model is a scripted fake here: these tests check the app around it, not the model itself
 (that is measured by app/ask/check_assistant.py on the 60 open questions).
@@ -13,12 +14,12 @@ import pytest
 from sqlalchemy import func, select
 
 from app.ai import llm
+from app.ask import model_reader
 from app.ask.assistant import MONEY_HIDDEN, CheckedText
-from app.ask.keyword_rule import read_with_rule
+from app.ask.keyword_rule import read_follow_up, read_with_rule
 from app.ask.number_check import AllowedNumbers, numbers_in_words, numbers_written
-from app.ask.question import ShopWords
-from app.ask.tools import TOOLS, for_the_model, look_up
-from app.ask.understand import shop_words
+from app.ask.question import Question, ShopWords
+from app.ask.tools import for_the_model, look_up
 from app.db import SessionLocal
 from app.models import AuditLog, StockOut
 from tests.helpers import OWNER_PASSWORD, create_other_shop, logged_in_browser
@@ -27,43 +28,48 @@ from tests.test_ask import (  # noqa: F401  (shop is a fixture)
 )
 from tests.test_today import add_alert
 
+SHOP = ShopWords(categories=("Brakes", "Oils"), branches=("Casablanca - Maarif", RABAT), part_words=frozenset(
+    {"brake", "pads", "oil", "filter", "filters", "plaquettes"}))
+NOTHING = {"part": None, "category": None, "branch": None, "period": None}
+
 
 class FakeModel:
-    """Plays back one scripted reply per call and remembers what it was sent."""
+    """Plays back scripted writing (one reply per call) and readings, and remembers what it was sent."""
 
-    def __init__(self, *replies: list[dict]):
-        self.replies = list(replies)
-        self.calls: list[dict] = []
+    def __init__(self, writes: list[list[str]], readings: list[object]):
+        self.writes, self.readings = list(writes), list(readings)
+        self.chats: list[list[dict]] = []
+        self.reads: list[dict] = []
 
-    def __call__(self, messages, tools=None, model=None):
-        self.calls.append({"messages": copy.deepcopy(messages), "tools": tools})
-        yield from self.replies.pop(0)
+    def chat(self, messages, tools=None, model=None):
+        assert tools is None, "the writer never gets tools"
+        self.chats.append(copy.deepcopy(messages))
+        yield from ({"text": piece} for piece in self.writes.pop(0))
 
-
-def looks_up(*calls: tuple[str, dict]) -> list[dict]:
-    return [{"tool_calls": [{"function": {"name": name, "arguments": arguments}} for name, arguments in calls]}]
-
-
-def writes(*pieces: str) -> list[dict]:
-    return [{"text": piece} for piece in pieces]
+    def ask_json(self, instructions, text, schema, model=None):
+        self.reads.append({"instructions": instructions, "text": text, "schema": schema})
+        return self.readings.pop(0)
 
 
 @pytest.fixture
 def model(monkeypatch):
-    """Installs a fake model: model(reply, reply, ...) returns it."""
+    """model(writes=[[pieces...], ...], readings=[json, ...]) installs a fake model and returns it."""
     monkeypatch.setattr(llm, "is_on", lambda model=None: True)
 
-    def install(*replies):
-        fake = FakeModel(*replies)
-        monkeypatch.setattr(llm, "chat", fake)
+    def install(writes=(), readings=()):
+        fake = FakeModel(list(writes), list(readings))
+        monkeypatch.setattr(llm, "chat", fake.chat)
+        monkeypatch.setattr(llm, "ask_json", fake.ask_json)
         return fake
 
     return install
 
 
-def chat(browser, question: str, earlier: list[dict] | None = None) -> list[dict]:
-    response = browser.post("/api/ask/chat", json={"question": question, "earlier": earlier or []})
-    assert response.status_code == 200, response.text
+def chat(browser, question: str, previous: dict | None = None, status: int = 200) -> list[dict]:
+    response = browser.post("/api/ask/chat", json={"question": question, "previous": previous})
+    assert response.status_code == status, response.text
+    if status != 200:
+        return []
     assert response.headers["content-type"].startswith("application/x-ndjson")
     return [json.loads(line) for line in response.text.splitlines() if line]
 
@@ -77,66 +83,86 @@ def shown(events: list[dict]) -> str:
     return "".join(event["text"] for event in events if event["type"] == "text")
 
 
-# The conversation
+def writer_prompt(fake: FakeModel, call: int = 0) -> str:
+    return fake.chats[call][0]["content"]
 
-def test_it_looks_up_then_writes_and_every_number_is_checked(browser, shop, model):
-    model(looks_up(("sales_of", {"part": "oil filters", "period": "this_week"})),
-          writes("We sold 5 oil ", "filters this week. ", "That is 500 MAD."))
-    events = chat(browser, "how are oil filters doing this week?")
+
+# Read, look up, write
+
+def test_a_question_the_rule_reads_is_looked_up_then_written_and_checked(browser, shop, model):
+    fake = model(writes=[["We sold 5 oil ", "filters this week. ", "That is 500 MAD."]])
+    events = chat(browser, "how many oil filters did we sell this week?")
     assert events[0] == {"type": "looking_up", "tool": "sales_of", "filters": {"part": "oil filters", "period": "this_week"}}
     result = done(events)
-    assert result["checked"] is True and result["wrong_numbers"] == []
-    assert result["text"] == "We sold 5 oil filters this week. That is 500 MAD."
+    assert result["read_by"] == "rule" and fake.reads == [], "the model isn't asked to read what the rule is sure of"
+    assert result["question"] == {"type": "sales_of", "filters": {"part": "oil filters", "period": "this_week"}}
+    assert result["checked"] is True and result["text"] == "We sold 5 oil filters this week. That is 500 MAD."
     # Sent sentence by sentence, never half a number.
     assert [event["text"] for event in events if event["type"] == "text"] == ["We sold 5 oil filters this week.", " That is 500 MAD."]
-    # The numbers used, shown under the answer, with the app's own sentence for each lookup.
-    assert result["lookups"][0]["tool"] == "sales_of" and result["lookups"][0]["values"]["pieces"] == 5
+    # The writer only gets that lookup's facts (money in MAD, not centimes); the shown numbers come with the answer.
+    assert '"pieces": 5' in writer_prompt(fake) and '"money": 500.0' in writer_prompt(fake)
     assert result["lookups"][0]["sentence"].startswith("Oil filter: 5 pieces sold")
 
 
-def test_a_wrong_number_stops_the_answer_before_it_is_shown(browser, shop, model):
-    model(looks_up(("sales_of", {"part": "oil filters", "period": "this_week"})),
-          writes("We sold 5 oil filters this week. ", "Next week we will sell 77. ", "Great!"))
-    events = chat(browser, "oil filters this week?")
+def test_a_wrong_number_stops_the_answer_and_the_app_answers_instead(browser, shop, model):
+    fake = model(writes=[["We sold 5 oil filters this week. ", "Next week we will sell 77. ", "Great!"]])
+    events = chat(browser, "how many oil filters did we sell this week?")
     result = done(events)
     assert result["checked"] is False and result["wrong_numbers"] == ["77"]
     assert "77" not in shown(events) and "Great" not in shown(events)
     assert result["lookups"], "the website shows the app's own sentences from these instead"
+    assert len(fake.chats) == 1, "no second try: the app's own answer is shown"
 
 
-def test_simple_arithmetic_on_looked_up_numbers_is_allowed(browser, shop, model):
+def test_comparisons_come_computed_and_simple_arithmetic_passes(browser, shop, model):
     # Brake pads: 6 this week, 12 the week before.
-    model(looks_up(("sales_vs_last", {"part": "brake pads", "period": "this_week"})),
-          writes("Brake pads: 6 this week against 12, so 6 fewer, down 50%. ", "Roughly half (0.5 times)."))
-    assert done(chat(browser, "brake pads vs last week?"))["checked"] is True
+    fake = model(writes=[["Brake pads: 6 this week against 12, so 6 fewer, down 50%. ", "Roughly half (0.5 times)."]])
+    result = done(chat(browser, "brake pads sales compared to last week"))
+    assert result["checked"] is True
+    assert '"percent": -50' in writer_prompt(fake)
 
 
 def test_numbers_written_in_words_are_checked_too(browser, shop, model):
-    model(looks_up(("sales_of", {"part": "oil filters", "period": "this_week"})), writes("We sold ninety-seven oil filters."),
-          writes("Yes, ninety-seven."))
-    assert done(chat(browser, "oil filters this week?"))["wrong_numbers"] == ["97"]
+    model(writes=[["We sold ninety-seven oil filters."]])
+    assert done(chat(browser, "how many oil filters did we sell this week?"))["wrong_numbers"] == ["97"]
 
 
-def test_a_number_without_any_lookup_fails_even_after_one_more_try(browser, shop, model):
-    fake = model(writes("You sold 42 pieces today."), writes("Still 42."))
-    result = done(chat(browser, "how was today?"))
-    assert result["checked"] is False and result["lookups"] == []
-    assert "these numbers are not in what you looked up: 42" in fake.calls[1]["messages"][-1]["content"]
+@pytest.mark.parametrize("question", ["What's going on today?", "Quoi de neuf ?", "ach kayn lyoum?", "how is the shop doing this week?"])
+def test_broad_questions_get_todays_briefing(browser, shop, model, question):
+    model(writes=[["Fine."]])
+    assert done(chat(browser, question))["question"]["type"] == "today_briefing"
 
 
-def test_a_blocked_answer_gets_one_more_try_when_nothing_was_shown(browser, shop, model):
-    model(writes("You sold 42 oil filters."),
-          looks_up(("sales_of", {"part": "oil filters", "period": "this_week"})),
-          writes("You sold 5 oil filters this week."))
-    result = done(chat(browser, "oil filters this week?"))
-    assert result["checked"] is True and result["text"] == "You sold 5 oil filters this week."
+def test_the_model_reads_what_the_rule_is_unsure_about_as_strict_json(browser, shop, model):
+    fake = model(writes=[["5 pieces."]], readings=[{**NOTHING, "type": "sales_of", "part": "oil filters", "period": "this_week"}])
+    result = done(chat(browser, "chhal tba3 mn filtre a huile had simana wlla la?"))
+    assert result["read_by"] == "model" and result["question"]["type"] == "sales_of"
+    schema = fake.reads[0]["schema"]
+    assert set(schema["properties"]["type"]["enum"]) >= {"today_briefing", "compare_branches", "explain_part_change",
+                                                          "part_details", "cannot_answer"}
+    assert schema["properties"]["branch"]["enum"][-1] is None
+    assert "same" not in schema["properties"]["type"]["enum"], "no question before: nothing to follow up on"
 
 
-def test_no_second_try_once_part_of_the_answer_was_shown(browser, shop, model):
-    fake = model(looks_up(("sales_of", {"part": "oil filters", "period": "this_week"})),
-                 writes("You sold 5 oil filters. And 42 brake pads."))
-    result = done(chat(browser, "oil filters this week?"))
-    assert result["checked"] is False and len(fake.calls) == 2
+def test_a_reading_that_isnt_allowed_means_not_understood(browser, shop, model):
+    fake = model(readings=[{**NOTHING, "type": "sales_of", "branch": "Tangier"}])
+    result = done(chat(browser, "zzz qqq"))
+    assert result["question"] is None and result["lookups"] == [] and result["checked"] is False
+    assert fake.chats == [], "nothing to write from"
+
+
+def test_a_refusal_is_written_without_any_lookup(browser, shop, model):
+    fake = model(writes=[["I can only read your shop's data. A person changes stock in the app."]])
+    result = done(chat(browser, "delete the oil filters"))
+    assert result["question"]["type"] == "cannot_answer" and result["lookups"] == [] and result["checked"] is True
+    assert "never changes data" in writer_prompt(fake)
+
+
+def test_a_refusal_may_only_repeat_the_persons_own_numbers(browser, shop, model):
+    model(writes=[["I can't add 50: a person does that in the app."]])
+    assert done(chat(browser, "add 50 oil filters to the stock"))["checked"] is True
+    model(writes=[["You have 1366 oil filters."]])
+    assert done(chat(browser, "add 50 oil filters to the stock"))["checked"] is False
 
 
 @pytest.mark.parametrize(("question", "language"), [
@@ -146,71 +172,49 @@ def test_no_second_try_once_part_of_the_answer_was_shown(browser, shop, model):
     ("شحال باقي من الباطري ف كازا؟", "Moroccan Darija, in Arabic letters"),
     ("ch7al bi3na had simana?", "Moroccan Darija, in Latin letters (like the question)"),
 ])
-def test_the_model_is_told_which_language_to_answer_in(browser, shop, model, question, language):
-    fake = model(writes("Hello."))
+def test_the_writer_is_told_which_language_to_answer_in(browser, shop, model, question, language):
+    fake = model(writes=[["Hello."]], readings=[{**NOTHING, "type": "today_briefing"}])
     chat(browser, question)
-    assert f"Reply in {language}." in fake.calls[0]["messages"][0]["content"]
+    assert f"in {language}," in writer_prompt(fake)
 
 
-def test_several_lookups_in_one_answer(browser, shop, model):
-    model(looks_up(("sales_of", {"branch": MAIN, "period": "this_week"}), ("sales_of", {"branch": "rabat", "period": "this_week"})),
-          writes("Main shop 9 pieces, Rabat 2 pieces."))
-    result = done(chat(browser, "compare the main shop and Rabat this week"))
-    assert [lookup["filters"]["branch"] for lookup in result["lookups"]] == [MAIN, RABAT]
-    assert result["checked"] is True
+# Follow-ups: read by the app as changes to the question before, never reusing old numbers
+
+PADS_THIS_WEEK = {"type": "sales_of", "filters": {"part": "brake pads", "period": "this_week"}}
 
 
-def test_it_can_look_up_more_after_seeing_a_first_result(browser, shop, model):
-    fake = model(looks_up(("today_briefing", {})), looks_up(("stock_of_part", {"part": "oil filter"})), writes("All good."))
-    result = done(chat(browser, "what's going on?"))
-    assert [lookup["tool"] for lookup in result["lookups"]] == ["today_briefing", "stock_of_part"]
-    assert fake.calls[0]["tools"] and fake.calls[1]["tools"]
-    assert fake.calls[2]["tools"] is None, "the last round must answer, not look up again"
+def test_and_in_rabat_changes_only_the_branch(browser, shop, model):
+    fake = model(writes=[["Rabat: 0 pieces."]])
+    result = done(chat(browser, "and in Rabat?", PADS_THIS_WEEK))
+    assert result["read_by"] == "follow_up" and fake.reads == []
+    assert result["question"] == {"type": "sales_of", "filters": {"part": "brake pads", "branch": RABAT, "period": "this_week"}}
+    assert result["lookups"][0]["values"]["pieces"] == 0
 
 
-def test_a_refusal_needs_no_lookup(browser, shop, model):
-    model(writes("I can only read your shop's data. A person changes stock on the Stock page."))
-    result = done(chat(browser, "set the stock of oil filters to 50"))
-    assert result["checked"] is True and result["lookups"] == []
+def test_a_follow_up_runs_a_fresh_lookup_and_old_numbers_fail(browser, shop, model):
+    model(writes=[["Like before, 6 pieces."]])  # 6 was the whole shop; Rabat sold none
+    assert done(chat(browser, "w f rbat?", PADS_THIS_WEEK))["checked"] is False
 
 
-def test_the_persons_own_numbers_may_be_repeated(browser, shop, model):
-    model(writes("I can't set the stock to 50: a person does that in the app."))
-    assert done(chat(browser, "set the stock of oil filters to 50"))["checked"] is True
+def test_why_about_a_part_explains_what_changed(browser, shop, model):
+    model(writes=[["Down."]])
+    question = done(chat(browser, "pourquoi ?", PADS_THIS_WEEK))["question"]
+    assert question == {"type": "explain_part_change", "filters": {"part": "brake pads", "period": "this_week"}}
 
 
-def test_a_problem_with_a_lookup_is_told_to_the_model(browser, shop, model):
-    fake = model(looks_up(("sales_of", {"branch": "Tangier"}), ("delete_stock", {})), writes("There is no Tangier branch."))
-    result = done(chat(browser, "sales in Tangier"))
-    tool_messages = [message for message in fake.calls[1]["messages"] if message["role"] == "tool"]
-    assert "no branch called 'Tangier'" in tool_messages[0]["content"]
-    assert "no tool called 'delete_stock'" in tool_messages[1]["content"]
-    assert result["lookups"] == []
+def test_a_follow_up_the_rule_cant_read_goes_to_the_model_as_same(browser, shop, model):
+    fake = model(writes=[["Fine."]], readings=[{**NOTHING, "type": "same", "branch": RABAT, "period": "last_week"}])
+    result = done(chat(browser, "hmm kifach kanet f rbat simana li fatet", PADS_THIS_WEEK))
+    assert result["read_by"] == "model"
+    assert result["question"] == {"type": "sales_of", "filters": {"part": "brake pads", "branch": RABAT, "period": "last_week"}}
+    assert "same" in fake.reads[0]["schema"]["properties"]["type"]["enum"]
+    assert '"part": "brake pads"' in fake.reads[0]["instructions"], "the model sees the question before"
 
 
-# Follow-ups
-
-def test_follow_ups_keep_the_conversation(browser, shop, model):
-    fake = model(looks_up(("sales_of", {"part": "oil filters", "branch": "Rabat", "period": "this_week"})), writes("2 in Rabat."))
-    earlier = [{"question": "oil filters sold this week?", "answer": "We sold 5 oil filters this week."}]
-    result = done(chat(browser, "and in Rabat?", earlier))
-    messages = fake.calls[0]["messages"]
-    assert [message["role"] for message in messages] == ["system", "user", "assistant", "user"]
-    assert messages[1]["content"] == "oil filters sold this week?" and messages[3]["content"] == "and in Rabat?"
-    assert result["checked"] is True and result["lookups"][0]["values"]["pieces"] == 2
-
-
-def test_numbers_from_earlier_answers_must_be_looked_up_again(browser, shop, model):
-    model(writes("Like I said, 5."), writes("Still 5."))
-    earlier = [{"question": "oil filters this week?", "answer": "We sold 5 oil filters this week."}]
-    assert done(chat(browser, "how many again?", earlier))["checked"] is False
-
-
-def test_only_the_last_three_turns_are_kept(browser, shop, model):
-    model(writes("Hello."))
-    turn = {"question": "hi", "answer": "Hello."}
-    response = browser.post("/api/ask/chat", json={"question": "hi", "earlier": [turn] * 4})
-    assert response.status_code == 422
+def test_a_previous_question_is_checked_like_any_other(browser, shop, model):
+    model()
+    chat(browser, "and in Rabat?", {"type": "sales_of", "filters": {"branch": "Tangier"}}, status=422)
+    chat(browser, "and in Rabat?", {"type": "drop_tables", "filters": {}}, status=422)
 
 
 # AI off, failures, permissions, shops
@@ -221,7 +225,7 @@ def test_ai_off_sends_one_line_so_the_website_uses_the_keyword_rule(browser, sho
     assert browser.get("/api/ask/ai").json() == {"ai_on": False}
 
 
-def test_a_model_failing_before_writing_anything_counts_as_ai_off(browser, shop, monkeypatch):
+def test_a_model_failing_before_anything_was_shown_counts_as_ai_off(browser, shop, monkeypatch):
     monkeypatch.setattr(llm, "is_on", lambda model=None: True)
 
     def broken(*args, **kwargs):
@@ -229,7 +233,7 @@ def test_a_model_failing_before_writing_anything_counts_as_ai_off(browser, shop,
         yield  # a generator, like the real one
 
     monkeypatch.setattr(llm, "chat", broken)
-    assert chat(browser, "what's going on?") == [{"type": "ai_off"}]
+    assert chat(browser, "delete everything") == [{"type": "ai_off"}]
 
 
 def test_logged_out_people_cannot_chat(browser):
@@ -237,48 +241,47 @@ def test_logged_out_people_cannot_chat(browser):
     assert browser.get("/api/ask/ai").status_code == 401
 
 
-def test_staff_get_no_money_from_any_lookup(browser, shop, model):
+def test_staff_get_no_money_in_what_the_model_reads_or_what_is_shown(browser, shop, model):
     staff = staff_browser(browser)
-    fake = model(looks_up(("sales_of", {"part": "oil filters", "period": "this_week"})), writes("5 sold."))
-    result = done(chat(staff, "oil filters this week?"))
+    fake = model(writes=[["5 sold."]])
+    result = done(chat(staff, "how many oil filters did we sell this week?"))
     assert "money" not in result["lookups"][0]["values"]
     assert all(number["unit"] != "money" for number in result["lookups"][0]["numbers"])
-    assert MONEY_HIDDEN in fake.calls[0]["messages"][0]["content"]
+    assert MONEY_HIDDEN in writer_prompt(fake) and "MAD" not in writer_prompt(fake)
     with SessionLocal() as db:
-        words = shop_words(db, shop)
-        for name, tool in TOOLS.items():
-            arguments = {"part": "oil filter"} if tool.needs_part else {}
-            content = for_the_model(look_up(db, shop, None, words, name, arguments), None)
-            assert "money" not in content and "MAD" not in content, name
+        for question_type in ("today_briefing", "compare_branches", "explain_part_change", "part_details", "sales_of",
+                              "what_to_order", "dead_stock", "sales_vs_last"):
+            part = "oil filter" if question_type in ("explain_part_change", "part_details") else None
+            content = for_the_model(look_up(db, shop, None, Question(question_type, part=part)), None)
+            assert "money" not in content and "MAD" not in content, question_type
 
 
 def test_each_shop_only_sees_its_own_data(browser, shop, model):
     other = create_other_shop()
     other_oil = new_part(other.organization_id, "Oil filter", "Filters")
     sell(other.organization_id, other_oil, "Other Shop", days_ago=0, quantity=99)
-    model(looks_up(("sales_of", {"part": "oil filters", "period": "this_week"})), writes("5."))
-    assert done(chat(browser, "oil filters this week?"))["lookups"][0]["values"]["pieces"] == 5
-    model(looks_up(("sales_of", {"part": "oil filters", "period": "this_week"})), writes("99."))
+    model(writes=[["5."]])
+    assert done(chat(browser, "how many oil filters did we sell this week?"))["lookups"][0]["values"]["pieces"] == 5
+    model(writes=[["99."]])
     other_owner = logged_in_browser("owner@other.ma", OWNER_PASSWORD)
-    assert done(chat(other_owner, "oil filters this week?"))["lookups"][0]["values"]["pieces"] == 99
+    assert done(chat(other_owner, "how many oil filters did we sell this week?"))["lookups"][0]["values"]["pieces"] == 99
 
 
 def test_asking_changes_nothing(browser, shop, model):
     with SessionLocal() as db:
         before = db.scalar(select(func.count()).select_from(AuditLog))
-    model(looks_up(("today_briefing", {}), ("part_details", {"part": "oil filter"})), writes("Fine."))
+    model(writes=[["Fine."], ["Fine."]])
     chat(browser, "what's going on?")
+    chat(browser, "and the oil filters?", PADS_THIS_WEEK)
     with SessionLocal() as db:
         assert db.scalar(select(func.count()).select_from(AuditLog)) == before
 
 
 # The new lookups (today's shop: the oil filters and brake pads of tests/test_ask.py, "today" = LAST_DAY)
 
-def lookup(shop_id, name: str, currency: str | None = "MAD", **arguments):
+def lookup(shop_id, question_type: str, currency: str | None = "MAD", **filters):
     with SessionLocal() as db:
-        found = look_up(db, shop_id, currency, shop_words(db, shop_id), name, arguments)
-        assert found.problem is None, found.problem
-        return found.answer
+        return look_up(db, shop_id, currency, Question(question_type, **filters)).answer
 
 
 def test_today_briefing(shop):
@@ -332,14 +335,6 @@ def test_lookups_that_need_a_part_ask_which_one(shop):
     assert lookup(shop, "explain_part_change", part="unicorn horn").key == "part_not_found"
 
 
-def test_filters_are_matched_to_the_shops_own_names(shop):
-    with SessionLocal() as db:
-        found = look_up(db, shop, "MAD", shop_words(db, shop), "sales_of", {"branch": "rabat", "category": "brakes", "colour": "red"})
-    assert found.filters == {"branch": RABAT, "category": "Brakes"}
-    with SessionLocal() as db:
-        assert "period must be one of" in look_up(db, shop, "MAD", shop_words(db, shop), "sales_of", {"period": "next_year"}).problem
-
-
 # The number check
 
 @pytest.mark.parametrize("written", [
@@ -383,9 +378,53 @@ def test_checked_text_lets_out_whole_sentences_and_stops_at_the_first_wrong_numb
     assert text.shown == "We sold 5 filters."
 
 
-# The keyword rule (used when AI is off) no longer trips on apostrophes
+# The keyword rule: new types, follow-ups, apostrophes
 
 def test_whats_is_not_read_as_a_part_called_s():
-    shop_names = ShopWords(categories=("Brakes",), branches=(RABAT,), part_words=frozenset())
-    assert read_with_rule("What's running out?", shop_names).type == "running_out"
-    assert read_with_rule("What's going on today?", shop_names).part == "going"
+    assert read_with_rule("What's running out?", SHOP).type == "running_out"
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("What's going on today?", Question("today_briefing")),
+    ("quoi de neuf", Question("today_briefing")),
+    ("كيداير اليوم", Question("today_briefing")),
+    ("compare Casablanca and Rabat this month", Question("compare_branches", period="this_month")),
+    ("which branch sells the most oils", Question("compare_branches", category="Oils")),
+    ("why are oil filters", Question("explain_part_change", part="oil filters")),
+    ("tout sur les plaquettes", Question("part_details", part="plaquettes")),
+])
+def test_the_rule_reads_the_new_question_types(text, expected):
+    assert read_with_rule(text, SHOP) == expected
+
+
+EARLIER = Question("sales_of", part="brake pads", branch="Casablanca - Maarif", period="this_week")
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("and in Rabat?", Question("sales_of", part="brake pads", branch=RABAT, period="this_week")),
+    ("w f rbat?", Question("sales_of", part="brake pads", branch=RABAT, period="this_week")),
+    ("وفي الرباط؟", Question("sales_of", part="brake pads", branch=RABAT, period="this_week")),
+    ("et le mois dernier ?", Question("sales_of", part="brake pads", branch="Casablanca - Maarif", period="last_month")),
+    ("and the oil filters?", Question("sales_of", part="oil filters", branch="Casablanca - Maarif", period="this_week")),
+    ("why?", Question("explain_part_change", part="brake pads", branch="Casablanca - Maarif", period="this_week")),
+    ("3lach?", Question("explain_part_change", part="brake pads", branch="Casablanca - Maarif", period="this_week")),
+])
+def test_follow_ups_change_the_question_before(text, expected):
+    assert read_follow_up(text, EARLIER, SHOP) == expected
+
+
+@pytest.mark.parametrize("text", ["what should I order?", "compare Casablanca and Rabat", "hello there friend", "zzz"])
+def test_a_question_of_its_own_is_not_a_follow_up(text):
+    assert read_follow_up(text, EARLIER, SHOP) is None
+
+
+def test_why_after_a_question_without_a_part_asks_it_again():
+    assert read_follow_up("why?", Question("running_out"), SHOP) == Question("running_out")
+
+
+def test_the_model_reader_merges_a_same_reading_into_the_question_before(monkeypatch):
+    monkeypatch.setattr(llm, "ask_json", lambda *args, **kwargs: {**NOTHING, "type": "same", "branch": RABAT})
+    assert model_reader.read_with_model("kifach f rbat", SHOP, earlier=EARLIER) == Question(
+        "sales_of", part="brake pads", branch=RABAT, period="this_week")
+    instructions = model_reader.instructions_for(SHOP)
+    assert "3lach na9so" in instructions and "عطيني كلشي" in instructions, "Darija examples, in both scripts"

@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.ai import llm
 from app.ask.answer_parts import Number
 from app.ask.answers import answer
-from app.ask.assistant import EARLIER_TURNS, as_line, converse
+from app.ask.assistant import as_line, converse
 from app.ask.question import QUESTION_TYPES, Question, checked_question
 from app.ask.understand import shop_words, understand, understand_as
 from app.ask.understood_line import heading, shown_period, understood_line
@@ -72,14 +72,16 @@ class AskOut(BaseModel):
     suggestions: list[Suggestion]  # when we weren't sure, or the reading is the model's best guess
 
 
-class Turn(BaseModel):
-    question: str = Field(min_length=1, max_length=300)
-    answer: str = Field(max_length=2000)
+class AskedBefore(BaseModel):
+    """The question before in this conversation, as the app understood it (sent back by the website)."""
+
+    type: str
+    filters: dict[str, str] = {}
 
 
 class ChatIn(BaseModel):
     question: str = Field(min_length=1, max_length=300)
-    earlier: list[Turn] = Field(default=[], max_length=EARLIER_TURNS)  # this conversation's last questions and answers
+    previous: AskedBefore | None = None  # so "and in Rabat?" or "why?" can change it
 
 
 def currency_seen(db: Session, user: User) -> str | None:
@@ -100,7 +102,11 @@ def chat(body: ChatIn, user: User = Depends(anyone), db: Session = Depends(get_s
     """Newline-delimited JSON events (see converse). {"type": "ai_off"} alone: use POST /api/ask instead."""
     currency = currency_seen(db, user)
     organization_id = user.organization_id
-    earlier = [turn.model_dump() for turn in body.earlier]
+    earlier = None
+    if body.previous:
+        earlier = checked_question({"type": body.previous.type, **body.previous.filters}, shop_words(db, organization_id))
+        if earlier is None or earlier.type == "cannot_answer":
+            raise HTTPException(422, "That isn't a filter this question type takes.")
 
     def events():
         if not llm.is_on():
