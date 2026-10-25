@@ -16,6 +16,10 @@ HEADINGS = {
     "late_deliveries": ("Late deliveries", "Late deliveries"),
     "forecast_of_part": ("Forecast for the next 30 days", "Forecast of {} for the next 30 days"),
     "sales_vs_last": ("Sales compared with the period before", "Sales of {} compared with the period before"),
+    "today_briefing": ("Today's briefing", "Today's briefing"),
+    "compare_branches": ("Branches compared", "Branches compared, {}"),
+    "explain_part_change": ("What changed", "What changed for {}"),
+    "part_details": ("Part details", "Details of {}"),
 }
 
 

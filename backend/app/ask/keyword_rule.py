@@ -42,6 +42,19 @@ CITY_NAMES = {
 # Checked in this order: the first type with a phrase in the question wins.
 TYPE_PHRASES = [
     ("cannot_answer", OUT_OF_SCOPE),
+    # Broad questions get today's briefing: sales vs a normal week, alerts, to order, late deliveries.
+    ("today_briefing", ["going on", "whats new", "what s new", "how is the shop doing", "how are we doing",
+                        "how is business", "summary", "briefing", "worry about", "quoi de neuf", "comment va",
+                        "le point", "resume", "inquieter", "ach kayn", "achno kayn", "chno kayn", "chno jdid",
+                        "kidayra", "kidayr", "kifach dayra", "ما الجديد", "ماذا يحدث", "كيف حال", "ملخص", "يقلقني",
+                        "اش كاين", "اشنو كاين", "شنو كاين", "كيداير", "كيدايره", "شنو جديد"]),
+    ("part_details", ["everything about", "all about", "details", "detail", "tout sur", "fiche", "infos",
+                      "informations", "kolchi 3la", "تفاصيل", "كل شيء عن", "معلومات", "كلشي على"]),
+    # "why" words are matched exactly (WHY_WORDS): "ماذا" (what) is one letter from "لماذا" (why).
+    ("explain_part_change", ["explain", "explique", "اشرح"]),
+    ("compare_branches", ["which branch", "what branch", "quelle agence", "quelle succursale", "quel magasin",
+                          "each branch", "chaque agence", "اي فرع", "كل فرع", "ach men far3", "chmen far3",
+                          "kol far3"]),
     ("late_deliveries", ["late", "overdue", "delayed", "not arrived", "retard", "pas arrive", "pas encore arrive",
                          "متاخر", "متاخره", "تاخر", "لم تصل", "m3etla", "m3atla", "t3etel", "ma wslat", "ma wslatch"]),
     ("open_alerts", ["alert", "alerts", "alerte", "alertes", "warning", "warnings", "flagged", "problem", "problems",
@@ -85,6 +98,11 @@ CATEGORY_WORDS = {
     "Visibility": ["visibility", "visibilite"],
 }
 
+# Words that only say "this is a follow-up": "and in Rabat?", "et à Casa ?", "w f rbat?", "وفي مراكش؟".
+FOLLOW_UP_WORDS = set(words_of("and also what about how about et aussi pour w o wa fi f و وفي وف ف في"))
+WHY_WORDS = set(words_of("why pourquoi 3lach 3lah lach علاش لماذا لاش علاه"))
+FOLLOW_UP_MOST_WORDS = 5
+
 # When unsure, the question types to offer, from what was understood.
 SUGGEST_FOR_PART = ("stock_of_part", "sales_of", "forecast_of_part")
 SUGGEST_FOR_CATEGORY = ("sales_of", "best_sellers", "what_to_order")
@@ -95,22 +113,63 @@ SUGGESTIONS_SHOWN = 3
 def read_with_rule(text: str, shop: ShopWords) -> Question:
     words = words_of(text)
     period, words = _take_period(words)
-    branch, words = _take_branch(words, shop.branches)
-    question_type, words = _take_type(words)
+    branches, words = _take_branches(words, shop.branches)
+    why = any(word in WHY_WORDS for word in words)
+    question_type, words = _take_type([word for word in words if word not in WHY_WORDS])
     if question_type == "cannot_answer":
         return CANNOT_ANSWER
+    if why and question_type in (None, "sales_of", "sales_vs_last"):
+        question_type = "explain_part_change"  # "why are brake pad sales down?"
+    if len(branches) > 1 and question_type in (None, "sales_of", "sales_vs_last", "compare_branches"):
+        question_type = "compare_branches"  # "compare Casablanca and Rabat"
     if question_type == "sales_vs_last":
         period = {"last_week": "this_week", "last_month": "this_month", "yesterday": "today"}.get(period, period)
+    branch = branches[0] if len(branches) == 1 else None
 
     left = [word for word in words if word not in LITTLE_WORDS]
     category, unknown = _subject(left, shop)
     part = " ".join(left) if left and category is None else None
+    if question_type == "explain_part_change" and not part:
+        question_type = "sales_vs_last"  # "why are sales down?" with no part: this period against the one before
     if question_type is None or unknown:
         return _not_sure(question_type, part, category, branch, period)
 
     allowed = QUESTION_TYPES[question_type]
     raw = {"type": question_type, "part": part, "category": category, "branch": branch, "period": period}
     return checked_question({k: v for k, v in raw.items() if k == "type" or k in allowed}, shop) or CANNOT_ANSWER
+
+
+def read_follow_up(text: str, earlier: Question, shop: ShopWords) -> Question | None:
+    """A short question that only changes the one before ("and in Rabat?", "et la semaine dernière ?",
+    "w f casa?", "why?"), merged into it. None when it is a question of its own."""
+    words = [word for word in words_of(text) if word not in FOLLOW_UP_WORDS]
+    if len(words) > FOLLOW_UP_MOST_WORDS:
+        return None
+    why = any(word in WHY_WORDS for word in words)
+    words = [word for word in words if word not in WHY_WORDS]
+    period, words = _take_period(words)
+    branches, words = _take_branches(words, shop.branches)
+    question_type, words = _take_type(words)
+    if question_type is not None or len(branches) > 1:
+        return None
+    left = [word for word in words if word not in LITTLE_WORDS]
+    category, unknown = _subject(left, shop)
+    if unknown:
+        return None
+    changes = {"period": period, "branch": branches[0] if branches else None, "category": category,
+               "part": " ".join(left) if left and category is None else None}
+    changes = {name: value for name, value in changes.items() if value}
+    if not changes and not why:
+        return None
+    merged = {"type": earlier.type, **earlier.filters()}
+    if "part" in changes or "category" in changes:
+        merged.pop("part", None)
+        merged.pop("category", None)
+    merged.update(changes)
+    if why and merged.get("part"):
+        merged["type"] = "explain_part_change"  # "why?" about a part: what changed for it
+    allowed = QUESTION_TYPES[merged["type"]]
+    return checked_question({k: v for k, v in merged.items() if k == "type" or k in allowed}, shop)
 
 
 def _find(words: list[str], phrase: str) -> int | None:
@@ -149,16 +208,18 @@ def _take_period(words: list[str]) -> tuple[str | None, list[str]]:
     return found_period, words
 
 
-def _take_branch(words: list[str], branches: tuple[str, ...]) -> tuple[str | None, list[str]]:
+def _take_branches(words: list[str], branches: tuple[str, ...]) -> tuple[list[str], list[str]]:
+    """Every branch named, in the shop's order, and the words left."""
+    found = []
     for branch in branches:
         names = [w for w in words_of(branch) if len(w) >= 4]
         for city, aliases in CITY_NAMES.items():
             if city in names:
                 names += aliases
-        found, words = _take_all(words, names)
-        if found:
-            return branch, words
-    return None, words
+        taken, words = _take_all(words, names)
+        if taken:
+            found.append(branch)
+    return found, words
 
 
 def _take_type(words: list[str]) -> tuple[str | None, list[str]]:
@@ -220,8 +281,8 @@ def branch_named(text: str, branches: tuple[str, ...]) -> str | None:
     """The shop branch `text` names ("rabat", "Casa", "الرباط"), or None."""
     if text in branches:
         return text
-    branch, _ = _take_branch(words_of(text), branches)
-    return branch
+    found, _ = _take_branches(words_of(text), branches)
+    return found[0] if found else None
 
 
 def category_named(text: str, categories: tuple[str, ...]) -> str | None:

@@ -18,6 +18,10 @@ QUESTION_TYPES: dict[str, tuple[str, ...]] = {
     "late_deliveries": (),
     "forecast_of_part": ("part", "branch"),
     "sales_vs_last": ("part", "category", "branch", "period"),
+    "today_briefing": (),
+    "compare_branches": ("part", "category", "period"),
+    "explain_part_change": ("part", "branch", "period"),
+    "part_details": ("part", "branch"),
     "cannot_answer": (),
 }
 PERIODS = ("today", "yesterday", "this_week", "last_week", "this_month", "last_month", "this_year")
