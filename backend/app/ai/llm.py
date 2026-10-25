@@ -12,8 +12,8 @@ from collections.abc import Iterator
 from app.config import OLLAMA_MODEL, OLLAMA_URL
 
 CHECK_SECONDS = 1
-ANSWER_SECONDS = 30
-CHAT_SECONDS = 120  # the first question after a restart also loads the model onto the graphics card
+ANSWER_SECONDS = 90  # the first question after a restart also loads the model onto the graphics card
+CHAT_SECONDS = 120
 
 
 class ModelFailed(Exception):
@@ -41,6 +41,7 @@ def ask_json(instructions: str, text: str, schema: dict, model: str = OLLAMA_MOD
         "messages": [{"role": "system", "content": instructions}, {"role": "user", "content": text}],
         "format": schema,
         "stream": False,
+        "think": False,
         "keep_alive": "30m",
         "options": {"temperature": 0},
     }
