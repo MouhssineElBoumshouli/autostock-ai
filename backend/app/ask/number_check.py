@@ -1,13 +1,9 @@
-"""Checks that every number the model wrote comes from the shop's real data.
-
-Allowed: the numbers in what the app looked up (tool results, their words included: "BP-1042",
-"2026-10-21"), the numbers in the person's own questions, and what simple arithmetic on the looked-up
-facts gives: rounding, a sum or a difference of two facts, one as a percentage of the other, or the
-percentage change between them. Anything else fails, and the app shows its own safe answer instead.
+"""Finding the numbers in a text, however they are written: digits (1,234 · 1 234 · 1.234,5),
+Arabic digits, or words ("twenty-five", "vingt", "عشرون"). Used to block any number the writer types
+itself (app/ask/fact_check.py) and to score answers (app/ask/check_assistant.py).
 """
 
 import re
-from itertools import permutations
 
 from app.ask.words import words_of
 
@@ -18,8 +14,6 @@ LIST_MARKER = re.compile(r"^(\s*)\d{1,2}[.)](?=\s)", re.MULTILINE)  # "1. " star
 # Darija written in Latin letters uses single digits as letters: "3tini", "m3a", "ch7al", "9aren".
 # A single 2, 3, 5, 7, 8 or 9 inside a word of letters is a letter, not a number.
 DARIJA_LETTER = re.compile(r"(?<!\d)(?:(?<=[^\W\d_])[235789](?=[^\W\d_])|\b[235789](?=[^\W\d_]{2,})|(?<=[^\W\d_]{2})[235789]\b)(?!\d)")
-ALWAYS_ALLOWED = (0,)
-MOST_PAIRED = 200  # enough for any one answer, and keeps the check instant
 
 # Numbers written as words are checked too. Words that also mean something else are left out:
 # "one"/"un"/"واحد" (also "a", "this one"), "neuf" (also "new"), "cent" (also in "pour cent").
@@ -92,10 +86,6 @@ def readings(written: str) -> list[list[float]]:
     return ways
 
 
-def _key(value: float) -> float:
-    return round(value, 1)
-
-
 def rounded(value: float) -> set[float]:
     """The number and its simple roundings: whole, one decimal, 2 or 3 significant digits ("about 1,200")."""
     shown = {value, round(value), round(value, 1)}
@@ -104,57 +94,3 @@ def rounded(value: float) -> set[float]:
         if size > digits:
             shown.add(round(value, digits - size))
     return shown
-
-
-def _collect(source: object, facts: list[float], in_words: list[float]) -> None:
-    """Numbers that are facts (counts, pieces, money, percentages) go to `facts`; numbers inside
-    words (dates, part numbers, sentences) and list lengths go to `in_words`."""
-    if isinstance(source, bool) or source is None:
-        return
-    if isinstance(source, int | float):
-        facts.append(float(source))
-    elif isinstance(source, str):
-        for written in numbers_written(source):
-            for reading in readings(written):
-                in_words.extend(reading)
-    elif isinstance(source, dict):
-        for value in source.values():
-            _collect(value, facts, in_words)
-    elif isinstance(source, list | tuple):
-        in_words.append(float(len(source)))  # "the top 5"
-        for value in source:
-            _collect(value, facts, in_words)
-
-
-class AllowedNumbers:
-    """Arithmetic is only allowed on facts: otherwise the pieces of a date (2026, 10, 21) could add
-    up to almost any small number, and an invented one would pass."""
-
-    def __init__(self, looked_up: list[object], questions: list[str]):
-        facts: list[float] = []
-        in_words: list[float] = []
-        for source in looked_up:
-            _collect(source, facts, in_words)
-        for question in questions:  # the person's own numbers ("set it to 50")
-            _collect(question, in_words, in_words)
-        facts = list(dict.fromkeys(facts))
-        allowed = set(ALWAYS_ALLOWED) | set(in_words)
-        for value in facts:
-            allowed |= rounded(value)
-        for first, second in permutations(facts[:MOST_PAIRED], 2):
-            derived = [first + second, abs(first - second)]
-            if second:
-                derived += [100 * first / second, abs(100 * (first - second) / second), first / second]
-            for value in derived:
-                allowed |= rounded(value)
-        self._keys = {_key(value) for value in allowed}
-
-    def allows(self, value: float) -> bool:
-        return _key(value) in self._keys
-
-    def wrong_numbers(self, text: str) -> list[str]:
-        """The numbers in `text` that no reading makes allowed."""
-        return [
-            written for written in numbers_written(text)
-            if not any(all(self.allows(value) for value in reading) for reading in readings(written))
-        ]

@@ -6,10 +6,13 @@
 2. The app runs that question's read-only lookup itself. Comparisons and percentages are computed
    by the app and given as facts.
 3. Write: the model writes 2 to 4 short sentences from those facts only, in the person's language.
+   It never types a number: it writes each fact's label ([F1]), and the app puts the real number there
+   (app/ask/labeled_facts.py).
 
-Every number it writes is checked against the facts before the person sees it (app/ask/number_check.py).
-Text goes to the screen one sentence at a time, each only once its numbers pass. If one fails, writing
-stops and the website shows the app's own answer instead. The numbers used are always sent with it.
+Each sentence is checked before the person sees it (app/ask/fact_check.py): no number typed by the
+model, and every label next to its own branch, part and period. Text goes to the screen one sentence
+at a time. If one fails, writing stops and the website shows the app's own answer instead. The numbers
+used are always sent with it.
 """
 
 import json
@@ -23,22 +26,27 @@ from app.ai import llm
 from app.ask.answer_parts import shop_today
 from app.ask.keyword_rule import read_follow_up, read_with_rule
 from app.ask.model_reader import read_with_model
-from app.ask.number_check import AllowedNumbers
+from app.ask.fact_check import FactText
+from app.ask.labeled_facts import labeled_facts
 from app.ask.question import NOT_SURE, Question, ShopWords
-from app.ask.tools import Lookup, for_the_model, look_up
+from app.ask.tools import Lookup, look_up
 from app.ask.understand import shop_words
 from app.ask.words import words_of
 
 LONGEST_ANSWER = 200  # word pieces (tokens): 2 to 4 sentences, and a model stuck repeating itself stops
-SENTENCE_END = re.compile(r"[.!?؟:\n](?=\s)")
 ARABIC_LETTER = re.compile(r"[؀-ۿ]")
 
 WRITER = """You write answers for an auto parts shop app. Today, for the shop, is {today}.
 Answer the person's question in 2 to 4 short sentences, in {language}, using only the facts below.
-- Use only numbers that are in the facts. Comparisons and percentages are already computed there: copy them.
-- Write every number in digits (12, not "twelve"). Plain words, no tables, no markdown. Lead with the answer.
-- If the facts don't answer the question, say what they do show.
+- Never type a number or a date yourself. Write the fact's label instead, exactly like [F1]: the app puts
+  the real number there. Comparisons and percentages are already facts: use their labels.
+- Put each label right next to the branch, part or period it belongs to.
+- Name parts without their numbers. Plain words, no tables, no markdown. Lead with the answer.
+- Use the most useful facts, not all of them. If they don't answer the question, say what they do show.
 - {money_rule}
+Example: with the facts "[F1] Casablanca - Maarif · this period · pieces sold", "[F2] Casablanca - Maarif ·
+change in pieces sold (down)", "[F3] Rabat - Agdal · this period · pieces sold", a good answer is:
+"Casablanca - Maarif sold [F1] pieces this period, [F2] on the period before. Rabat - Agdal sold [F3] pieces."
 Facts:
 {facts}"""
 REFUSAL = """You write answers for an auto parts shop app. The app only reads the shop's stock, sales, alerts,
@@ -47,6 +55,7 @@ data about customers or staff, nor about other topics.
 In 1 or 2 short sentences, in {language}, politely say you can't help with this question and what you can
 help with. Don't write any numbers."""
 MONEY_SEEN = "Money amounts are in {currency}."
+NUMBER_STYLE = {"English": "en", "French": "fr"}  # how the app writes numbers; every other answer is in Arabic letters
 MONEY_HIDDEN = "This person doesn't see money: never mention prices, costs or sales values."
 DARIJA_WORDS = set(words_of(
     "dyal dial kayn kayna chno chnou ach wach 3lach kifach ch7al chhal bzaf daba lyoum simana khassni khassna "
@@ -74,35 +83,6 @@ def reply_language(question: str) -> str:
     return "French" if words & FRENCH_WORDS else "English"
 
 
-class CheckedText:
-    """Holds the model's text until a sentence is complete, then lets it out only if every number in
-    it is allowed. After the first wrong number it lets nothing more out."""
-
-    def __init__(self, allowed: AllowedNumbers):
-        self.allowed = allowed
-        self.waiting = ""
-        self.shown = ""
-        self.wrong: list[str] = []
-
-    def add(self, piece: str) -> str:
-        self.waiting += piece
-        ends = list(SENTENCE_END.finditer(self.waiting))
-        return self._let_out(ends[-1].end()) if ends else ""
-
-    def finish(self) -> str:
-        return self._let_out(len(self.waiting))
-
-    def _let_out(self, upto: int) -> str:
-        if self.wrong:
-            return ""
-        ready, self.waiting = self.waiting[:upto], self.waiting[upto:]
-        self.wrong = self.allowed.wrong_numbers(ready)
-        if self.wrong:
-            return ""
-        self.shown += ready
-        return ready
-
-
 def read(text: str, shop: ShopWords, earlier: Question | None, model: str) -> tuple[Question | None, str]:
     """The question understood, and by whom: "follow_up" and "rule" need no model. None if not understood."""
     if earlier:
@@ -125,7 +105,7 @@ def converse(
     language = reply_language(question)
     understood, read_by = read(question, shop, earlier, model)
     lookups: list[Lookup] = []
-    text = CheckedText(AllowedNumbers([], [question]))
+    text = FactText([], shop.branches)
     try:
         if understood is None:
             pass  # not understood: the website says so and suggests asking another way
@@ -136,11 +116,13 @@ def converse(
             lookup = look_up(db, organization_id, currency, understood)
             lookups.append(lookup)
             yield {"type": "looking_up", "tool": lookup.tool, "filters": lookup.filters}
-            facts = for_the_model(lookup, currency)
-            text.allowed = AllowedNumbers([json.loads(facts)], [question])
+            facts = labeled_facts(lookup.answer, understood, currency, NUMBER_STYLE.get(language, "ar"))
+            text = FactText(facts, shop.branches)
             money_rule = MONEY_SEEN.format(currency=currency) if currency else MONEY_HIDDEN
-            writer = WRITER.format(today=shop_today(db, organization_id), language=language, money_rule=money_rule, facts=facts)
-            yield from _written(text, [{"role": "system", "content": writer}, {"role": "user", "content": question}], model)
+            writer = WRITER.format(today=shop_today(db, organization_id), language=language, money_rule=money_rule,
+                                   facts="\n".join(fact.line() for fact in facts))
+            asked = f"{question}\n(Answer in {language}, with the labels.)"
+            yield from _written(text, [{"role": "system", "content": writer}, {"role": "user", "content": asked}], model)
     except llm.ModelFailed:
         if not text.shown and not lookups:
             yield {"type": "ai_off"}
@@ -159,8 +141,8 @@ def converse(
     }
 
 
-def _written(text: CheckedText, messages: list[dict], model: str) -> Iterator[dict]:
-    """The model's writing, let out sentence by sentence while its numbers pass."""
+def _written(text: FactText, messages: list[dict], model: str) -> Iterator[dict]:
+    """The model's writing, let out sentence by sentence while it passes the check."""
     for piece in llm.chat(messages, model, LONGEST_ANSWER):
         if out := text.add(piece["text"]):
             yield {"type": "text", "text": out}

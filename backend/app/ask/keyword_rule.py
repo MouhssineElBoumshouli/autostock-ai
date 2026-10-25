@@ -66,7 +66,8 @@ TYPE_PHRASES = [
     ("forecast_of_part", ["forecast", "prevision", "previsions", "predict", "prediction", "expect", "expected",
                           "think we ll sell", "will we sell", "we ll sell", "va vendre", "allons vendre", "توقعات",
                           "توقع", "نتوقع", "ghadi nbi3o", "غادي نبيعو"]),
-    ("sales_vs_last", ["compared", "compare", "vs", "versus", "better than", "worse than", "par rapport",
+    ("sales_vs_last", ["compared", "compare", "vs", "versus", "better than", "worse than", "par rapport", "9aren",
+                       "9arn", "qaren", "m9arna", "mqarna", "قارن",
                        "plus ou moins", "مقارنه", "ارتفعت", "انخفضت", "tla3", "habet", "kter wla 9al", "طلع", "هبط"]),
     ("what_to_order", ["order", "reorder", "commander", "commande", "recommander", "نطلب", "اطلب", "طلبه", "طلبيه",
                        "ncommandi", "الكوموند", "كوموند", "njibo", "nchriw"]),
@@ -82,7 +83,8 @@ TYPE_PHRASES = [
     ("stock_of_part", ["in stock", "stock", "stok", "left", "still have", "do we have", "remaining", "reste",
                        "il reste", "مخزون", "المخزون", "تبقى", "باقي", "عندنا", "لدينا", "3ndna", "3andna", "bqa",
                        "b9a", "بقا"]),
-    ("sales_of", ["sell", "sold", "sales", "selling", "ventes", "vente", "vendu", "vendus", "vend", "بعنا", "مبيعات",
+    ("sales_of", ["sell", "sold", "sales", "selling", "ventes", "vente", "vendu", "vendus", "vend", "lbi3", "lbi3a",
+                  "البيع", "بعنا", "مبيعات",
                   "بيع", "بيعت", "bi3na", "bi3", "tba3"]),
 ]
 
@@ -215,14 +217,19 @@ def _take_branches(words: list[str], branches: tuple[str, ...]) -> tuple[list[st
     """Every branch named, in the shop's order, and the words left."""
     found = []
     for branch in branches:
-        names = [w for w in words_of(branch) if len(w) >= 4]
-        for city, aliases in CITY_NAMES.items():
-            if city in names:
-                names += aliases
-        taken, words = _take_all(words, names)
+        taken, words = _take_all(words, branch_phrases(branch))
         if taken:
             found.append(branch)
     return found, words
+
+
+def branch_phrases(branch: str) -> list[str]:
+    """Every way a branch is called: its name's words ("rabat", "agdal") and its city's ("الرباط", "rbat")."""
+    names = [w for w in words_of(branch) if len(w) >= 4]
+    for city, aliases in CITY_NAMES.items():
+        if city in names:
+            names += aliases
+    return names
 
 
 def _take_type(words: list[str]) -> tuple[str | None, list[str]]:
