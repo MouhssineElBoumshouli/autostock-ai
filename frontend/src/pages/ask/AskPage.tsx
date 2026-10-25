@@ -66,6 +66,8 @@ export function AskPage() {
           askRule({ question }, question);
         } else if (event.type === "looking_up") {
           update(id, (entry) => ({ ...entry, lookingUp: [...entry.lookingUp, { tool: event.tool, filters: event.filters }] }));
+        } else if (event.type === "restart") {
+          update(id, (entry) => ({ ...entry, text: "" }));
         } else if (event.type === "text") {
           update(id, (entry) => ({ ...entry, text: entry.text + event.text }));
         } else {

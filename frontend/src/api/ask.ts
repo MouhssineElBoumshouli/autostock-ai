@@ -55,6 +55,8 @@ export type AssistantEvent =
   | { type: "ai_off" }
   | { type: "looking_up"; tool: string; filters: AskFilters }
   | { type: "text"; text: string }
+  // The written answer so far is taken back: the writer tries once more.
+  | { type: "restart" }
   // checked=false: a number in the written answer didn't match the shop's data, so the app's own
   // sentences from `lookups` are shown instead of the text.
   | {
@@ -62,6 +64,7 @@ export type AssistantEvent =
       checked: boolean;
       text: string;
       wrong_numbers: string[];
+      retried: boolean;
       read_by: "rule" | "model" | "follow_up";
       question: AskedBefore | null; // what the app understood; sent back so a follow-up can change it
       lookups: AssistantLookup[];

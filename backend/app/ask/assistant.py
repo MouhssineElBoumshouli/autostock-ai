@@ -11,14 +11,15 @@
 
 Each sentence is checked before the person sees it (app/ask/fact_check.py): no number typed by the
 model, and every label next to its own branch, part and period. Text goes to the screen one sentence
-at a time. If one fails, writing stops and the website shows the app's own answer instead. The numbers
+at a time. If one fails, the writer tries once more, told exactly what was wrong (what was shown is
+taken back first). If that fails too, the website shows the app's own answer instead. The numbers
 used are always sent with it.
 """
 
 import json
 import re
 import uuid
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 
 from sqlalchemy.orm import Session
 
@@ -26,7 +27,7 @@ from app.ai import llm
 from app.ask.answer_parts import shop_today
 from app.ask.keyword_rule import read_follow_up, read_with_rule
 from app.ask.model_reader import read_with_model
-from app.ask.fact_check import FactText
+from app.ask.fact_check import FactText, explained
 from app.ask.labeled_facts import labeled_facts
 from app.ask.question import NOT_SURE, Question, ShopWords
 from app.ask.tools import Lookup, look_up
@@ -56,6 +57,8 @@ orders and suppliers. It never changes data or places orders (a person does that
 data about customers or staff, nor about other topics.
 In 1 or 2 short sentences, in {language}, politely say you can't help with this question and what you can
 help with. Don't write any numbers."""
+RETRY = """The app did not show your answer: {problems}.
+Write the whole answer again, in {language}, with the labels only."""
 MONEY_SEEN = "Money amounts are in {currency}."
 NUMBER_STYLE = {"English": "en", "French": "fr"}  # how the app writes numbers; every other answer is in Arabic letters
 MONEY_HIDDEN = "This person doesn't see money: never mention prices, costs or sales values."
@@ -101,55 +104,72 @@ def converse(
     db: Session, organization_id: uuid.UUID, currency: str | None, question: str, earlier: Question | None,
     model: str = llm.OLLAMA_MODEL,
 ) -> Iterator[dict]:
-    """Events for the website, in order: {"type": "looking_up"}, {"type": "text"} pieces, then one
-    {"type": "done"}. Or a single {"type": "ai_off"} when the model can't be reached."""
+    """Events for the website, in order: {"type": "looking_up"}, {"type": "text"} pieces (after a
+    {"type": "restart"}, the text so far is taken back), then one {"type": "done"}. Or a single
+    {"type": "ai_off"} when the model can't be reached."""
     shop = shop_words(db, organization_id)
     language = reply_language(question)
     understood, read_by = read(question, shop, earlier, model)
     lookups: list[Lookup] = []
     text = FactText([], shop.branches)
+    retried = False
     try:
-        if understood is None:
-            pass  # not understood: the website says so and suggests asking another way
-        elif understood.type == "cannot_answer":
-            yield from _written(text, [{"role": "system", "content": REFUSAL.format(language=language)},
-                                       {"role": "user", "content": question}], model)
-        else:
-            lookup = look_up(db, organization_id, currency, understood)
-            lookups.append(lookup)
-            yield {"type": "looking_up", "tool": lookup.tool, "filters": lookup.filters}
-            facts = labeled_facts(lookup.answer, understood, currency, NUMBER_STYLE.get(language, "ar"))
+        if understood is not None:  # not understood: the website says so and suggests asking another way
+            if understood.type == "cannot_answer":
+                facts: list = []
+                messages = [{"role": "system", "content": REFUSAL.format(language=language)},
+                            {"role": "user", "content": question}]
+            else:
+                lookup = look_up(db, organization_id, currency, understood)
+                lookups.append(lookup)
+                yield {"type": "looking_up", "tool": lookup.tool, "filters": lookup.filters}
+                facts = labeled_facts(lookup.answer, understood, currency, NUMBER_STYLE.get(language, "ar"))
+                money_rule = MONEY_SEEN.format(currency=currency) if currency else MONEY_HIDDEN
+                writer = WRITER.format(today=shop_today(db, organization_id), language=language, money_rule=money_rule,
+                                       about=heading(understood), facts="\n".join(fact.line() for fact in facts))
+                messages = [{"role": "system", "content": writer},
+                            {"role": "user", "content": f"{question}\n(Answer in {language}, with the labels.)"}]
             text = FactText(facts, shop.branches, understood.period)
-            money_rule = MONEY_SEEN.format(currency=currency) if currency else MONEY_HIDDEN
-            writer = WRITER.format(today=shop_today(db, organization_id), language=language, money_rule=money_rule,
-                                   about=heading(understood), facts="\n".join(fact.line() for fact in facts))
-            asked = f"{question}\n(Answer in {language}, with the labels.)"
-            yield from _written(text, [{"role": "system", "content": writer}, {"role": "user", "content": asked}], model)
+            written = yield from _written(text, messages, model)
+            if text.wrong:
+                # One second try, told exactly what was wrong. What was already shown is taken back first.
+                retried = True
+                if text.shown:
+                    yield {"type": "restart"}
+                problems = "; ".join(dict.fromkeys(explained(problem) for problem in text.wrong))
+                messages += [{"role": "assistant", "content": written},
+                             {"role": "user", "content": RETRY.format(problems=problems, language=language)}]
+                text = FactText(facts, shop.branches, understood.period)
+                yield from _written(text, messages, model)
     except llm.ModelFailed:
         if not text.shown and not lookups:
             yield {"type": "ai_off"}
             return
         text.wrong = text.wrong or ["(the model stopped)"]
-    if out := text.finish():
-        yield {"type": "text", "text": out}
     yield {
         "type": "done",
         "checked": not text.wrong and bool(text.shown.strip()),
         "text": text.shown.strip(),
         "wrong_numbers": text.wrong,
+        "retried": retried,
         "read_by": read_by,
         "question": {"type": understood.type, "filters": understood.filters()} if understood else None,
         "lookups": [_shown(lookup) for lookup in lookups],
     }
 
 
-def _written(text: FactText, messages: list[dict], model: str) -> Iterator[dict]:
-    """The model's writing, let out sentence by sentence while it passes the check."""
+def _written(text: FactText, messages: list[dict], model: str) -> Generator[dict, None, str]:
+    """The model's writing, let out sentence by sentence while it passes the check. Returns all it wrote."""
+    written = ""
     for piece in llm.chat(messages, model, LONGEST_ANSWER):
+        written += piece["text"]
         if out := text.add(piece["text"]):
             yield {"type": "text", "text": out}
         if text.wrong:
-            return
+            return written
+    if out := text.finish():
+        yield {"type": "text", "text": out}
+    return written
 
 
 def _shown(lookup: Lookup) -> dict:

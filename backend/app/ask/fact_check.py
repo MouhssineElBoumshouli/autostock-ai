@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass
 
 from app.ask.keyword_rule import branch_phrases
-from app.ask.labeled_facts import Fact
+from app.ask.labeled_facts import WHEN_WORDS, Fact
 from app.ask.number_check import numbers_written
 from app.ask.words import LITTLE_WORDS, words_of
 
@@ -25,6 +25,9 @@ SENTENCE_END = re.compile(r"[.!?؟](?=\s)|\n")
 LABEL = re.compile(r"\[\s*(F\d+)\s*\]|\b(F\d+)\b")
 CLAUSE_MARK = re.compile(r"[,،;()–—]")
 MOST_WAITING = 600  # characters with no sentence end: a model stuck repeating itself is stopped
+NO_END = "(no end to the sentence)"
+MISPLACED = re.compile(r"\[(F\d+)\] is (.+), written next to (.+)")
+KIND_WORDS = {**WHEN_WORDS, "up": "a change up", "down": "a change down", "same": "no change"}
 ARABIC_PREFIXES = "وبلف"  # glued to the next word: "والرباط" is "and Rabat"
 # Words saying which way a change went: next to a percentage, they must match it.
 DIRECTION_PHRASES = {
@@ -86,7 +89,7 @@ class FactText:
         if ends:
             return self._let_out(ends[-1].end())
         if len(self.waiting) > MOST_WAITING:
-            self.wrong = self.wrong or ["(no end to the sentence)"]
+            self.wrong = self.wrong or [NO_END]
         return ""
 
     def finish(self) -> str:
@@ -214,3 +217,18 @@ def _names_with_digits(facts: list[Fact]) -> list[str]:
             if start > 0:
                 found.add(" ".join(words[start - 1:at + 1]))
     return sorted(found, key=len, reverse=True)
+
+
+def explained(problem: str) -> str:
+    """A problem in words the writer can act on, for its one second try."""
+    if problem.startswith("typed number "):
+        return f"you typed the number {problem.removeprefix('typed number ')} yourself; use labels only"
+    if problem.startswith("unknown label "):
+        return f"there is no label [{problem.removeprefix('unknown label ')}]; use only the labels in the facts"
+    if problem == NO_END:
+        return "your answer never finished a sentence; write 2 to 4 short sentences"
+    found = MISPLACED.match(problem)
+    if found:
+        label, own, other = found.groups()
+        return f"label [{label}] is the number for {KIND_WORDS.get(own, own)}, but you put it next to {KIND_WORDS.get(other, other)}"
+    return problem

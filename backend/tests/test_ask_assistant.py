@@ -42,7 +42,8 @@ NOTHING = {"part": None, "category": None, "branch": None, "period": None}
 
 class FakeModel:
     """Plays back scripted writing and readings, and remembers what it was sent. A scripted writing is
-    a list of pieces, or a function of the writer's prompt (to find a fact's label in it)."""
+    a list of pieces, or a function of the writer's prompt (to find a fact's label in it). When the
+    script runs out, the last writing is given again (a writer that makes the same mistake twice)."""
 
     def __init__(self, writes: list, readings: list[object]):
         self.writes, self.readings = list(writes), list(readings)
@@ -53,7 +54,7 @@ class FakeModel:
     def chat(self, messages, model=None, longest=None):
         assert longest, "the writer is always limited in length"
         self.chats.append(copy.deepcopy(messages))
-        reply = self.writes.pop(0)
+        reply = self.writes.pop(0) if len(self.writes) > 1 else self.writes[0]  # the last one again, for a retry
         for piece in reply(messages[0]["content"]) if callable(reply) else reply:
             self.pieces_sent += 1
             yield {"text": piece}
@@ -146,7 +147,8 @@ def test_a_number_typed_by_the_model_blocks_the_answer(browser, shop, model):
     assert result["checked"] is False and result["wrong_numbers"] == ["typed number 77"]
     assert "77" not in shown(events) and "Great" not in shown(events)
     assert result["lookups"], "the website shows the app's own sentences from these instead"
-    assert len(fake.chats) == 1, "no second try: the app's own answer is shown"
+    assert len(fake.chats) == 2 and result["retried"] is True, "one second try, then the app's own answer"
+    assert "you typed the number 77 yourself; use labels only" in fake.chats[1][-1]["content"]
 
 
 @pytest.mark.parametrize("typed", ["We sold 5 oil filters.", "We sold ٥ oil filters.", "We sold ninety-seven oil filters."])
@@ -206,6 +208,41 @@ def test_the_right_number_on_the_wrong_part_is_blocked(browser, several_brake_pa
     assert done(chat_with(model, right, browser, "tout sur les brake pads"))["text"] == "The rear pads have 20 in stock, the front ones 30."
 
 
+def test_a_blocked_answer_is_written_again_once_told_exactly_what_was_wrong(browser, shop, model):
+    def swapped(prompt):
+        return [f"Rabat sold {label(prompt, MAIN, 'this period', 'pieces sold')} pieces."]
+
+    def right(prompt):
+        return [f"Rabat sold {label(prompt, RABAT, 'this period', 'pieces sold')} pieces."]
+
+    fake = model(writes=[swapped, right])
+    result = done(chat(browser, "compare Atlas and Rabat"))
+    assert result["checked"] is True and result["retried"] is True and result["text"] == "Rabat sold 2 pieces."
+    second_try = fake.chats[1]
+    assert second_try[-2] == {"role": "assistant", "content": swapped(writer_prompt(fake))[0]}
+    assert "is the number for Atlas Parts, but you put it next to Rabat - Agdal" in second_try[-1]["content"]
+
+
+def test_text_already_shown_is_taken_back_before_the_second_try(browser, shop, model):
+    def first(prompt):
+        return [f"We sold {label(prompt, 'pieces sold')} oil filters. ", "And 77 more."]
+
+    def second(prompt):
+        return [f"We sold {label(prompt, 'pieces sold')} oil filters this week."]
+
+    model(writes=[first, second])
+    events = chat(browser, "how many oil filters did we sell this week?")
+    kinds = [event["type"] for event in events]
+    assert kinds == ["looking_up", "text", "restart", "text", "done"]
+    assert done(events)["text"] == "We sold 5 oil filters this week."
+
+
+def test_an_answer_that_is_right_the_first_time_is_not_written_twice(browser, shop, model):
+    fake = model(writes=[lambda prompt: [f"We sold {label(prompt, 'pieces sold')} oil filters."]])
+    assert done(chat(browser, "how many oil filters did we sell this week?"))["retried"] is False
+    assert len(fake.chats) == 1
+
+
 def test_an_unknown_label_is_blocked(browser, shop, model):
     model(writes=[["We sold [F99] pieces."]])
     assert done(chat(browser, "how many oil filters did we sell this week?"))["wrong_numbers"] == ["unknown label F99"]
@@ -215,7 +252,7 @@ def test_a_writer_stuck_repeating_itself_is_stopped_by_the_app(browser, shop, mo
     fake = model(writes=[["3 "] * 5000])
     result = done(chat(browser, "how many oil filters did we sell this week?"))
     assert result["checked"] is False and result["wrong_numbers"] == ["(no end to the sentence)"]
-    assert fake.pieces_sent < 400, "the app stops reading long before the model's own length limit"
+    assert fake.pieces_sent < 800, "the app stops reading long before the model's own length limit, both tries"
 
 
 @pytest.mark.parametrize("question", ["What's going on today?", "Quoi de neuf ?", "ach kayn lyoum?", "how is the shop doing this week?"])

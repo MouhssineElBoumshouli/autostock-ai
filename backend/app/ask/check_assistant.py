@@ -50,6 +50,7 @@ class Result:
     first_words_seconds: float | None
     asked: dict | None = None  # the question as the app understood it, kept for a follow-up
     read_by: str = ""
+    retried: bool = False
     misses: list[str] = field(default_factory=list)
 
     @property
@@ -68,7 +69,8 @@ def ask_once(db, organization_id, question: str, earlier: dict | None, model: st
         if event["type"] in ("done", "ai_off"):
             done = event
     return Result(None, done.get("text", ""), done.get("checked", False), done.get("wrong_numbers", []),
-                  done.get("lookups", []), perf_counter() - started, first_words, done.get("question"), done.get("read_by", ""))
+                  done.get("lookups", []), perf_counter() - started, first_words, done.get("question"), done.get("read_by", ""),
+                  done.get("retried", False))
 
 
 def language_of(text: str) -> str:
@@ -202,6 +204,8 @@ def report(model: str, results: list[Result], show_misses: bool) -> None:
         print(f"  {language}: {sum(r.good for r in mine)}/{len(mine)}")
     follow_ups = [r for r in results if r.case.earlier]
     print(f"  follow-ups: {sum(r.good for r in follow_ups)}/{len(follow_ups)}")
+    retried = [r for r in results if r.retried]
+    print(f"  written twice: {len(retried)}, of which the second try passed the check: {sum(not r.wrong_numbers for r in retried)}")
     readers = {name: sum(r.read_by == name for r in results) for name in ("rule", "follow_up", "model")}
     print(f"  read by: {readers}")
     if show_misses:
