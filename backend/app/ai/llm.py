@@ -7,11 +7,17 @@ to their non-AI way when the answer is None (Ollama off, model missing, slow or 
 import json
 import urllib.error
 import urllib.request
+from collections.abc import Iterator
 
 from app.config import OLLAMA_MODEL, OLLAMA_URL
 
 CHECK_SECONDS = 1
 ANSWER_SECONDS = 30
+CHAT_SECONDS = 120  # the first question after a restart also loads the model onto the graphics card
+
+
+class ModelFailed(Exception):
+    """Ollama stopped answering or sent something unreadable in the middle of a chat."""
 
 
 def is_on(model: str = OLLAMA_MODEL) -> bool:
@@ -46,3 +52,33 @@ def ask_json(instructions: str, text: str, schema: dict, model: str = OLLAMA_MOD
             return json.loads(json.load(response)["message"]["content"])
     except (OSError, ValueError, KeyError, TypeError):
         return None
+
+
+def chat(messages: list[dict], tools: list[dict] | None = None, model: str = OLLAMA_MODEL) -> Iterator[dict]:
+    """The model's reply as it is written: {"text": "..."} pieces, and {"tool_calls": [...]} when it
+    asks to look something up. Raises ModelFailed if anything goes wrong."""
+    if not OLLAMA_URL:
+        raise ModelFailed("AI is off.")
+    body = {
+        "model": model,
+        "messages": messages,
+        "stream": True,
+        "think": False,  # models that can "think out loud" first would make people wait much longer
+        "keep_alive": "30m",
+        "options": {"temperature": 0},
+    }
+    if tools:
+        body["tools"] = tools
+    request = urllib.request.Request(
+        f"{OLLAMA_URL}/api/chat", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=CHAT_SECONDS) as response:
+            for line in response:
+                message = json.loads(line).get("message", {})
+                if message.get("content"):
+                    yield {"text": message["content"]}
+                if message.get("tool_calls"):
+                    yield {"tool_calls": message["tool_calls"]}
+    except (OSError, ValueError, AttributeError) as error:
+        raise ModelFailed(str(error)) from error

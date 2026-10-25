@@ -1,12 +1,14 @@
 """Ask your shop: a question in plain words, answered from the shop's real data. Read-only.
 
-The question is understood by the local model when it is on, else by the keyword rule (see
-app/ask). The answer and its numbers always come from the app's own queries, never from the model.
+With the local model on, POST /api/ask/chat: the assistant looks things up and writes the answer,
+sent as it is written; every number in it is checked against the looked-up data (app/ask/assistant.py).
+With AI off, POST /api/ask: the keyword rule reads the question and the app writes the answer.
 """
 
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -14,11 +16,12 @@ from sqlalchemy.orm import Session
 from app.ai import llm
 from app.ask.answer_parts import Number
 from app.ask.answers import answer
+from app.ask.assistant import EARLIER_TURNS, as_line, converse
 from app.ask.question import QUESTION_TYPES, Question, checked_question
 from app.ask.understand import shop_words, understand, understand_as
 from app.ask.understood_line import heading, shown_period, understood_line
 from app.auth.permissions import require_role
-from app.db import get_session
+from app.db import SessionLocal, get_session
 from app.models import Organization, User
 
 router = APIRouter(prefix="/api/ask")
@@ -69,11 +72,50 @@ class AskOut(BaseModel):
     suggestions: list[Suggestion]  # when we weren't sure, or the reading is the model's best guess
 
 
+class Turn(BaseModel):
+    question: str = Field(min_length=1, max_length=300)
+    answer: str = Field(max_length=2000)
+
+
+class ChatIn(BaseModel):
+    question: str = Field(min_length=1, max_length=300)
+    earlier: list[Turn] = Field(default=[], max_length=EARLIER_TURNS)  # this conversation's last questions and answers
+
+
+def currency_seen(db: Session, user: User) -> str | None:
+    """The shop's currency, or None for people who don't see money."""
+    if user.role == "staff":
+        return None
+    return db.scalar(select(Organization.currency).where(Organization.id == user.organization_id))
+
+
+@router.get("/ai")
+def ai(user: User = Depends(anyone)) -> dict[str, bool]:
+    """Whether the local AI is running, so the page can say up front when it isn't."""
+    return {"ai_on": llm.is_on()}
+
+
+@router.post("/chat")
+def chat(body: ChatIn, user: User = Depends(anyone), db: Session = Depends(get_session)) -> StreamingResponse:
+    """Newline-delimited JSON events (see converse). {"type": "ai_off"} alone: use POST /api/ask instead."""
+    currency = currency_seen(db, user)
+    organization_id = user.organization_id
+    earlier = [turn.model_dump() for turn in body.earlier]
+
+    def events():
+        if not llm.is_on():
+            yield as_line({"type": "ai_off"})
+            return
+        with SessionLocal() as own_db:  # its own session: the answer is still being written after this function returns
+            for event in converse(own_db, organization_id, currency, body.question, earlier):
+                yield as_line(event)
+
+    return StreamingResponse(events(), media_type="application/x-ndjson", headers={"Cache-Control": "no-cache"})
+
+
 @router.post("")
 def ask(body: AskIn, user: User = Depends(anyone), db: Session = Depends(get_session)) -> AskOut:
-    currency = None
-    if user.role != "staff":
-        currency = db.scalar(select(Organization.currency).where(Organization.id == user.organization_id))
+    currency = currency_seen(db, user)
     if body.filters is not None:
         # A filter chip was changed: keep the question type, replace its filters, nothing re-read.
         if not body.question_type:
