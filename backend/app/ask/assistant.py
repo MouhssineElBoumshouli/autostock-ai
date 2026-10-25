@@ -29,6 +29,7 @@ from app.ask.tools import Lookup, for_the_model, look_up
 from app.ask.understand import shop_words
 from app.ask.words import words_of
 
+LONGEST_ANSWER = 200  # word pieces (tokens): 2 to 4 sentences, and a model stuck repeating itself stops
 SENTENCE_END = re.compile(r"[.!?؟:\n](?=\s)")
 ARABIC_LETTER = re.compile(r"[؀-ۿ]")
 
@@ -56,6 +57,9 @@ FRENCH_WORDS = set(words_of(
     "le la les des du est sont quoi quel quelle quelles combien pourquoi comment nous vous il reste ventes "
     "agence semaine mois neuf donne moi tout sur et une chez de"
 ))
+# The small model can't write Darija (measured: 0 of 14 right): Darija questions get simple Arabic,
+# which Moroccan readers understand, with Darija words where it knows them.
+DARIJA_ANSWER = "simple Moroccan Arabic, in Arabic letters (Darija words are welcome)"
 DARIJA_SPELLING = re.compile(r"\b[a-z]*[379][a-z]+")  # "3lach", "m9arna", "ch7al": Darija written with digits
 
 
@@ -64,9 +68,9 @@ def reply_language(question: str) -> str:
     words = set(words_of(question))
     darija = bool(words & DARIJA_WORDS) or bool(DARIJA_SPELLING.search(question.lower()))
     if ARABIC_LETTER.search(question):
-        return "Moroccan Darija, in Arabic letters" if darija else "Arabic"
+        return DARIJA_ANSWER if darija else "Arabic"
     if darija:
-        return "Moroccan Darija, in Latin letters (like the question)"
+        return DARIJA_ANSWER
     return "French" if words & FRENCH_WORDS else "English"
 
 
@@ -157,8 +161,8 @@ def converse(
 
 def _written(text: CheckedText, messages: list[dict], model: str) -> Iterator[dict]:
     """The model's writing, let out sentence by sentence while its numbers pass."""
-    for piece in llm.chat(messages, None, model):
-        if "text" in piece and (out := text.add(piece["text"])):
+    for piece in llm.chat(messages, model, LONGEST_ANSWER):
+        if out := text.add(piece["text"]):
             yield {"type": "text", "text": out}
         if text.wrong:
             return

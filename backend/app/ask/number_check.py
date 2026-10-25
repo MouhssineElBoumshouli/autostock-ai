@@ -15,6 +15,9 @@ ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹٫٬", "0
 # 1234 · 1,234 · 1 234 · 1.234,5 · 12.5 — grouped thousands with a comma, dot or space.
 NUMBER = re.compile(r"\d+(?:[   ,.]\d{3}(?!\d))*(?:[.,]\d+)?")
 LIST_MARKER = re.compile(r"^(\s*)\d{1,2}[.)](?=\s)", re.MULTILINE)  # "1. " starting a line is a list, not a number
+# Darija written in Latin letters uses single digits as letters: "3tini", "m3a", "ch7al", "9aren".
+# A single 2, 3, 5, 7, 8 or 9 inside a word of letters is a letter, not a number.
+DARIJA_LETTER = re.compile(r"(?<!\d)(?:(?<=[^\W\d_])[235789](?=[^\W\d_])|\b[235789](?=[^\W\d_]{2,})|(?<=[^\W\d_]{2})[235789]\b)(?!\d)")
 ALWAYS_ALLOWED = (0,)
 MOST_PAIRED = 200  # enough for any one answer, and keeps the check instant
 
@@ -37,7 +40,7 @@ NUMBER_WORDS = {
 
 
 def numbers_written(text: str) -> list[str]:
-    text = LIST_MARKER.sub(r"\1", text.translate(ARABIC_DIGITS))
+    text = DARIJA_LETTER.sub("", LIST_MARKER.sub(r"\1", text.translate(ARABIC_DIGITS)))
     return NUMBER.findall(text) + numbers_in_words(text)
 
 

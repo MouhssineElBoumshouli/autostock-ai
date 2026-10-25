@@ -55,9 +55,9 @@ def ask_json(instructions: str, text: str, schema: dict, model: str = OLLAMA_MOD
         return None
 
 
-def chat(messages: list[dict], tools: list[dict] | None = None, model: str = OLLAMA_MODEL) -> Iterator[dict]:
-    """The model's reply as it is written: {"text": "..."} pieces, and {"tool_calls": [...]} when it
-    asks to look something up. Raises ModelFailed if anything goes wrong."""
+def chat(messages: list[dict], model: str = OLLAMA_MODEL, longest: int = 300) -> Iterator[dict]:
+    """The model's reply as it is written, in {"text": "..."} pieces, at most `longest` word pieces
+    (tokens). Raises ModelFailed if anything goes wrong."""
     if not OLLAMA_URL:
         raise ModelFailed("AI is off.")
     body = {
@@ -66,10 +66,8 @@ def chat(messages: list[dict], tools: list[dict] | None = None, model: str = OLL
         "stream": True,
         "think": False,  # models that can "think out loud" first would make people wait much longer
         "keep_alive": "30m",
-        "options": {"temperature": 0},
+        "options": {"temperature": 0, "num_predict": longest},
     }
-    if tools:
-        body["tools"] = tools
     request = urllib.request.Request(
         f"{OLLAMA_URL}/api/chat", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
     )
@@ -79,7 +77,5 @@ def chat(messages: list[dict], tools: list[dict] | None = None, model: str = OLL
                 message = json.loads(line).get("message", {})
                 if message.get("content"):
                     yield {"text": message["content"]}
-                if message.get("tool_calls"):
-                    yield {"tool_calls": message["tool_calls"]}
     except (OSError, ValueError, AttributeError) as error:
         raise ModelFailed(str(error)) from error

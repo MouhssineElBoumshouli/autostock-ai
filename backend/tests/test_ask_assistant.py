@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 
 from app.ai import llm
 from app.ask import model_reader
-from app.ask.assistant import MONEY_HIDDEN, CheckedText
+from app.ask.assistant import DARIJA_ANSWER, MONEY_HIDDEN, CheckedText
 from app.ask.keyword_rule import read_follow_up, read_with_rule
 from app.ask.number_check import AllowedNumbers, numbers_in_words, numbers_written
 from app.ask.question import Question, ShopWords
@@ -41,8 +41,8 @@ class FakeModel:
         self.chats: list[list[dict]] = []
         self.reads: list[dict] = []
 
-    def chat(self, messages, tools=None, model=None):
-        assert tools is None, "the writer never gets tools"
+    def chat(self, messages, model=None, longest=None):
+        assert longest, "the writer is always limited in length"
         self.chats.append(copy.deepcopy(messages))
         yield from ({"text": piece} for piece in self.writes.pop(0))
 
@@ -169,8 +169,8 @@ def test_a_refusal_may_only_repeat_the_persons_own_numbers(browser, shop, model)
     ("What's going on today?", "English"),
     ("Quoi de neuf ?", "French"),
     ("ما الجديد اليوم؟", "Arabic"),
-    ("شحال باقي من الباطري ف كازا؟", "Moroccan Darija, in Arabic letters"),
-    ("ch7al bi3na had simana?", "Moroccan Darija, in Latin letters (like the question)"),
+    ("شحال باقي من الباطري ف كازا؟", DARIJA_ANSWER),
+    ("ch7al bi3na had simana?", DARIJA_ANSWER),
 ])
 def test_the_writer_is_told_which_language_to_answer_in(browser, shop, model, question, language):
     fake = model(writes=[["Hello."]], readings=[{**NOTHING, "type": "today_briefing"}])
@@ -428,3 +428,19 @@ def test_the_model_reader_merges_a_same_reading_into_the_question_before(monkeyp
         "sales_of", part="brake pads", branch=RABAT, period="this_week")
     instructions = model_reader.instructions_for(SHOP)
     assert "3lach na9so" in instructions and "عطيني كلشي" in instructions, "Darija examples, in both scripts"
+
+
+def test_darija_letters_written_as_digits_are_not_numbers():
+    assert numbers_written("3tini kolchi 3la radiateur, ch7al bi3na m3a 9aren") == []
+    assert numbers_written("5W30 oil, 120MAD, 3 lines, H7") == ["5", "30", "120", "3", "7"]
+
+
+@pytest.mark.parametrize("text", ["Passe une commande de 20 radiateurs chez Valeo", "place an order for 20 radiators"])
+def test_asking_the_app_to_place_an_order_is_refused(text):
+    assert read_with_rule(text, SHOP).type == "cannot_answer"
+
+
+def test_a_writer_stuck_repeating_itself_is_cut_off(browser, shop, model):
+    fake = model(writes=[["Fine."]])
+    chat(browser, "how many oil filters did we sell this week?")
+    assert fake.chats, "the fake model asserts every call is limited in length (see FakeModel.chat)"

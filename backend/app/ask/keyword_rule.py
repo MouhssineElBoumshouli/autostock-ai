@@ -15,7 +15,10 @@ OUT_OF_SCOPE = """customer customers client clients employee employees staff wea
     invoice invoices margin profit phone add
     meilleur employe supprime supprimer prix meteo facture marge benefice numero telephone ajoute ajouter
     زبون زبائن موظف عميل احذف حذف سعر طقس فاتوره هاتف رقم ربح اضف
-    chkoun ahsan bdel lprix match lmatch r9m nmra""".split()
+    chkoun ahsan bdel lprix match lmatch r9m nmra""".split() + [
+    # The app never orders by itself: a person does, on the Orders page.
+    "place an order", "place the order", "passe une commande", "passer une commande", "passe commande", "passer commande",
+    "اطلب لي", "دير كوموند", "dir commande", "dir lcommande"]
 
 PERIOD_PHRASES = {
     "today": ["today", "aujourd hui", "ce jour", "اليوم", "ليوم", "lyouma", "lyoum", "lyom", "had nhar", "هاد النهار"],
