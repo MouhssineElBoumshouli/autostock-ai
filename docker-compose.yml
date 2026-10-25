@@ -30,7 +30,7 @@ services:
       WATCHFILES_FORCE_POLLING: "true"
       # Optional local AI for "Ask your shop". If it isn't running, the app says "AI is off".
       OLLAMA_URL: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b-instruct}
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
       - ./backend:/app
@@ -59,7 +59,7 @@ services:
   ollama: &ollama
     image: ollama/ollama:0.12.6
     profiles: ["ai"]
-    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 3 && ollama pull ${OLLAMA_MODEL:-qwen2.5:3b} && wait"]
+    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 3 && ollama pull ${OLLAMA_MODEL:-qwen3:4b-instruct} && wait"]
     environment:
       # Room for the shop's numbers the model reads before answering.
       OLLAMA_CONTEXT_LENGTH: "8192"

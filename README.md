@@ -93,17 +93,30 @@ Forecasts are remade by themselves after every sales import, or with `POST /api/
 
 ## Ask your shop (optional local AI)
 
-Questions are read by simple keyword rules; nothing extra is needed. When the rules are unsure, the
-app asks "Did you mean...". To also start the free local model, which then helps only with those
-unsure questions (Ollama, qwen2.5:3b, about 2 GB downloaded once, nothing leaves the computer):
+Without AI, questions are read by simple keyword rules ("stock of brake pads in Rabat"); nothing
+extra is needed, and the Ask page says so at the top. With the free local AI (Ollama, model
+`qwen3:4b-instruct`, about 2.5 GB downloaded once, nothing leaves the computer), Ask becomes an
+assistant: it looks up the shop's data, writes the answer in the question's language as it goes,
+and every number it writes is checked against the data before it is shown.
+
+On a computer with an NVIDIA graphics card (much faster), start it with:
 
 ```
-docker compose --profile ai up
-docker compose exec api python -m app.ask.check_questions
+docker compose --profile ai-gpu up
 ```
 
-The second command scores the rule, each model, and rule + model on both labeled question sets
-(150 questions), per language, with how often each answers the wrong question.
+Without one: `docker compose --profile ai up` (works, but answers take much longer).
+
+**Close heavy apps (games, animated wallpapers, many browser tabs) before using it on a 4 GB
+graphics card.** Windows and open apps already use part of the card's memory; if the model doesn't
+fit, part of it runs on the processor and answers get several times slower. Check with
+`docker compose exec ollama-gpu ollama ps`: the PROCESSOR column should say mostly GPU.
+
+To score the models on the 60 open test questions (good answers, number check, refusals, seconds):
+
+```
+docker compose exec api python -m app.ask.check_assistant qwen3:4b-instruct --misses
+```
 
 ## Database changes
 

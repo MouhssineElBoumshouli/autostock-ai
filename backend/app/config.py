@@ -12,4 +12,4 @@ COOKIES_SECURE = APP_URL.startswith("https://")
 
 # Optional local AI (Ollama). Empty or unreachable = "AI is off" and the app works without it.
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "").rstrip("/")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:3b")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3:4b-instruct")
