@@ -11,9 +11,10 @@
 
 Each sentence is checked before the person sees it (app/ask/fact_check.py): no number typed by the
 model, and every label next to its own branch, part and period. Text goes to the screen one sentence
-at a time. If one fails, the writer tries once more, told exactly what was wrong (what was shown is
-taken back first). If that fails too, the website shows the app's own answer instead. The numbers
-used are always sent with it.
+at a time. Once finished, the answer must be in the question's language (app/ask/answer_language.py).
+If anything fails, the writer tries once more, told exactly what was wrong (what was shown is taken
+back first). If that fails too, the website shows the app's own answer instead, in the person's own
+app language. The numbers used are always sent with it.
 """
 
 import json
@@ -27,7 +28,8 @@ from app.ai import llm
 from app.ask.answer_parts import shop_today
 from app.ask.keyword_rule import read_follow_up, read_with_rule
 from app.ask.model_reader import read_with_model
-from app.ask.fact_check import FactText, explained
+from app.ask.answer_language import in_language
+from app.ask.fact_check import WRONG_LANGUAGE, FactText, explained
 from app.ask.labeled_facts import labeled_facts
 from app.ask.question import NOT_SURE, Question, ShopWords
 from app.ask.tools import Lookup, look_up
@@ -129,8 +131,10 @@ def converse(
                                        about=heading(understood), facts="\n".join(fact.line() for fact in facts))
                 messages = [{"role": "system", "content": writer},
                             {"role": "user", "content": f"{question}\n(Answer in {language}, with the labels.)"}]
+            names = [*shop.branches, *(fact.part for fact in facts if fact.part)]
             text = FactText(facts, shop.branches, understood.period)
             written = yield from _written(text, messages, model)
+            _check_language(text, language, names)
             if text.wrong:
                 # One second try, told exactly what was wrong. What was already shown is taken back first.
                 retried = True
@@ -141,6 +145,7 @@ def converse(
                              {"role": "user", "content": RETRY.format(problems=problems, language=language)}]
                 text = FactText(facts, shop.branches, understood.period)
                 yield from _written(text, messages, model)
+                _check_language(text, language, names)
     except llm.ModelFailed:
         if not text.shown and not lookups:
             yield {"type": "ai_off"}
@@ -149,7 +154,7 @@ def converse(
     yield {
         "type": "done",
         "checked": not text.wrong and bool(text.shown.strip()),
-        "text": text.shown.strip(),
+        "text": "" if text.wrong else text.shown.strip(),  # when blocked, the person sees the app's own answer
         "wrong_numbers": text.wrong,
         "retried": retried,
         "read_by": read_by,
@@ -170,6 +175,12 @@ def _written(text: FactText, messages: list[dict], model: str) -> Generator[dict
     if out := text.finish():
         yield {"type": "text", "text": out}
     return written
+
+
+def _check_language(text: FactText, language: str, names: list[str]) -> None:
+    """A finished answer in another language than the question's counts as blocked."""
+    if not text.wrong and text.shown and not in_language(text.shown, language, names):
+        text.wrong = [f"{WRONG_LANGUAGE}{language}"]
 
 
 def _shown(lookup: Lookup) -> dict:

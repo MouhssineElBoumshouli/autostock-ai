@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 
 from app.ai import llm
 from app.ask import model_reader
+from app.ask.answer_language import written_in
 from app.ask.assistant import DARIJA_ANSWER, MONEY_HIDDEN
 from app.ask.fact_check import FactText
 from app.ask.keyword_rule import read_follow_up, read_with_rule
@@ -199,13 +200,13 @@ def test_the_right_number_on_the_wrong_part_is_blocked(browser, several_brake_pa
     def wrong(prompt):
         return [f"The rear pads have {label(prompt, 'Brake pads front', 'pieces in stock')} in stock."]
 
-    assert done(chat_with(model, wrong, browser, "tout sur les brake pads"))["checked"] is False
+    assert done(chat_with(model, wrong, browser, "tell me everything about the brake pads"))["checked"] is False
 
     def right(prompt):
         return [f"The rear pads have {label(prompt, 'Brake pads rear', 'pieces in stock')} in stock, "
                 f"the front ones {label(prompt, 'Brake pads front', 'pieces in stock')}."]
 
-    assert done(chat_with(model, right, browser, "tout sur les brake pads"))["text"] == "The rear pads have 20 in stock, the front ones 30."
+    assert done(chat_with(model, right, browser, "tell me everything about the brake pads"))["text"] == "The rear pads have 20 in stock, the front ones 30."
 
 
 def test_a_blocked_answer_is_written_again_once_told_exactly_what_was_wrong(browser, shop, model):
@@ -241,6 +242,41 @@ def test_an_answer_that_is_right_the_first_time_is_not_written_twice(browser, sh
     fake = model(writes=[lambda prompt: [f"We sold {label(prompt, 'pieces sold')} oil filters."]])
     assert done(chat(browser, "how many oil filters did we sell this week?"))["retried"] is False
     assert len(fake.chats) == 1
+
+
+def test_an_answer_in_the_wrong_language_is_written_again_in_the_right_one(browser, shop, model):
+    def english(prompt):
+        return [f"We sold {label(prompt, 'pieces sold')} oil filters this week."]
+
+    def french(prompt):
+        return [f"Cette semaine, {label(prompt, 'pieces sold')} filtres à huile ont été vendus."]
+
+    fake = model(writes=[english, french])
+    events = chat(browser, "combien de filtres a huile vendus cette semaine ?")
+    result = done(events)
+    assert result["checked"] is True and result["retried"] is True
+    assert result["text"] == "Cette semaine, 5 filtres à huile ont été vendus."
+    assert "you answered in the wrong language; answer in French" in fake.chats[1][-1]["content"]
+    assert [event["type"] for event in events] == ["looking_up", "text", "restart", "text", "done"]
+
+
+def test_an_answer_in_the_wrong_language_twice_shows_the_apps_own_answer(browser, shop, model):
+    fake = model(writes=[lambda prompt: [f"We sold {label(prompt, 'pieces sold')} oil filters this week."]])
+    result = done(chat(browser, "ما هي مبيعات فلاتر الزيت هذا الأسبوع؟"))
+    assert result["checked"] is False and result["text"] == "" and result["lookups"]
+    assert result["wrong_numbers"] == ["wrong language, the question is in Arabic"]
+    assert len(fake.chats) == 2
+
+
+@pytest.mark.parametrize(("text", "found"), [
+    ("Rabat - Agdal sold 6 980 pieces last month.", "en"),
+    ("Cette semaine, 5 362 pièces ont été vendues.", "fr"),
+    ("الدار البيضاء - Maarif باع 6 349 هذا الشهر", "ar"),
+    ("Rabat - Agdal: 263.", None),  # only a name and a number: can't tell, so it passes
+    ("Ce period, 5 362 pieces sold this period.", "en"),
+])
+def test_the_language_an_answer_is_written_in(text, found):
+    assert written_in(text, [RABAT, CASA]) == found
 
 
 def test_an_unknown_label_is_blocked(browser, shop, model):

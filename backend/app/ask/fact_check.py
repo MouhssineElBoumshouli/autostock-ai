@@ -26,6 +26,7 @@ LABEL = re.compile(r"\[\s*(F\d+)\s*\]|\b(F\d+)\b")
 CLAUSE_MARK = re.compile(r"[,،;()–—]")
 MOST_WAITING = 600  # characters with no sentence end: a model stuck repeating itself is stopped
 NO_END = "(no end to the sentence)"
+WRONG_LANGUAGE = "wrong language, the question is in "
 MISPLACED = re.compile(r"\[(F\d+)\] is (.+), written next to (.+)")
 KIND_WORDS = {**WHEN_WORDS, "up": "a change up", "down": "a change down", "same": "no change"}
 ARABIC_PREFIXES = "وبلف"  # glued to the next word: "والرباط" is "and Rabat"
@@ -227,6 +228,8 @@ def explained(problem: str) -> str:
         return f"there is no label [{problem.removeprefix('unknown label ')}]; use only the labels in the facts"
     if problem == NO_END:
         return "your answer never finished a sentence; write 2 to 4 short sentences"
+    if problem.startswith(WRONG_LANGUAGE):
+        return f"you answered in the wrong language; answer in {problem.removeprefix(WRONG_LANGUAGE)}"
     found = MISPLACED.match(problem)
     if found:
         label, own, other = found.groups()
