@@ -1,7 +1,8 @@
 """Honest score for the "Ask your shop" assistant, per local model, on the 60 open questions of
 app/ask/assistant_test_questions.py (written before the assistant, never edited).
 
-An answer is good when it does what its case says a good answer must contain:
+The assistant reads each question (rule, follow-up, or model), runs one lookup, and the model writes
+the answer from its facts (app/ask/assistant.py). An answer is good when it does what its case says a good answer must contain:
 - answerable questions: every needed lookup made with the right filters, every number it must
   mention said (simple rounding allowed), the number check passed, the right language;
 - questions to refuse: nothing looked up, a reply with no numbers, the right language.
@@ -23,13 +24,14 @@ from sqlalchemy import select
 from app.ai import llm
 from app.ask.assistant import converse
 from app.ask.assistant_test_questions import ASSISTANT_CASES, AssistantCase
-from app.ask.number_check import rounded, numbers_written, readings
+from app.ask.number_check import numbers_written, readings, rounded
+from app.ask.question import Question
 from app.db import SessionLocal
 from app.demo.demo_shop import DEMO_SHOP_NAME
 from app.models import Organization, Part
 from app.search.part_search import find_parts
 
-MODELS = ("qwen2.5:3b", "qwen3:4b-instruct", "qwen2.5:7b", "llama3.1:8b", "qwen3:8b")
+MODELS = ("qwen3:4b-instruct", "qwen2.5:3b")
 ARABIC = re.compile(r"[؀-ۿ]")
 LATIN = re.compile(r"[A-Za-zÀ-ÿ]")
 FRENCH = set("le la les des est sont vous nous une pour dans avec sur cette semaine ventes pièces vendu vendues".split())
@@ -46,6 +48,8 @@ class Result:
     lookups: list[dict]
     seconds: float
     first_words_seconds: float | None
+    asked: dict | None = None  # the question as the app understood it, kept for a follow-up
+    read_by: str = ""
     misses: list[str] = field(default_factory=list)
 
     @property
@@ -53,22 +57,18 @@ class Result:
         return not self.misses
 
 
-def ask_once(db, organization_id, question: str, earlier: list[dict], model: str) -> Result:
+def ask_once(db, organization_id, question: str, earlier: dict | None, model: str) -> Result:
     started = perf_counter()
     first_words = None
     done: dict = {}
-    for event in converse(db, organization_id, "MAD", question, earlier, model):
+    previous = Question(earlier["type"], **earlier["filters"]) if earlier else None
+    for event in converse(db, organization_id, "MAD", question, previous, model):
         if event["type"] == "text" and first_words is None:
             first_words = perf_counter() - started
         if event["type"] in ("done", "ai_off"):
             done = event
     return Result(None, done.get("text", ""), done.get("checked", False), done.get("wrong_numbers", []),
-                  done.get("lookups", []), perf_counter() - started, first_words)
-
-
-def shown_text(result: Result) -> str:
-    """What the person saw: the model's text, or the app's own sentences when the check stopped it."""
-    return result.text if result.checked else " ".join(lookup["sentence"] for lookup in result.lookups)
+                  done.get("lookups", []), perf_counter() - started, first_words, done.get("question"), done.get("read_by", ""))
 
 
 def language_of(text: str) -> str:
@@ -164,13 +164,14 @@ def judge(db, organization_id, result: Result) -> None:
 
 
 def run_model(db, organization_id, model: str) -> list[Result]:
-    ask_once(db, organization_id, "hello", [], model)  # loads the model onto the graphics card first
+    ask_once(db, organization_id, "hello", None, model)  # loads the model onto the graphics card first
     results = []
     for case in ASSISTANT_CASES:
-        earlier = []
+        earlier = None
         for question in case.earlier:
             before = ask_once(db, organization_id, question, earlier, model)
-            earlier.append({"question": question, "answer": shown_text(before)})
+            if before.asked and before.asked["type"] != "cannot_answer":
+                earlier = before.asked
         result = ask_once(db, organization_id, case.question, earlier, model)
         result.case = case
         judge(db, organization_id, result)
@@ -199,6 +200,10 @@ def report(model: str, results: list[Result], show_misses: bool) -> None:
     for language in ("en", "fr", "ar", "darija"):
         mine = [r for r in results if r.case.language == language]
         print(f"  {language}: {sum(r.good for r in mine)}/{len(mine)}")
+    follow_ups = [r for r in results if r.case.earlier]
+    print(f"  follow-ups: {sum(r.good for r in follow_ups)}/{len(follow_ups)}")
+    readers = {name: sum(r.read_by == name for r in results) for name in ("rule", "follow_up", "model")}
+    print(f"  read by: {readers}")
     if show_misses:
         for r in results:
             if not r.good:
