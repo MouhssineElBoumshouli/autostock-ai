@@ -200,13 +200,13 @@ def test_the_right_number_on_the_wrong_part_is_blocked(browser, several_brake_pa
     def wrong(prompt):
         return [f"The rear pads have {label(prompt, 'Brake pads front', 'pieces in stock')} in stock."]
 
-    assert done(chat_with(model, wrong, browser, "tell me everything about the brake pads"))["checked"] is False
+    assert done(chat_with(model, wrong, browser, "details of the brake pads"))["checked"] is False
 
     def right(prompt):
         return [f"The rear pads have {label(prompt, 'Brake pads rear', 'pieces in stock')} in stock, "
                 f"the front ones {label(prompt, 'Brake pads front', 'pieces in stock')}."]
 
-    assert done(chat_with(model, right, browser, "tell me everything about the brake pads"))["text"] == "The rear pads have 20 in stock, the front ones 30."
+    assert done(chat_with(model, right, browser, "details of the brake pads"))["text"] == "The rear pads have 20 in stock, the front ones 30."
 
 
 def test_a_blocked_answer_is_written_again_once_told_exactly_what_was_wrong(browser, shop, model):
