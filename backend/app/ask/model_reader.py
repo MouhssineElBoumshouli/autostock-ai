@@ -42,6 +42,9 @@ EXAMPLES = """Examples (the shop's names may differ):
 "شكون الفرع اللي كيبيع كثر ديال الزيوت؟" -> {"type": "compare_branches", "part": null, "category": "Oils", "branch": null, "period": null}
 "chhal ba9i mn les amortisseurs f fes?" -> {"type": "stock_of_part", "part": "les amortisseurs", "category": null, "branch": "Fes - Centre", "period": null}
 "عطيني كلشي على البوجي" -> {"type": "part_details", "part": "البوجي", "category": null, "branch": null, "period": null}
+"ach kayn jdid f lhanout?" -> {"type": "today_briefing", "part": null, "category": null, "branch": null, "period": null}
+"شنو خاصني نشري هاد السيمانة؟" -> {"type": "what_to_order", "part": null, "category": null, "branch": null, "period": null}
+"wach kayna chi sel3a ma kat tba3ch f rbat?" -> {"type": "dead_stock", "part": null, "category": null, "branch": "Rabat - Agdal", "period": null}
 "add 10 batteries to the stock" -> {"type": "cannot_answer", "part": null, "category": null, "branch": null, "period": null}"""
 
 FOLLOW_UP_EXAMPLES = """The question before was: {earlier}

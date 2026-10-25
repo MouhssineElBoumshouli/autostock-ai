@@ -25,6 +25,9 @@ LITTLE_WORDS = set(
     التكلفه تكلفه
     chhal ch7al chno achno ach li lli l f fi mn men dyal d wach kayna kayn chi had 3ndna ghadi khassni bzaf
     3la ila w o sel3a lw
+    3tini a3tini mno menno 3nd 3and bin kifach dayr dayra hanout lhanout tay7 tay7a taye7 na9es n9es
+    shop magasin boutique between entre give donne down baisse baissent
+    عطيني منو عند بين الحانوت حانوت المحل طايح ناقص
     شحال اشنو شنو اللي لي ف ديال واش كاين كاينه شي هاد غادي السلعه سلعه
     """.split()
 )
