@@ -41,12 +41,21 @@ WHEN_PHRASES = {
                   "السنه الماضيه", "العام الماضي", "l3am li fat", "العام اللي فات"],
     "normal": ["normal", "normale", "usual", "habituelle", "habituel", "average", "moyenne", "عادي", "العادي",
                "المعتاد", "متوسط"],
-    "before": ["before", "previous", "last week", "last month", "earlier", "avant", "precedent", "precedente",
+    "before": ["before", "previous", "last week", "last month", "last period", "earlier", "avant", "precedent", "precedente",
                "semaine derniere", "mois dernier", "derniere", "dernier", "السابق", "السابقه", "الماضي", "الماضيه",
                "قبل", "li fat", "اللي فات", "اللي فاتت"],
     "now": ["this week", "this month", "this year", "this period", "today", "now", "cette semaine", "ce mois",
             "cette annee", "cette periode", "aujourd hui", "maintenant", "هذا الاسبوع", "هذا الشهر", "هذه السنه",
             "هذه الفتره", "اليوم", "الان", "هاد السيمانه", "هاد الشهر", "daba", "دابا", "had simana", "had chhar"],
+}
+
+
+# When the question is about a past period ("le mois dernier"), its words name the period asked
+# about ("this period" in the facts), not the one before it.
+ASKED_PERIOD_PHRASES = {
+    "yesterday": ["yesterday", "hier", "امس", "البارح"],
+    "last_week": ["last week", "semaine derniere", "الاسبوع الماضي", "simana li fatet"],
+    "last_month": ["last month", "mois dernier", "الشهر الماضي", "chhar li fat"],
 }
 
 
@@ -61,12 +70,12 @@ class FactText:
     """Holds the writer's text until a sentence is complete, checks it, and lets it out with the real
     numbers in place of the labels. After the first problem it lets nothing more out."""
 
-    def __init__(self, facts: list[Fact], branches: tuple[str, ...]):
+    def __init__(self, facts: list[Fact], branches: tuple[str, ...], period: str | None = None):
         self.facts = {fact.label: fact for fact in facts}
         self.names = _names_with_digits(facts)
         # Numbers in the facts' own descriptions ("within 14 days", "the next 30 days") come from the app.
         self.described = {number for fact in facts for number in numbers_written(fact.what)}
-        self.vocabulary = _vocabulary(facts, branches)
+        self.vocabulary = _vocabulary(facts, branches, period)
         self.waiting = ""
         self.shown = ""
         self.wrong: list[str] = []
@@ -170,7 +179,7 @@ def _sides(at: int, mentions: list[Mention], places: list[tuple[int, int]]) -> l
     return []
 
 
-def _vocabulary(facts: list[Fact], branches: tuple[str, ...]) -> list[tuple[str, str, list[str]]]:
+def _vocabulary(facts: list[Fact], branches: tuple[str, ...], period: str | None) -> list[tuple[str, str, list[str]]]:
     """(kind, name, words) for every branch, every part the facts are about, and every period kind,
     longest phrases first."""
     phrases = [("branch", branch, words_of(phrase)) for branch in branches for phrase in branch_phrases(branch)]
@@ -179,7 +188,10 @@ def _vocabulary(facts: list[Fact], branches: tuple[str, ...]) -> list[tuple[str,
     for part in parts:
         own = [word for word in words_of(part) if word not in shared and word not in LITTLE_WORDS and not word.isdigit()]
         phrases += [("part", part, [word]) for word in own]
-    phrases += [("when", kind, words_of(phrase)) for kind, kind_phrases in WHEN_PHRASES.items() for phrase in kind_phrases]
+    asked = ASKED_PERIOD_PHRASES.get(period or "", [])
+    phrases += [("when", "now", words_of(phrase)) for phrase in asked]
+    phrases += [("when", kind, words_of(phrase)) for kind, kind_phrases in WHEN_PHRASES.items() for phrase in kind_phrases
+                if phrase not in asked]
     phrases += [("direction", kind, words_of(phrase)) for kind, kind_phrases in DIRECTION_PHRASES.items()
                 for phrase in kind_phrases]
     return sorted(phrases, key=lambda phrase: -len(phrase[2]))

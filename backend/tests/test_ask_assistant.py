@@ -412,6 +412,12 @@ def test_a_label_next_to_someone_else_or_a_typed_number_is_a_problem(text, probl
     assert problems(text)[0] == problem
 
 
+def test_when_the_question_is_about_last_month_last_month_is_this_period():
+    asked_last_month = FactText(FACTS, (CASA, RABAT), period="last_month")
+    assert asked_last_month.problems("Rabat sold [F1] pieces last month, against [F3] the month before.") == []
+    assert asked_last_month.problems("Rabat sold [F3] pieces last month.") != []
+
+
 def test_the_text_is_let_out_sentence_by_sentence_with_numbers_in_and_stops_at_the_first_problem():
     text = FactText(FACTS, (CASA, RABAT))
     assert text.add("Rabat sold [F1]") == ""

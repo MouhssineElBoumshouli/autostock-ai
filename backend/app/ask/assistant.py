@@ -119,7 +119,7 @@ def converse(
             lookups.append(lookup)
             yield {"type": "looking_up", "tool": lookup.tool, "filters": lookup.filters}
             facts = labeled_facts(lookup.answer, understood, currency, NUMBER_STYLE.get(language, "ar"))
-            text = FactText(facts, shop.branches)
+            text = FactText(facts, shop.branches, understood.period)
             money_rule = MONEY_SEEN.format(currency=currency) if currency else MONEY_HIDDEN
             writer = WRITER.format(today=shop_today(db, organization_id), language=language, money_rule=money_rule,
                                    about=heading(understood), facts="\n".join(fact.line() for fact in facts))
