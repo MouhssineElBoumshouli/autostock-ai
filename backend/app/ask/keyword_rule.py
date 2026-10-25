@@ -214,3 +214,18 @@ def _not_sure(found_type, part, category, branch, period) -> Question:
     candidates += ["sales_of", "stock_of_part", "what_to_order"]
     suggestions = tuple(dict.fromkeys(candidates))[:SUGGESTIONS_SHOWN]
     return Question(NOT_SURE, part=part, category=category, branch=branch, period=period, suggestions=suggestions)
+
+
+def branch_named(text: str, branches: tuple[str, ...]) -> str | None:
+    """The shop branch `text` names ("rabat", "Casa", "الرباط"), or None."""
+    if text in branches:
+        return text
+    branch, _ = _take_branch(words_of(text), branches)
+    return branch
+
+
+def category_named(text: str, categories: tuple[str, ...]) -> str | None:
+    """The shop category `text` names ("brakes", "les freins", "فرامل"), or None."""
+    if text in categories:
+        return text
+    return _category([word for word in words_of(text) if word not in LITTLE_WORDS], categories)

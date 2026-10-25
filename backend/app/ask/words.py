@@ -5,7 +5,8 @@ import unicodedata
 
 ARABIC_LETTERS = str.maketrans({"أ": "ا", "إ": "ا", "آ": "ا", "ى": "ي", "ة": "ه", "ـ": ""})
 
-# Little words that never name a part, in the four languages.
+# Little words that never name a part, in the four languages. "s re ll ve m" are what is left of
+# "what's", "we're", "we'll", "we've", "I'm" once the apostrophe is gone.
 LITTLE_WORDS = set(
     """
     how many much did do does we our us i you your what whats which who are is was were be the a an of for in at
@@ -13,6 +14,7 @@ LITTLE_WORDS = set(
     will would to need should soon this that these those me my with by from about can could please total overall
     category department section shelf amount number count delivery deliveries supplier suppliers
     cost costs money
+    s re ll ve m
     combien de d des du la le les l on a en au aux que qu quoi quelle quelles quel quels est ce ci cet cette sont
     ca c je j nous vous y t il ils elle pour dans qui va vont etre se plus moins piece pieces produit produits
     article articles et ou mon ma mes nos notre votre passer categorie bientot rayon famille total montant nombre
