@@ -110,7 +110,8 @@ Without one: `docker compose --profile ai up` (works, but answers take much long
 **Close heavy apps (games, animated wallpapers, many browser tabs) before using it on a 4 GB
 graphics card.** Windows and open apps already use part of the card's memory; if the model doesn't
 fit, part of it runs on the processor and answers get several times slower. Check with
-`docker compose exec ollama-gpu ollama ps`: the PROCESSOR column should say mostly GPU.
+`docker compose exec ollama-gpu ollama ps`: the PROCESSOR column should say mostly GPU. If it says
+100% CPU even with apps closed, restart the AI once: `docker compose --profile ai-gpu restart ollama-gpu`.
 
 To score the models on the 60 open test questions (good answers, number check, refusals, seconds):
 
