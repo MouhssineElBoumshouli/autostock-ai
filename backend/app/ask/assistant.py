@@ -30,6 +30,7 @@ from app.ask.fact_check import FactText
 from app.ask.labeled_facts import labeled_facts
 from app.ask.question import NOT_SURE, Question, ShopWords
 from app.ask.tools import Lookup, look_up
+from app.ask.understood_line import heading
 from app.ask.understand import shop_words
 from app.ask.words import words_of
 
@@ -47,6 +48,7 @@ Answer the person's question in 2 to 4 short sentences, in {language}, using onl
 Example: with the facts "[F1] Casablanca - Maarif · this period · pieces sold", "[F2] Casablanca - Maarif ·
 change in pieces sold (down)", "[F3] Rabat - Agdal · this period · pieces sold", a good answer is:
 "Casablanca - Maarif sold [F1] pieces this period, [F2] on the period before. Rabat - Agdal sold [F3] pieces."
+The facts are about: {about}
 Facts:
 {facts}"""
 REFUSAL = """You write answers for an auto parts shop app. The app only reads the shop's stock, sales, alerts,
@@ -120,7 +122,7 @@ def converse(
             text = FactText(facts, shop.branches)
             money_rule = MONEY_SEEN.format(currency=currency) if currency else MONEY_HIDDEN
             writer = WRITER.format(today=shop_today(db, organization_id), language=language, money_rule=money_rule,
-                                   facts="\n".join(fact.line() for fact in facts))
+                                   about=heading(understood), facts="\n".join(fact.line() for fact in facts))
             asked = f"{question}\n(Answer in {language}, with the labels.)"
             yield from _written(text, [{"role": "system", "content": writer}, {"role": "user", "content": asked}], model)
     except llm.ModelFailed:

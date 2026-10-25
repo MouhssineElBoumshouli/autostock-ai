@@ -38,7 +38,7 @@ WHAT = {
     "days_late": "days late", "stock_by_branch pieces": "pieces in stock",
 }
 PART_KEYS = ("name", "supplier", "order_number")
-# What period a fact is about. "now" is given to every other fact of an answer that compares periods.
+# What period a fact is about, when the answer gives the same kind of number for several periods.
 WHEN_WORDS = {"now": "this period", "before": "the period before", "last_year": "the same days last year",
               "normal": "a normal week"}
 
@@ -67,10 +67,14 @@ def labeled_facts(answer: Answer, question: Question, currency: str | None, lang
     """`language` is "en", "fr" or "ar": how the numbers are written in the answer."""
     found: list[dict] = []
     _walk(answer.values, [], {"branch": question.branch}, found)
-    compares = any(fact["when"] for fact in found)
+    # A period is only worth checking when the same kind of number is given for two periods
+    # ("pieces sold" now and before); an alert count has no other period to be mixed up with.
+    periods: dict[str, set[str]] = {}
+    for fact in found:
+        periods.setdefault(fact["what"], set()).add(fact["when"] or "now")
     facts = []
     for number, fact in enumerate(found[:MOST_FACTS], 1):
-        when = fact["when"] or ("now" if compares and not fact["key"].startswith("percent") else None)
+        when = (fact["when"] or "now") if len(periods[fact["what"]]) > 1 else None
         facts.append(Fact(
             label=f"F{number}", what=fact["what"], value=_raw(fact["value"], fact["key"], currency),
             shown=_shown(fact["value"], fact["key"], currency, language), branch=fact["branch"],
