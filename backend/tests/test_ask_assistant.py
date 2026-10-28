@@ -26,6 +26,7 @@ from app.ask.assistant import MONEY_HIDDEN
 from app.ask.reply_language import DARIJA_WRITER_LANGUAGE
 from app.ask.fact_check import FactText
 from app.ask.keyword_rule import read_follow_up, read_with_rule
+from app.ask.answer_parts import Answer
 from app.ask.labeled_facts import Fact, labeled_facts
 from app.ask.number_check import numbers_in_words, numbers_written
 from app.ask.question import Question, ShopWords, checked_question
@@ -444,6 +445,13 @@ def test_staff_get_no_money_in_what_the_model_reads_or_what_is_shown(browser, sh
             assert not any(word in fact.what for fact in facts for word in MONEY_WORDS), question_type
 
 
+def test_each_fact_says_what_it_is_in_its_own_answer():
+    # "4,662 pieces to order" was written as "sold": the writer was told these were pieces sold.
+    answer = Answer("what_to_order", {"subject": {"kind": "all"}, "count": 222, "pieces": 4662, "money": 100}, "")
+    whats = [fact.what for fact in labeled_facts(answer, Question("what_to_order"), "MAD", "en")]
+    assert whats == ["lines to order", "pieces to order (not sold)", "cost of what to order"]
+
+
 def test_each_shop_only_sees_its_own_data(browser, shop, model):
     other = create_other_shop()
     other_oil = new_part(other.organization_id, "Oil filter", "Filters")
@@ -688,3 +696,9 @@ def test_the_model_can_name_the_branches_to_compare(monkeypatch):
 @pytest.mark.parametrize("branches", [f"{CASA} | Tangier", CASA, ""])
 def test_branches_to_compare_must_be_two_of_the_shops_own(branches):
     assert checked_question({"type": "compare_branches", "branches": branches}, SHOP) in (None, Question("compare_branches"))
+
+
+def test_a_currency_written_next_to_a_money_fact_is_not_shown_twice():
+    money = [Fact("F1", "cost of what to order", "12122.74 MAD", "MAD 12,122.74")]
+    text = FactText(money, (CASA, RABAT))
+    assert text.add("It costs MAD [F1]. ") == "It costs MAD 12,122.74."

@@ -43,6 +43,19 @@ WHAT = {
     "reasons price_now": "average selling price", "reasons price_before": "average selling price",
     "next pieces": "pieces sold",
 }
+# The same key means different things in different answers: "pieces" are to order, in stock or left.
+WHAT_FOR = {
+    "what_to_order": {"pieces": "pieces to order (not sold)", "count": "lines to order", "money": "cost of what to order"},
+    "stock_of_part": {"pieces": "pieces in stock"},
+    "running_out": {"count": "parts that may run out", "pieces": "pieces left of the first part to run out",
+                    "days_left": "days left for the first part to run out"},
+    "dead_stock": {"count": "parts with stock but no sale", "pieces": "pieces on the shelf that don't sell",
+                   "money": "value at cost of the stock that doesn't sell"},
+    "forecast": {"pieces": "pieces expected to sell"},
+    "open_alerts": {"count": "open alerts"},
+    "late_deliveries": {"count": "late supplier deliveries"},
+    "best_sellers": {"pieces": "pieces sold of the best seller"},
+}
 PART_KEYS = ("name", "supplier", "order_number")
 # What period a fact is about, when the answer gives the same kind of number for several periods.
 WHEN_WORDS = {"now": "this period", "before": "the period before", "last_year": "the same days last year",
@@ -73,6 +86,8 @@ def labeled_facts(answer: Answer, question: Question, currency: str | None, lang
     """`language` is "en", "fr" or "ar": how the numbers are written in the answer."""
     found: list[dict] = []
     _walk(answer.values, [], {"branch": question.branch}, found)
+    for fact in found:
+        fact["what"] = WHAT_FOR.get(answer.key, {}).get(fact["key"], fact["what"])
     # A period is only worth checking when the same kind of number is given for two periods
     # ("pieces sold" now and before); an alert count has no other period to be mixed up with.
     periods: dict[str, set[str]] = {}
