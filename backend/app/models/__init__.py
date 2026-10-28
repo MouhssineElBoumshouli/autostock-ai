@@ -1,6 +1,7 @@
 """All tables. Importing this package registers them with Alembic."""
 
 from app.models.alert import Alert
+from app.models.asked_question import AskedQuestion
 from app.models.audit_log import AuditLog
 from app.models.branch import Branch
 from app.models.demo_planted_problem import DemoPlantedProblem
@@ -26,6 +27,7 @@ __all__ = [
     "EQUIVALENT_SOURCES",
     "ROLES",
     "Alert",
+    "AskedQuestion",
     "AuditLog",
     "Branch",
     "DemoPlantedProblem",
