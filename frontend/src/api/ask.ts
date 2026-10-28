@@ -26,13 +26,17 @@ export type AskOut = {
   ai_note: string | null;
   ai_on: boolean;
   period: string | null;
-  // `sentence` and `understood` are the server's English; screens build them from these (askSentence.ts).
+  // `understood` is the server's English; screens build it from these (askSentence.ts).
   key: string;
   values: Record<string, unknown>;
-  sentence: string;
+  // Written by the server in the question's own language (`language`), which may differ from the app's.
+  answer: string;
+  language: AnswerLanguage;
   numbers: AskNumber[];
   suggestions: AskSuggestion[];
 };
+
+export type AnswerLanguage = "en" | "fr" | "ar";
 
 export type AskRequest = { question: string; question_type?: string; filters?: AskFilters };
 
@@ -42,28 +46,28 @@ export function useAsk() {
   });
 }
 
-// The assistant (local AI on): one lookup it made, with the app's own sentence and the real numbers.
+// The assistant (local AI on): one lookup it made, with the real numbers.
 export type AssistantLookup = {
   tool: string;
   filters: AskFilters;
   key: string;
   values: Record<string, unknown>;
-  sentence: string;
   numbers: AskNumber[];
 };
 export type AssistantEvent =
   | { type: "ai_off" }
   | { type: "looking_up"; tool: string; filters: AskFilters }
   | { type: "text"; text: string }
-  // The written answer so far is taken back: the writer tries once more.
+  // The written answer so far is taken back: the cloud writer tries once more, or the app writes it.
   | { type: "restart" }
-  // checked=false: a number in the written answer didn't match the shop's data, so the app's own
-  // sentences from `lookups` are shown instead of the text.
+  // `text` is the answer to show: the app's own (written_by "app"), or the cloud writer's once every
+  // sentence passed the check against the shop's data.
   | {
       type: "done";
-      checked: boolean;
       text: string;
-      wrong_numbers: string[];
+      written_by: "app" | "cloud";
+      language: AnswerLanguage;
+      cloud_problems: string[];
       retried: boolean;
       read_by: "rule" | "model" | "follow_up";
       question: AskedBefore | null; // what the app understood; sent back so a follow-up can change it
@@ -95,6 +99,23 @@ export async function askAssistant(
     for (const line of lines) if (line.trim()) onEvent(JSON.parse(line) as AssistantEvent);
   }
   if (waiting.trim()) onEvent(JSON.parse(waiting) as AssistantEvent);
+}
+
+// Each person's last questions and answers, kept on the server.
+export type AskedEntry =
+  | { id: string; question: string; kind: "assistant"; answer: Extract<AssistantEvent, { type: "done" }> }
+  | { id: string; question: string; kind: "rule"; answer: AskOut };
+
+export function useAskHistory() {
+  return useQuery({
+    queryKey: ["ask", "history"],
+    queryFn: () => apiRequest<AskedEntry[]>("/api/ask/history"),
+    staleTime: Infinity, // read once per visit: the page keeps the newer ones itself
+  });
+}
+
+export function forgetAskHistory() {
+  return apiRequest<void>("/api/ask/history", { method: "DELETE" });
 }
 
 export function useAiOn() {

@@ -2,7 +2,18 @@ import { InfoIcon, MessageCircleQuestionIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
-import { type AskRequest, type AskedBefore, askAssistant, useAiOn, useAsk } from "@/api/ask";
+import { useQueryClient } from "@tanstack/react-query";
+
+import {
+  type AskRequest,
+  type AskedBefore,
+  type AskedEntry,
+  askAssistant,
+  forgetAskHistory,
+  useAiOn,
+  useAsk,
+  useAskHistory,
+} from "@/api/ask";
 import { useStockFilterChoices } from "@/api/stock";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
@@ -17,19 +28,29 @@ import { AnswerCard, type HistoryEntry } from "./AnswerCard";
 import { type AssistantEntry, AssistantCard } from "./AssistantCard";
 import { QuestionForm } from "./QuestionForm";
 
-const HISTORY_LIMIT = 10;
+const HISTORY_LIMIT = 20; // the server keeps the same number per person
 
 type RuleEntry = HistoryEntry & { kind: "rule" };
 type Entry = RuleEntry | AssistantEntry;
 
-// One big question box and this visit's questions, newest on top. With the local AI on, the
-// assistant answers in its own words and follow-ups keep the conversation; with it off, the keyword
-// rule answers (with a note at the top saying so). "?q=" (from the box on Today) asks right away, once.
+// A question saved on the server, shown again the way it was first shown.
+function savedEntry(saved: AskedEntry): Entry {
+  if (saved.kind === "rule") return { kind: "rule", id: saved.id, question: saved.question, data: saved.answer };
+  const lookingUp = saved.answer.lookups.map((lookup) => ({ tool: lookup.tool, filters: lookup.filters }));
+  return { kind: "assistant", id: saved.id, question: saved.question, lookingUp, text: saved.answer.text, done: saved.answer, failed: false };
+}
+
+// One big question box and the person's last questions (kept on the server), newest on top. With the
+// local AI on, it reads the question and follow-ups keep the conversation; with it off, the keyword rule
+// reads it (with a note at the top saying so). The app writes the answer either way, in the question's
+// language. "?q=" (from the box on Today) asks right away, once.
 export function AskPage() {
   const currency = useSignedIn().organization.currency;
   const choices = useStockFilterChoices();
   const aiOn = useAiOn();
   const ask = useAsk();
+  const saved = useAskHistory();
+  const queryClient = useQueryClient();
   const [history, setHistory] = useState<Entry[]>([]);
   // The last question the app understood in this conversation: "and in Rabat?" changes it.
   const [previous, setPrevious] = useState<AskedBefore | null>(null);
@@ -90,7 +111,18 @@ export function AskPage() {
   function newConversation() {
     setPrevious(null);
     setHistory([]);
+    queryClient.setQueryData(["ask", "history"], []);
+    void forgetAskHistory();
   }
+
+  // The questions asked on an earlier visit, once, under any asked since the page opened.
+  const showedSaved = useRef(false);
+  useEffect(() => {
+    if (!saved.data || showedSaved.current) return;
+    showedSaved.current = true;
+    const earlier = saved.data.map(savedEntry).reverse();
+    setHistory((now) => [...now, ...earlier].slice(0, HISTORY_LIMIT));
+  }, [saved.data]);
 
   useEffect(() => {
     const prefilled = params.get("q");
@@ -118,9 +150,9 @@ export function AskPage() {
       )}
       <QuestionForm onAsk={submit} asking={thinking || writing} />
 
-      {previous && !aiOff && (
+      {history.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-body-medium text-on-surface-variant">{t.ask.assistant.followUpHint}</p>
+          <p className="text-body-medium text-on-surface-variant">{previous && !aiOff ? t.ask.assistant.followUpHint : ""}</p>
           <Button variant="text" size="sm" onClick={newConversation} disabled={writing}>
             {t.ask.assistant.newConversation}
           </Button>
@@ -143,7 +175,15 @@ export function AskPage() {
         </Card>
       )}
 
-      {history.length === 0 && !thinking && !failed ? (
+      {saved.isError && history.length === 0 && (
+        <Card className="py-0">
+          <ErrorState onRetry={() => saved.refetch()} retrying={saved.isFetching} />
+        </Card>
+      )}
+
+      {saved.isPending && history.length === 0 ? (
+        <Skeleton className="h-40 w-full" aria-busy="true" />
+      ) : history.length === 0 && !thinking && !failed && !saved.isError ? (
         <EmptyState icon={MessageCircleQuestionIcon} title={t.ask.emptyTitle} description={t.ask.emptyDescription} />
       ) : (
         <div className="grid grid-cols-1 gap-4">

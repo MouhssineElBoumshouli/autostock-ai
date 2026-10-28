@@ -1,52 +1,5 @@
 // All English text shown to users. fr.ts and ar.ts have exactly the same shape (checked by `npm test`).
 
-// The words an Ask answer is built from, already formatted by src/pages/ask/askSentence.ts.
-export type AnswerWords = {
-  subject: string; // "all parts", "Oil filter (3 parts)", "the Brakes category"
-  Subject: string; // the same with a capital first letter, to start a sentence
-  branch: string | null;
-  period: string; // "this week"
-  range: string; // "Oct 14 – Oct 20"
-  pieces: string; // "5 pieces"
-  money: string | null; // null for people who don't see money
-  count: number;
-  shownCount: string;
-  name: string;
-  sku: string;
-  beforePieces: string;
-  beforeRange: string;
-  percent: number | null;
-  days: string;
-  daysLeft: string; // "4 days"
-  daysLate: string; // "3 days"
-  low: string;
-  high: string;
-  madeFrom: string;
-  madeOn: string;
-  part: string;
-  alertBranch: string;
-  alert: string;
-  orderNumber: string;
-  supplier: string;
-  words: string | null;
-  // The assistant's own lookups (briefing, branches compared, a part's story and details).
-  normalWeek: string;
-  needsAction: string;
-  worthALook: string;
-  lines: string;
-  late: string;
-  runningOut: string;
-  branchList: string; // "Casablanca - Maarif 976 pieces (up 3%), Rabat - Agdal …"
-  lastYear: string;
-  outNow: string;
-  outBefore: string;
-  inStock: string;
-  expected: string;
-  sold30: string;
-};
-
-const inBranch = (branch: string | null) => (branch ? ` in ${branch}` : "");
-
 export const en = {
   appName: "AutoStock AI",
   common: {
@@ -611,6 +564,14 @@ export const en = {
     language: "Language",
     languageHelp: "Everyone sees the app in this language, unless they choose their own in their account menu.",
     saved: "Settings saved.",
+    cloudWriter: {
+      title: "Who writes the answers on the Ask page",
+      description: "By default the app writes every answer itself, on this computer. You can let a cloud writer (Groq) write them in more natural sentences. The app still checks every number, and writes the answer itself if anything is wrong.",
+      off: "The app (on this computer)",
+      on: "Cloud writer (Groq)",
+      note: "The facts used for each answer are sent to Groq. Free, about 1,000 questions a day. Groq does not use them to train its models. Without internet, or once the daily limit is reached, the app writes the answers.",
+      noKey: "To turn it on, add a free Groq key (GROQ_API_KEY) to the .env file, then restart the app. See the README.",
+    },
     branches: {
       title: "Branches",
       description: "Where stock is kept. Rename one, merge two that mean the same place, or remove one you added by mistake.",
@@ -805,70 +766,7 @@ export const en = {
       last_30_days: "the last 30 days",
     } as Record<string, string>,
     // What an answer is about, inside a sentence.
-    subjects: {
-      part: (name: string, count: string | null) => (count ? `${name} (${count} parts)` : name),
-      matching: (words: string, count: string) => `parts matching “${words}” (${count} parts)`,
-      category: (name: string) => `the ${name} category`,
-      all: "all parts",
-    },
     // One sentence per answer key. Mirrors the English sentences in backend/app/ask.
-    answers: {
-      not_sure: (w: AnswerWords) => `I'm not sure what you mean${w.words ? ` by “${w.words}”` : ""}. Did you mean one of these?`,
-      cannot_answer: () => "I can't answer that yet.",
-      part_not_found: (w: AnswerWords) => `I couldn't find a part matching “${w.part}”. Try its name or part number.`,
-      which_part_stock: () => "Which part? For example: “how many oil filters in stock”.",
-      which_part_forecast: () => "Which part? For example: “how many brake pads will we sell”.",
-      sales_of: (w: AnswerWords) =>
-        `${w.Subject}: ${w.pieces} sold${inBranch(w.branch)} ${w.period} (${w.range})${w.money ? `, worth ${w.money}` : ""}.`,
-      best_sellers_none: (w: AnswerWords) => `No sales for ${w.subject}${inBranch(w.branch)} ${w.period} (${w.range}).`,
-      best_sellers: (w: AnswerWords) =>
-        `Best seller for ${w.subject}${inBranch(w.branch)} ${w.period} (${w.range}): ${w.name} (${w.sku}), ${w.pieces}.`,
-      sales_vs_last: (w: AnswerWords) =>
-        `${w.Subject}${inBranch(w.branch)}, ${w.period} (${w.range}): ${w.pieces}, ` +
-        (w.percent === null
-          ? "with no sales in the period before."
-          : `${w.percent === 0 ? "the same as" : `${w.percent > 0 ? "up" : "down"} ${Math.abs(w.percent)}% on`} ${w.beforeRange} (${w.beforePieces}).`),
-      stock_of_part: (w: AnswerWords) => `${w.Subject}: ${w.pieces} in stock${inBranch(w.branch)}.`,
-      running_out_none: (w: AnswerWords) =>
-        `Nothing in ${w.subject} is expected to run out${inBranch(w.branch)} within ${w.days} days.`,
-      running_out: (w: AnswerWords) =>
-        `${w.shownCount} ${w.count === 1 ? "part is" : "parts are"} expected to run out${inBranch(w.branch)} within ${w.days} days (${w.subject}). ` +
-        `First: ${w.name} (${w.sku}), ${w.pieces} left, about ${w.daysLeft}.`,
-      dead_stock_none: (w: AnswerWords) => `No dead stock in ${w.subject}${inBranch(w.branch)} (no sale in ${w.days} days).`,
-      dead_stock: (w: AnswerWords) =>
-        `${w.shownCount} ${w.count === 1 ? "part has" : "parts have"} stock but no sale in ${w.days} days (${w.subject}${inBranch(w.branch)}): ` +
-        `${w.pieces} on the shelf${w.money ? `, costing ${w.money}` : ""}.`,
-      forecast_none: (w: AnswerWords) => `No forecast yet for ${w.subject}. Forecasts are made after sales are imported.`,
-      forecast: (w: AnswerWords) =>
-        `${w.Subject}${inBranch(w.branch)}: about ${w.pieces} expected over the next ${w.days} days ` +
-        `(likely between ${w.low} and ${w.high}), from sales up to ${w.madeFrom}.`,
-      what_to_order_no_run: () => "There is no order suggestion yet. A manager can make one on the Orders page.",
-      what_to_order_none: (w: AnswerWords) =>
-        `Nothing left to order for ${w.subject}${inBranch(w.branch)} (latest suggestion, ${w.madeOn}).`,
-      what_to_order: (w: AnswerWords) =>
-        `To order for ${w.subject}${inBranch(w.branch)}: ${w.shownCount} ${w.count === 1 ? "line" : "lines"}, ` +
-        `${w.pieces}${w.money ? `, costing ${w.money}` : ""} (latest suggestion, ${w.madeOn}).`,
-      open_alerts_none: (w: AnswerWords) => `No open alerts for ${w.subject}${inBranch(w.branch)}.`,
-      open_alerts: (w: AnswerWords) =>
-        `${w.shownCount} open ${w.count === 1 ? "alert" : "alerts"} for ${w.subject}${inBranch(w.branch)}. ` +
-        `Newest: ${w.part} in ${w.alertBranch}: ${w.alert}`,
-      late_deliveries_none: () => "No supplier delivery is late.",
-      late_deliveries: (w: AnswerWords) =>
-        `${w.shownCount} ${w.count === 1 ? "delivery is" : "deliveries are"} late. Most late: ${w.orderNumber} from ${w.supplier}, ${w.daysLate}.`,
-      today_briefing: (w: AnswerWords) =>
-        `This week (${w.range}): ${w.pieces} sold, a normal week is ${w.normalWeek}. ${w.needsAction} alerts need action, ` +
-        `${w.worthALook} are worth a look. To order: ${w.lines} lines. Late deliveries: ${w.late}. Running out soon: ${w.runningOut} parts.`,
-      compare_branches: (w: AnswerWords) =>
-        `Sales of ${w.subject}, ${w.period} (${w.range}), most sold first: ${w.branchList}. Compared with ${w.beforeRange}.`,
-      explain_part_change: (w: AnswerWords) =>
-        `${w.Subject}${inBranch(w.branch)}, ${w.period} (${w.range}): ${w.pieces}, ` +
-        `${w.percent === null ? "no sales before" : w.percent === 0 ? "the same as" : `${w.percent > 0 ? "up" : "down"} ${Math.abs(w.percent)}% on`} ` +
-        `${w.beforeRange} (${w.beforePieces}). Same days last year: ${w.lastYear}. Days out of stock (per branch): ${w.outNow} now, ` +
-        `${w.outBefore} before. In stock now: ${w.inStock}. Expected next 30 days: ${w.expected}.`,
-      part_details: (w: AnswerWords) =>
-        `${w.Subject}${inBranch(w.branch)}: ${w.inStock} in stock, ${w.sold30} sold in the last 30 days, ` +
-        `about ${w.expected} expected in the next 30 days. Best seller: ${w.name} (${w.sku}).`,
-    } as Record<string, (w: AnswerWords) => string>,
     // Labels of the real numbers under an answer.
     numberLabels: {
       pieces_sold: "Pieces sold",
@@ -914,12 +812,9 @@ export const en = {
       lookingUp: "Looking up",
       writing: "Writing…",
       basedOn: "Based on:",
-      notChecked: "I couldn't check every number in the written answer against your data, so here are your shop's numbers directly:",
-      noLookup: "I couldn't answer that from your shop's data. Try asking it another way.",
       newConversation: "New conversation",
       followUpHint: "Follow-up questions keep the conversation: “and in Rabat?”, “why?”",
-      change: (percent: number | null) =>
-        percent === null ? "no sales before" : percent === 0 ? "the same" : `${percent > 0 ? "up" : "down"} ${Math.abs(percent)}%`,
+      writtenByCloud: "Written by the cloud writer (Groq), checked against your data.",
     },
     homeBox: {
       inputLabel: "Ask your shop",

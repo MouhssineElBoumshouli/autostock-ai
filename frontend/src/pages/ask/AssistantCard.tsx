@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { t } from "@/i18n";
 
 import { formatAskNumber } from "./askFormat";
-import { answerSentence, numberLabel, understoodHeading } from "./askSentence";
+import { numberLabel, understoodHeading } from "./askSentence";
 import { relatedScreen } from "./questionTypes";
 
 type Done = Extract<AssistantEvent, { type: "done" }>;
@@ -29,14 +29,14 @@ function lookupHeading(tool: string, filters: AskFilters): string {
   return understoodHeading(tool, filters, filters.period ?? null);
 }
 
-// The model writes plain text; a stray "**bold**" from it is shown as plain words.
+// The cloud writer writes plain text; a stray "**bold**" from it is shown as plain words.
 function plainText(text: string): string {
   return text.replace(/\*\*/g, "");
 }
 
-// One question to the assistant: what it is looking up, the answer as it is written, and under it
-// the real numbers it used. If a written number didn't match the shop's data, the app's own
-// sentences from the same lookups replace the written answer.
+// One question to the assistant: what it is looking up, the answer (in the question's own language,
+// written by the app, or by the cloud writer when the owner turned it on and it passed every check),
+// and under it the real numbers it used.
 export function AssistantCard({
   entry,
   branches,
@@ -74,25 +74,10 @@ export function AssistantCard({
 
         {entry.failed ? (
           <ErrorState onRetry={onRetry} />
-        ) : done && !done.checked ? (
-          <div className="grid gap-2">
-            <p className="text-body-medium text-on-surface-variant">
-              {lookups.length
-                ? t.ask.assistant.notChecked
-                : done.question?.type === "cannot_answer"
-                  ? answerSentence({ key: "cannot_answer", values: {}, sentence: "" }, currency)
-                  : t.ask.assistant.noLookup}
-            </p>
-            {lookups.map((lookup, index) => (
-              <p key={index} className="text-body-large text-on-surface">
-                {answerSentence(lookup, currency)}
-              </p>
-            ))}
-          </div>
         ) : (
           <div aria-live="polite" aria-busy={writing}>
-            {entry.text && (
-              <p dir="auto" className="whitespace-pre-line text-body-large text-on-surface">
+            {(done?.text || entry.text) && (
+              <p dir="auto" lang={done?.language} className="whitespace-pre-line text-body-large text-on-surface">
                 {plainText(done ? done.text : entry.text)}
               </p>
             )}
@@ -101,6 +86,9 @@ export function AssistantCard({
                 <Skeleton className="size-5 shrink-0 rounded-full" />
                 {entry.text ? t.ask.assistant.writing : t.ask.thinking}
               </div>
+            )}
+            {done?.written_by === "cloud" && (
+              <p className="mt-2 text-body-small text-on-surface-variant">{t.ask.assistant.writtenByCloud}</p>
             )}
           </div>
         )}

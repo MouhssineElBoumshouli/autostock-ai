@@ -1,7 +1,6 @@
 // Tout le texte en français. Même forme que en.ts (vérifié par `npm test`).
-import type { AnswerWords, en } from "./en";
+import type { en } from "./en";
 
-const inBranch = (branch: string | null) => (branch ? ` à ${branch}` : "");
 const plural = (count: number, one: string, many: string) => (count === 1 ? one : many);
 
 // Les noms de colonnes que le serveur met dans ses messages d'import ("Quantity is not a number").
@@ -578,6 +577,14 @@ export const fr: typeof en = {
     language: "Langue",
     languageHelp: "Tout le monde voit l’application dans cette langue, sauf s’il choisit la sienne dans son menu.",
     saved: "Paramètres enregistrés.",
+    cloudWriter: {
+      title: "Qui rédige les réponses de la page Questions",
+      description: "Par défaut, l’application rédige chaque réponse elle-même, sur cet ordinateur. Vous pouvez laisser un assistant en ligne (Groq) les rédiger avec des phrases plus naturelles. L’application vérifie toujours chaque chiffre, et rédige la réponse elle-même en cas d’erreur.",
+      off: "L’application (sur cet ordinateur)",
+      on: "Assistant en ligne (Groq)",
+      note: "Les données utilisées pour chaque réponse sont envoyées à Groq. Gratuit, environ 1 000 questions par jour. Groq ne s’en sert pas pour entraîner ses modèles. Sans internet, ou une fois la limite du jour atteinte, l’application rédige les réponses.",
+      noKey: "Pour l’activer, ajoutez une clé Groq gratuite (GROQ_API_KEY) dans le fichier .env, puis redémarrez l’application. Voir le README.",
+    },
     branches: {
       title: "Succursales",
       description:
@@ -771,73 +778,6 @@ export const fr: typeof en = {
       this_year: "cette année",
       last_30_days: "ces 30 derniers jours",
     },
-    subjects: {
-      part: (name: string, count: string | null) => (count ? `${name} (${count} pièces)` : name),
-      matching: (words: string, count: string) => `pièces correspondant à « ${words} » (${count} pièces)`,
-      category: (name: string) => `la famille ${name}`,
-      all: "toutes les pièces",
-    },
-    answers: {
-      not_sure: (w: AnswerWords) =>
-        `Je ne suis pas sûr de comprendre${w.words ? ` « ${w.words} »` : ""}. Vouliez-vous dire une de ces questions ?`,
-      cannot_answer: () => "Je ne sais pas encore répondre à cette question.",
-      part_not_found: (w: AnswerWords) =>
-        `Je n’ai trouvé aucune pièce correspondant à « ${w.part} ». Essayez sa désignation ou sa référence.`,
-      which_part_stock: () => "Quelle pièce ? Par exemple : « combien de filtres à huile en stock ».",
-      which_part_forecast: () => "Quelle pièce ? Par exemple : « combien de plaquettes de frein on va vendre ».",
-      sales_of: (w: AnswerWords) =>
-        `${w.Subject} : ${w.pieces} vendues${inBranch(w.branch)} ${w.period} (${w.range})${w.money ? `, soit ${w.money}` : ""}.`,
-      best_sellers_none: (w: AnswerWords) => `Aucune vente pour ${w.subject}${inBranch(w.branch)} ${w.period} (${w.range}).`,
-      best_sellers: (w: AnswerWords) =>
-        `Meilleure vente pour ${w.subject}${inBranch(w.branch)} ${w.period} (${w.range}) : ${w.name} (${w.sku}), ${w.pieces}.`,
-      sales_vs_last: (w: AnswerWords) =>
-        `${w.Subject}${inBranch(w.branch)}, ${w.period} (${w.range}) : ${w.pieces}, ` +
-        (w.percent === null
-          ? "sans aucune vente sur la période précédente."
-          : `${w.percent === 0 ? "autant que" : `${w.percent > 0 ? "en hausse de" : "en baisse de"} ${Math.abs(w.percent)} % par rapport à`} ${w.beforeRange} (${w.beforePieces}).`),
-      stock_of_part: (w: AnswerWords) => `${w.Subject} : ${w.pieces} en stock${inBranch(w.branch)}.`,
-      running_out_none: (w: AnswerWords) =>
-        `Aucune rupture prévue pour ${w.subject}${inBranch(w.branch)} dans les ${w.days} prochains jours.`,
-      running_out: (w: AnswerWords) =>
-        `${plural(w.count, "1 pièce risque", `${w.shownCount} pièces risquent`)} d’être en rupture${inBranch(w.branch)} sous ${w.days} jours (${w.subject}). ` +
-        `La première : ${w.name} (${w.sku}), ${w.pieces} restantes, environ ${w.daysLeft}.`,
-      dead_stock_none: (w: AnswerWords) =>
-        `Aucun stock dormant pour ${w.subject}${inBranch(w.branch)} (aucune vente en ${w.days} jours).`,
-      dead_stock: (w: AnswerWords) =>
-        `${plural(w.count, "1 pièce a", `${w.shownCount} pièces ont`)} du stock mais aucune vente en ${w.days} jours (${w.subject}${inBranch(w.branch)}) : ` +
-        `${w.pieces} en rayon${w.money ? `, pour ${w.money}` : ""}.`,
-      forecast_none: (w: AnswerWords) =>
-        `Pas encore de prévision pour ${w.subject}. Les prévisions sont calculées après l’import des ventes.`,
-      forecast: (w: AnswerWords) =>
-        `${w.Subject}${inBranch(w.branch)} : environ ${w.pieces} prévues sur les ${w.days} prochains jours ` +
-        `(probablement entre ${w.low} et ${w.high}), d’après les ventes jusqu’au ${w.madeFrom}.`,
-      what_to_order_no_run: () => "Pas encore de besoins calculés. Un gérant peut les calculer dans À commander.",
-      what_to_order_none: (w: AnswerWords) =>
-        `Plus rien à commander pour ${w.subject}${inBranch(w.branch)} (dernier calcul, ${w.madeOn}).`,
-      what_to_order: (w: AnswerWords) =>
-        `À commander pour ${w.subject}${inBranch(w.branch)} : ${plural(w.count, "1 ligne", `${w.shownCount} lignes`)}, ` +
-        `${w.pieces}${w.money ? `, pour ${w.money}` : ""} (dernier calcul, ${w.madeOn}).`,
-      open_alerts_none: (w: AnswerWords) => `Aucune alerte ouverte pour ${w.subject}${inBranch(w.branch)}.`,
-      open_alerts: (w: AnswerWords) =>
-        `${plural(w.count, "1 alerte ouverte", `${w.shownCount} alertes ouvertes`)} pour ${w.subject}${inBranch(w.branch)}. ` +
-        `La plus récente : ${w.part} à ${w.alertBranch} : ${w.alert}`,
-      late_deliveries_none: () => "Aucune livraison fournisseur en retard.",
-      late_deliveries: (w: AnswerWords) =>
-        `${plural(w.count, "1 livraison est", `${w.shownCount} livraisons sont`)} en retard. La plus en retard : ${w.orderNumber} de ${w.supplier}, ${w.daysLate}.`,
-      today_briefing: (w: AnswerWords) =>
-        `Cette semaine (${w.range}) : ${w.pieces} vendues, une semaine normale c’est ${w.normalWeek}. ${w.needsAction} alertes à traiter, ` +
-        `${w.worthALook} à surveiller. À commander : ${w.lines} lignes. Livraisons en retard : ${w.late}. Bientôt en rupture : ${w.runningOut} pièces.`,
-      compare_branches: (w: AnswerWords) =>
-        `Ventes de ${w.subject}, ${w.period} (${w.range}), de la plus vendeuse à la moins vendeuse : ${w.branchList}. Comparé à ${w.beforeRange}.`,
-      explain_part_change: (w: AnswerWords) =>
-        `${w.Subject}${inBranch(w.branch)}, ${w.period} (${w.range}) : ${w.pieces}, ` +
-        `${w.percent === null ? "aucune vente avant" : w.percent === 0 ? "autant que" : `${w.percent > 0 ? "en hausse de" : "en baisse de"} ${Math.abs(w.percent)} % par rapport à`} ` +
-        `${w.beforeRange} (${w.beforePieces}). Mêmes jours l’an dernier : ${w.lastYear}. Jours en rupture (par agence) : ${w.outNow} maintenant, ` +
-        `${w.outBefore} avant. En stock : ${w.inStock}. Attendu sur 30 jours : ${w.expected}.`,
-      part_details: (w: AnswerWords) =>
-        `${w.Subject}${inBranch(w.branch)} : ${w.inStock} en stock, ${w.sold30} vendues sur 30 jours, ` +
-        `environ ${w.expected} attendues sur les 30 prochains jours. Meilleure vente : ${w.name} (${w.sku}).`,
-    },
     numberLabels: {
       pieces_sold: "Pièces vendues",
       sales_value: "Montant des ventes",
@@ -882,17 +822,9 @@ export const fr: typeof en = {
       lookingUp: "Recherche",
       writing: "Rédaction…",
       basedOn: "D’après :",
-      notChecked:
-        "Je n’ai pas pu vérifier chaque chiffre de la réponse rédigée avec vos données, voici donc directement les chiffres de votre magasin :",
-      noLookup: "Je n’ai pas pu répondre à partir des données de votre magasin. Essayez de poser la question autrement.",
       newConversation: "Nouvelle conversation",
       followUpHint: "Les questions de suite gardent la conversation : « et à Rabat ? », « pourquoi ? »",
-      change: (percent: number | null) =>
-        percent === null
-          ? "aucune vente avant"
-          : percent === 0
-            ? "stable"
-            : `${percent > 0 ? "en hausse de" : "en baisse de"} ${Math.abs(percent)} %`,
+      writtenByCloud: "Rédigé par l’assistant en ligne (Groq), vérifié avec vos données.",
     },
     homeBox: {
       inputLabel: "Interrogez votre magasin",
@@ -959,6 +891,7 @@ export const fr: typeof en = {
       "The column matching doesn't fit this file. Upload it again.":
         "L’association des colonnes ne correspond pas à ce fichier. Importez-le à nouveau.",
       "A filter needs the question type it belongs to.": "Un filtre a besoin du type de question auquel il appartient.",
+      "Add GROQ_API_KEY to the .env file first.": "Ajoutez d’abord GROQ_API_KEY dans le fichier .env.",
       "That isn't a filter this question type takes.": "Ce type de question n’accepte pas ce filtre.",
       "Name is missing (needed for a new part)": "Désignation manquante (obligatoire pour une nouvelle pièce)",
       "SKU is missing": "Référence manquante",

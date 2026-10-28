@@ -6,7 +6,14 @@ import type { Language } from "@/i18n";
 
 export const currencies = ["MAD", "EUR", "USD"] as const;
 export type Currency = (typeof currencies)[number];
-export type ShopSettings = { name: string; currency: Currency; language: Language };
+export type ShopSettings = {
+  name: string;
+  currency: Currency;
+  language: Language;
+  cloud_writer_on: boolean;
+  cloud_writer_ready: boolean; // a Groq key is in .env: only then can the cloud writer be turned on
+};
+export type SettingsChange = Partial<Omit<ShopSettings, "cloud_writer_ready">>;
 
 const settingsQueryKey = ["settings"];
 
@@ -17,7 +24,7 @@ export function useSettings() {
 export function useSaveSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (settings: ShopSettings) => apiRequest<ShopSettings>("/api/settings", { method: "PATCH", body: settings }),
+    mutationFn: (change: SettingsChange) => apiRequest<ShopSettings>("/api/settings", { method: "PATCH", body: change }),
     onSuccess: (settings) => {
       queryClient.setQueryData(settingsQueryKey, settings);
       // The shop name is shown in the top bar.
