@@ -98,13 +98,14 @@ def test_the_cloud_writer_reads_groqs_stream(monkeypatch):
     sent = {}
 
     def urlopen(request, timeout):
-        sent.update(json.loads(request.data), key=request.get_header("Authorization"))
+        sent.update(json.loads(request.data), key=request.get_header("Authorization"), agent=request.get_header("User-agent"))
         return Reply()
 
     monkeypatch.setattr(cloud_writer, "GROQ_API_KEY", "test-key")
     monkeypatch.setattr(cloud_writer.urllib.request, "urlopen", urlopen)
     assert "".join(piece["text"] for piece in cloud_writer.chat([{"role": "user", "content": "hi"}])) == "We sold [F1] pieces."
     assert sent["key"] == "Bearer test-key" and sent["stream"] is True and sent["model"] == cloud_writer.GROQ_MODEL
+    assert sent["agent"] == "AutoStock-AI/1.0", "Groq's firewall refuses Python's default name"
 
 
 def test_the_cloud_writer_failing_raises_so_the_app_writes_instead(monkeypatch):

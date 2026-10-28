@@ -14,6 +14,8 @@ from app.config import GROQ_API_KEY, GROQ_MODEL
 
 URL = "https://api.groq.com/openai/v1/chat/completions"
 SECONDS = 20
+# Groq's firewall refuses Python's default name ("Python-urllib", error 1010), so the app says its own.
+USER_AGENT = "AutoStock-AI/1.0"
 # gpt-oss "thinks" before writing; low effort keeps it quick, and the thinking counts in this limit.
 LONGEST = 1500
 
@@ -41,7 +43,7 @@ def chat(messages: list[dict]) -> Iterator[dict]:
         "include_reasoning": False,
     }
     request = urllib.request.Request(URL, data=json.dumps(body).encode(), headers={
-        "Content-Type": "application/json", "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json", "Authorization": f"Bearer {GROQ_API_KEY}", "User-Agent": USER_AGENT,
     })
     try:
         with urllib.request.urlopen(request, timeout=SECONDS) as response:
