@@ -702,3 +702,5 @@ def test_a_currency_written_next_to_a_money_fact_is_not_shown_twice():
     money = [Fact("F1", "cost of what to order", "12122.74 MAD", "MAD 12,122.74")]
     text = FactText(money, (CASA, RABAT))
     assert text.add("It costs MAD [F1]. ") == "It costs MAD 12,122.74."
+    french = FactText([Fact("F1", "cost of what to order", "12122.74 MAD", "12 122,74 DH")], (CASA, RABAT))
+    assert french.add("Pour [F1] MAD. ") == "Pour 12 122,74 DH."

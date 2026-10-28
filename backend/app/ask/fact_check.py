@@ -27,8 +27,9 @@ CLAUSE_MARK = re.compile(r"[,،;()–—]")
 MOST_WAITING = 600  # characters with no sentence end: a model stuck repeating itself is stopped
 NO_END = "(no end to the sentence)"
 WRONG_LANGUAGE = "wrong language, the question is in "
-# A money fact already says its currency: "costing MAD [F3]" would show "MAD MAD 1,212,274.00".
-DOUBLE_CURRENCY = re.compile(r"\b(MAD|DH|EUR|USD)\s+(?=\1\b)")
+# A money fact already says its currency: "costing MAD [F3]" would show "MAD MAD 1,212,274.00",
+# "[F3] MAD" in French "1 212 274,00 DH MAD". Two currency words in a row keep the first.
+DOUBLE_CURRENCY = re.compile(r"\b(MAD|DH|EUR|USD)\s+(?:MAD|DH|EUR|USD)\b")
 MISPLACED = re.compile(r"\[(F\d+)\] is (.+), written next to (.+)")
 KIND_WORDS = {**WHEN_WORDS, "up": "a change up", "down": "a change down", "same": "no change"}
 ARABIC_PREFIXES = "وبلف"  # glued to the next word: "والرباط" is "and Rabat"
@@ -105,7 +106,7 @@ class FactText:
         self.wrong = self.problems(ready)
         if self.wrong:
             return ""
-        out = DOUBLE_CURRENCY.sub("", LABEL.sub(lambda found: self.facts[found.group(1) or found.group(2)].shown, ready))
+        out = DOUBLE_CURRENCY.sub(r"\1", LABEL.sub(lambda found: self.facts[found.group(1) or found.group(2)].shown, ready))
         self.shown += out
         return out
 
