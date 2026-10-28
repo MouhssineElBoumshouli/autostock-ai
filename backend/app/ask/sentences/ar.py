@@ -232,7 +232,7 @@ def _way(v, s) -> str:
 
 
 def _reason(reason: dict, v, s) -> str:
-    over = {"parts_and_branches": " (مجموع القطع والفروع)", "branches": " (مجموع الفروع)"}
+    over = {"parts_and_branches": " (في المجموع، كل هذه القطع وكل الفروع)", "branches": " (في المجموع، كل الفروع)"}
     counted = over.get(v.get("days_out_of_stock_counts"), "")
     kind = reason["kind"]
     if kind == "out_of_stock":

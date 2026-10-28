@@ -188,7 +188,8 @@ def compare_branches(v, s):
     if not rows or not rows[0]["pieces"]:
         return f"No sales{_of(v, s)} {when} in any branch."
     top, others = rows[0], rows[1:]
-    text = f"{s.name(top['branch'])} sells the most{_of(v, s)}: {s.pieces(top['pieces'])} {when}"
+    most = "more" if v.get("only_asked") and len(rows) == 2 else "the most"
+    text = f"{s.name(top['branch'])} sells {most}{_of(v, s)}: {s.pieces(top['pieces'])} {when}"
     if others:
         listed = [f"{s.name(row['branch'])} ({s.number(row['pieces'])})" for row in others]
         text += f", ahead of {', '.join(listed[:-1]) + ' and ' + listed[-1] if len(listed) > 1 else listed[0]}"
@@ -223,7 +224,7 @@ def _way(v, s) -> str:
 
 
 def _reason(reason: dict, v, s) -> str:
-    over = {"parts_and_branches": " (added up over parts and branches)", "branches": " (added up over branches)"}
+    over = {"parts_and_branches": " (in total, all these parts and branches together)", "branches": " (in total, all branches together)"}
     counted = over.get(v.get("days_out_of_stock_counts"), "")
     kind = reason["kind"]
     if kind == "out_of_stock":

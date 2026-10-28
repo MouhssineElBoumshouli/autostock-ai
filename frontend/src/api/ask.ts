@@ -16,7 +16,8 @@ export type AskNumberUnit =
 // `key` names a fixed label shown in the person's language; without one, `label` is the shop's own words.
 export type AskNumber = { label: string; value: number | string; unit: AskNumberUnit; key?: string | null; about?: string | null };
 export type AskSuggestion = { question_type: string; label: string; filters: AskFilters; period: string | null };
-export type AskFilters = { part?: string; category?: string; branch?: string; period?: string };
+// `branches`: two or more branch names joined by " | " ("compare Casablanca and Rabat").
+export type AskFilters = { part?: string; category?: string; branch?: string; period?: string; branches?: string };
 
 export type AskOut = {
   understood: string | null;

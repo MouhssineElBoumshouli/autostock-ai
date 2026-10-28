@@ -33,25 +33,26 @@ TYPE_MEANINGS = {
 }
 
 EXAMPLES = """Examples (the shop's names may differ):
-"how many headlight bulbs did we sell yesterday in Fes" -> {"type": "sales_of", "part": "headlight bulbs", "category": null, "branch": "Fes - Centre", "period": "yesterday"}
-"stock dial les disques" -> {"type": "stock_of_part", "part": "les disques", "category": null, "branch": null, "period": null}
-"ما هي قطع المحرك التي ستنفد" -> {"type": "running_out", "part": null, "category": "Engine", "branch": null, "period": null}
-"ventes de la semaine dernière comparées à celle d'avant" -> {"type": "sales_vs_last", "part": null, "category": null, "branch": null, "period": "last_week"}
-"kifach dayra lbi3a had chhar?" -> {"type": "today_briefing", "part": null, "category": null, "branch": null, "period": null}
-"3lach na9so lbi3 dyal les filtres?" -> {"type": "explain_part_change", "part": "les filtres", "category": null, "branch": null, "period": null}
-"شكون الفرع اللي كيبيع كثر ديال الزيوت؟" -> {"type": "compare_branches", "part": null, "category": "Oils", "branch": null, "period": null}
-"chhal ba9i mn les amortisseurs f fes?" -> {"type": "stock_of_part", "part": "les amortisseurs", "category": null, "branch": "Fes - Centre", "period": null}
-"عطيني كلشي على البوجي" -> {"type": "part_details", "part": "البوجي", "category": null, "branch": null, "period": null}
-"ach kayn jdid f lhanout?" -> {"type": "today_briefing", "part": null, "category": null, "branch": null, "period": null}
-"شنو خاصني نشري هاد السيمانة؟" -> {"type": "what_to_order", "part": null, "category": null, "branch": null, "period": null}
-"wach kayna chi sel3a ma kat tba3ch f rbat?" -> {"type": "dead_stock", "part": null, "category": null, "branch": "Rabat - Agdal", "period": null}
-"add 10 batteries to the stock" -> {"type": "cannot_answer", "part": null, "category": null, "branch": null, "period": null}"""
+"how many headlight bulbs did we sell yesterday in Fes" -> {"type": "sales_of", "part": "headlight bulbs", "category": null, "branch": "Fes - Centre", "period": "yesterday", "branches": null}
+"stock dial les disques" -> {"type": "stock_of_part", "part": "les disques", "category": null, "branch": null, "period": null, "branches": null}
+"ما هي قطع المحرك التي ستنفد" -> {"type": "running_out", "part": null, "category": "Engine", "branch": null, "period": null, "branches": null}
+"ventes de la semaine dernière comparées à celle d'avant" -> {"type": "sales_vs_last", "part": null, "category": null, "branch": null, "period": "last_week", "branches": null}
+"kifach dayra lbi3a had chhar?" -> {"type": "today_briefing", "part": null, "category": null, "branch": null, "period": null, "branches": null}
+"3lach na9so lbi3 dyal les filtres?" -> {"type": "explain_part_change", "part": "les filtres", "category": null, "branch": null, "period": null, "branches": null}
+"9aren bin fes w agadir had chhar" -> {"type": "compare_branches", "part": null, "category": null, "branch": null, "period": "this_month", "branches": ["Fes - Centre", "Agadir - Talborjt"]}
+"شكون الفرع اللي كيبيع كثر ديال الزيوت؟" -> {"type": "compare_branches", "part": null, "category": "Oils", "branch": null, "period": null, "branches": null}
+"chhal ba9i mn les amortisseurs f fes?" -> {"type": "stock_of_part", "part": "les amortisseurs", "category": null, "branch": "Fes - Centre", "period": null, "branches": null}
+"عطيني كلشي على البوجي" -> {"type": "part_details", "part": "البوجي", "category": null, "branch": null, "period": null, "branches": null}
+"ach kayn jdid f lhanout?" -> {"type": "today_briefing", "part": null, "category": null, "branch": null, "period": null, "branches": null}
+"شنو خاصني نشري هاد السيمانة؟" -> {"type": "what_to_order", "part": null, "category": null, "branch": null, "period": null, "branches": null}
+"wach kayna chi sel3a ma kat tba3ch f rbat?" -> {"type": "dead_stock", "part": null, "category": null, "branch": "Rabat - Agdal", "period": null, "branches": null}
+"add 10 batteries to the stock" -> {"type": "cannot_answer", "part": null, "category": null, "branch": null, "period": null, "branches": null}"""
 
 FOLLOW_UP_EXAMPLES = """The question before was: {earlier}
 If the new words only change it, use type "same" and give only what changed. Examples:
-"and in Fes?" / "w f fes?" / "وفي فاس؟" -> {{"type": "same", "part": null, "category": null, "branch": "Fes - Centre", "period": null}}
-"et le mois dernier ?" -> {{"type": "same", "part": null, "category": null, "branch": null, "period": "last_month"}}
-"why?" / "3lach?" / "علاش؟" -> {{"type": "explain_part_change", "part": null, "category": null, "branch": null, "period": null}}
+"and in Fes?" / "w f fes?" / "وفي فاس؟" -> {{"type": "same", "part": null, "category": null, "branch": "Fes - Centre", "period": null, "branches": null}}
+"et le mois dernier ?" -> {{"type": "same", "part": null, "category": null, "branch": null, "period": "last_month", "branches": null}}
+"why?" / "3lach?" / "علاش؟" -> {{"type": "explain_part_change", "part": null, "category": null, "branch": null, "period": null, "branches": null}}
 If it is a new question of its own, read it as usual."""
 
 
@@ -67,6 +68,7 @@ Filters:
 - category: one of {list(shop.categories)} when the question is about a whole category, else null.
 - branch: one of {list(shop.branches)} when a branch or its city is named, else null.
 - period: one of {list(PERIODS)}, else null. "next month" is not a period.
+- branches: for compare_branches only, when two or more branches are named: their names, else null.
 If the question is not one of the types above, use cannot_answer. Never guess a filter nobody asked for.
 {EXAMPLES}
 {follow_up}"""
@@ -85,6 +87,7 @@ def schema_for(shop: ShopWords, earlier: Question | None = None) -> dict:
             "category": one_of(shop.categories),
             "branch": one_of(shop.branches),
             "period": one_of(PERIODS),
+            "branches": {"type": ["array", "null"], "items": {"enum": list(shop.branches)}},
         },
         "required": ["type", *FILTERS],
     }

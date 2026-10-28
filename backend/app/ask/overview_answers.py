@@ -8,7 +8,7 @@ from app.alerts.problem import NEEDS_ACTION, WORTH_A_LOOK, pieces
 from app.api.today import BASELINE_WEEKS, find_late_deliveries, open_alert_group, to_order_summary, weekly_sales
 from app.ask.answer_parts import Answer, Asked, Number, date_range, part_not_found, pick_parts, range_words
 from app.ask.periods import LABELS, day_range, period_used, range_before
-from app.ask.question import Question
+from app.ask.question import BRANCHES_JOINED, Question
 from app.ask.sales_answers import pieces_and_value
 from app.ask.stock_answers import running_out
 from app.models import Branch, Part, SaleLine
@@ -121,6 +121,8 @@ def compare_branches(asked: Asked) -> Answer:
     now = _pieces_per_branch(asked, parts.condition, first, last)
     before = _pieces_per_branch(asked, parts.condition, before_first, before_last)
     names = asked.db.scalars(select(Branch.name).where(Branch.organization_id == asked.organization_id))
+    if asked.question.branches:  # "compare Casablanca and Rabat": only the branches asked about
+        names = [name for name in names if name in asked.question.branches.split(BRANCHES_JOINED)]
     rows = sorted(
         (
             {"branch": name, "pieces": now.get(name, (0, 0))[0], "pieces_before": before.get(name, (0, 0))[0],
@@ -135,7 +137,8 @@ def compare_branches(asked: Asked) -> Answer:
     return Answer(
         "compare_branches",
         {"subject": parts.subject, "period": period, "range": date_range(first, last),
-         "before_range": date_range(before_first, before_last), "total_pieces": total, "branches": rows},
+         "before_range": date_range(before_first, before_last), "total_pieces": total, "branches": rows,
+         "only_asked": bool(asked.question.branches)},
         f"Sales of {parts.label}, {LABELS[period]} ({range_words(first, last)}), most sold first: {each}. "
         f"Compared with {range_words(before_first, before_last)}.",
         [Number(label=row["branch"], value=row["pieces"], unit="pieces") for row in rows]

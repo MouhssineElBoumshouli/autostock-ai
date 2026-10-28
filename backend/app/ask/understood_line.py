@@ -30,6 +30,8 @@ def heading(question: Question) -> str:
     pieces = [with_subject.format(subject) if subject else without_subject]
     if question.branch:
         pieces.append(question.branch)
+    if question.branches:
+        pieces.append(question.branches)
     period = shown_period(question)
     if period:
         pieces.append(LABELS[period])

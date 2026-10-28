@@ -40,7 +40,7 @@ def test_compare_branches_leads_with_the_winner_then_the_others():
 def test_why_states_the_main_reason_first():
     assert write("explain_part_change", EXPLAIN, "fr") == (
         "Les ventes de filtres à huile sont un peu en baisse (5 %) : 3 183 ce mois-ci contre 3 346 avant. "
-        "Raison principale : rupture de stock 13 jours ce mois-ci (additionnés sur les agences), contre 5 avant.")
+        "Raison principale : rupture de stock 13 jours ce mois-ci (en tout, toutes agences confondues), contre 5 avant.")
 
 
 def test_why_says_so_honestly_when_no_reason_fits():
@@ -135,3 +135,10 @@ def test_a_group_of_parts_is_named_by_the_shops_own_family_name():
     values = {"subject": {"kind": "matching", "words": "plaquettes frein", "family": "Brake pads front"}, "pieces": 1542,
               "branch": "Rabat - Agdal"}
     assert write("stock_of_part", values, "fr") == "Il reste 1 542 pièces de Brake pads front en stock à Rabat - Agdal."
+
+
+def test_two_branches_asked_about_one_sells_more():
+    values = {"subject": {"kind": "all"}, "period": "this_month", "range": "2026-10-01/2026-10-28",
+              "branches": BRANCHES[1:], "only_asked": True}
+    assert write("compare_branches", values).startswith("Rabat - Agdal sells more: 125 pieces this month")
+    assert write("compare_branches", values, "fr").startswith("Rabat - Agdal vend plus : 125 ce mois-ci")

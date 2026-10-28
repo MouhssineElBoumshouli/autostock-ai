@@ -198,7 +198,8 @@ def compare_branches(v, s):
         return f"Aucune vente{_of(v, s)} {when}, dans aucune agence."
     top, others = rows[0], rows[1:]
     what = f" {de(subject(v, s))}" if subject(v, s) else ""
-    text = f"{s.name(top['branch'])} vend le plus{what} : {s.number(top['pieces'])} {when}"
+    most = "plus" if v.get("only_asked") and len(rows) == 2 else "le plus"
+    text = f"{s.name(top['branch'])} vend {most}{what} : {s.number(top['pieces'])} {when}"
     if others:
         listed = [f"{s.name(row['branch'])} ({s.number(row['pieces'])})" for row in others]
         text += f", devant {', '.join(listed[:-1]) + ' et ' + listed[-1] if len(listed) > 1 else listed[0]}"
@@ -234,7 +235,7 @@ def _way(v, s) -> str:
 
 
 def _reason(reason: dict, v, s) -> str:
-    over = {"parts_and_branches": " (additionnés sur les pièces et les agences)", "branches": " (additionnés sur les agences)"}
+    over = {"parts_and_branches": " (en tout, toutes pièces et agences confondues)", "branches": " (en tout, toutes agences confondues)"}
     counted = over.get(v.get("days_out_of_stock_counts"), "")
     kind = reason["kind"]
     if kind == "out_of_stock":

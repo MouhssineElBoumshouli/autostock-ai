@@ -569,7 +569,7 @@ export const en = {
       description: "By default the app writes every answer itself, on this computer. You can let a cloud writer (Groq) write them in more natural sentences. The app still checks every number, and writes the answer itself if anything is wrong.",
       off: "The app (on this computer)",
       on: "Cloud writer (Groq)",
-      note: "The facts used for each answer are sent to Groq. Free, about 1,000 questions a day. Groq does not use them to train its models. Without internet, or once the daily limit is reached, the app writes the answers.",
+      note: "The facts used for each answer are sent to Groq. Free, but limited: about 100 to 150 answers a day with this model. Groq does not use them to train its models. Without internet, or once the daily limit is reached, the app writes the answers.",
       noKey: "To turn it on, add a free Groq key (GROQ_API_KEY) to the .env file, then restart the app. See the README.",
     },
     branches: {
@@ -814,6 +814,10 @@ export const en = {
       basedOn: "Based on:",
       newConversation: "New conversation",
       followUpHint: "Follow-up questions keep the conversation: “and in Rabat?”, “why?”",
+      clearHistory: "Clear history",
+      clearHistoryTitle: "Clear your saved questions?",
+      clearHistoryText: "Your last questions and their answers will be deleted. This can't be undone.",
+      historyCleared: "History cleared.",
       writtenByCloud: "Written by the cloud writer (Groq), checked against your data.",
     },
     homeBox: {

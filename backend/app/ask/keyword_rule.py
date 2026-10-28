@@ -8,7 +8,7 @@ Any word left that isn't understood, or no question-type phrase at all -> not su
 asked which of the closest question types they meant. The rule never guesses.
 """
 
-from app.ask.question import CANNOT_ANSWER, NOT_SURE, QUESTION_TYPES, Question, ShopWords, checked_question
+from app.ask.question import BRANCHES_JOINED, CANNOT_ANSWER, NOT_SURE, QUESTION_TYPES, Question, ShopWords, checked_question
 from app.ask.words import LITTLE_WORDS, normalize, same_word, words_of
 
 OUT_OF_SCOPE = """customer customers client clients employee employees staff weather delete remove change price prices
@@ -140,7 +140,8 @@ def read_with_rule(text: str, shop: ShopWords) -> Question:
         return _not_sure(question_type, part, category, branch, period)
 
     allowed = QUESTION_TYPES[question_type]
-    raw = {"type": question_type, "part": part, "category": category, "branch": branch, "period": period}
+    raw = {"type": question_type, "part": part, "category": category, "branch": branch, "period": period,
+           "branches": BRANCHES_JOINED.join(branches) if len(branches) > 1 else None}
     return checked_question({k: v for k, v in raw.items() if k == "type" or k in allowed}, shop) or CANNOT_ANSWER
 
 

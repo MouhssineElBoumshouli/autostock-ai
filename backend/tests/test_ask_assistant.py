@@ -28,10 +28,10 @@ from app.ask.fact_check import FactText
 from app.ask.keyword_rule import read_follow_up, read_with_rule
 from app.ask.labeled_facts import Fact, labeled_facts
 from app.ask.number_check import numbers_in_words, numbers_written
-from app.ask.question import Question, ShopWords
+from app.ask.question import Question, ShopWords, checked_question
 from app.ask.tools import look_up
 from app.db import SessionLocal
-from app.models import AuditLog, Organization, StockOut
+from app.models import AuditLog, Branch, Organization, StockOut
 from tests.helpers import OWNER_PASSWORD, create_other_shop, logged_in_browser
 from tests.test_ask import (  # noqa: F401  (shop and several_brake_pads_shop are fixtures)
     LAST_DAY, MAIN, RABAT, branch_named, new_part, select_part, sell, shelve, several_brake_pads_shop, shop,
@@ -42,7 +42,7 @@ from tests.test_today import add_alert
 CASA = "Casablanca - Maarif"
 SHOP = ShopWords(categories=("Brakes", "Oils"), branches=(CASA, RABAT), part_words=frozenset(
     {"brake", "pads", "oil", "filter", "filters", "plaquettes"}))
-NOTHING = {"part": None, "category": None, "branch": None, "period": None}
+NOTHING = {"part": None, "category": None, "branch": None, "period": None, "branches": None}
 
 
 class FakeModel:
@@ -621,7 +621,7 @@ def test_whats_is_not_read_as_a_part_called_s():
     ("What's going on today?", Question("today_briefing", period="today")),
     ("quoi de neuf", Question("today_briefing")),
     ("كيداير اليوم", Question("today_briefing", period="today")),
-    ("compare Casablanca and Rabat this month", Question("compare_branches", period="this_month")),
+    ("compare Casablanca and Rabat this month", Question("compare_branches", period="this_month", branches=f"{CASA} | {RABAT}")),
     ("which branch sells the most oils", Question("compare_branches", category="Oils")),
     ("why are oil filters", Question("explain_part_change", part="oil filters")),
     ("tout sur les plaquettes", Question("part_details", part="plaquettes")),
@@ -666,3 +666,25 @@ def test_the_model_reader_merges_a_same_reading_into_the_question_before(monkeyp
         "sales_of", part="brake pads", branch=RABAT, period="this_week")
     instructions = model_reader.instructions_for(SHOP)
     assert "3lach na9so" in instructions and "عطيني كلشي" in instructions, "Darija examples, in both scripts"
+
+
+def test_comparing_two_branches_answers_about_those_two(shop):
+    with SessionLocal() as db:
+        db.add(Branch(organization_id=shop, name="Marrakech - Gueliz"))
+        db.commit()
+    values = lookup(shop, "compare_branches", branches=f"{RABAT} | {MAIN}").values
+    assert [row["branch"] for row in values["branches"]] == [MAIN, RABAT] and values["only_asked"] is True
+    assert len(lookup(shop, "compare_branches").values["branches"]) == 3, "without names: every branch"
+
+
+def test_the_model_can_name_the_branches_to_compare(monkeypatch):
+    monkeypatch.setattr(llm, "ask_json", lambda *args, **kwargs: {
+        **NOTHING, "type": "compare_branches", "branches": [CASA, RABAT], "period": "this_month"})
+    assert model_reader.read_with_model("9aren bin casa w rbat had chhar", SHOP) == Question(
+        "compare_branches", period="this_month", branches=f"{CASA} | {RABAT}")
+    assert model_reader.schema_for(SHOP)["properties"]["branches"]["items"]["enum"] == [CASA, RABAT]
+
+
+@pytest.mark.parametrize("branches", [f"{CASA} | Tangier", CASA, ""])
+def test_branches_to_compare_must_be_two_of_the_shops_own(branches):
+    assert checked_question({"type": "compare_branches", "branches": branches}, SHOP) in (None, Question("compare_branches"))

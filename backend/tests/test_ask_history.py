@@ -1,5 +1,5 @@
 """Each person's last questions on the Ask page are kept on the server (newest 20), shown when they
-come back, never to anyone else, and forgotten on "New conversation". Also: "et le mois dernier ?"
+come back, never to anyone else, and forgotten only on "Clear history". Also: "et le mois dernier ?"
 after the briefing answers about last month, and the owner's cloud writer switch."""
 
 import json
@@ -48,7 +48,7 @@ def test_each_person_sees_only_their_own_questions(browser, shop):
     assert logged_in_browser("owner@other.ma", OWNER_PASSWORD).get("/api/ask/history").json() == []
 
 
-def test_new_conversation_forgets_them(browser, shop):
+def test_clear_history_forgets_them(browser, shop):
     browser.post("/api/ask", json={"question": "what should I order?"})
     assert browser.delete("/api/ask/history").status_code == 204
     assert browser.get("/api/ask/history").json() == []

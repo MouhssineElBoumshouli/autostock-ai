@@ -9,7 +9,6 @@ import {
   type AskedBefore,
   type AskedEntry,
   askAssistant,
-  forgetAskHistory,
   useAiOn,
   useAsk,
   useAskHistory,
@@ -26,6 +25,7 @@ import { t } from "@/i18n";
 
 import { AnswerCard, type HistoryEntry } from "./AnswerCard";
 import { type AssistantEntry, AssistantCard } from "./AssistantCard";
+import { ClearHistoryButton } from "./ClearHistoryButton";
 import { QuestionForm } from "./QuestionForm";
 
 const HISTORY_LIMIT = 20; // the server keeps the same number per person
@@ -108,11 +108,15 @@ export function AskPage() {
     else void askAi(question);
   }
 
+  // Follow-ups start again from nothing; the questions on the page (and saved) stay.
   function newConversation() {
+    setPrevious(null);
+  }
+
+  function historyCleared() {
     setPrevious(null);
     setHistory([]);
     queryClient.setQueryData(["ask", "history"], []);
-    void forgetAskHistory();
   }
 
   // The questions asked on an earlier visit, once, under any asked since the page opened.
@@ -153,9 +157,14 @@ export function AskPage() {
       {history.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-body-medium text-on-surface-variant">{previous && !aiOff ? t.ask.assistant.followUpHint : ""}</p>
-          <Button variant="text" size="sm" onClick={newConversation} disabled={writing}>
-            {t.ask.assistant.newConversation}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {previous && !aiOff && (
+              <Button variant="text" size="sm" onClick={newConversation} disabled={writing}>
+                {t.ask.assistant.newConversation}
+              </Button>
+            )}
+            <ClearHistoryButton onCleared={historyCleared} disabled={writing} />
+          </div>
         </div>
       )}
 

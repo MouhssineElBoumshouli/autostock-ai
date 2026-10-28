@@ -126,7 +126,7 @@ def history(user: User = Depends(anyone), db: Session = Depends(get_session)) ->
 
 @router.delete("/history", status_code=204)
 def clear_history(user: User = Depends(anyone), db: Session = Depends(get_session)) -> None:
-    """"New conversation": the person's earlier questions are forgotten."""
+    """"Clear history" (after a confirm): the person's earlier questions are forgotten."""
     forget(db, user)
 
 

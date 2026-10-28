@@ -13,6 +13,7 @@ export function understoodHeading(questionType: string, filters: AskFilters, per
       : null;
   const pieces = [build(subject)];
   if (filters.branch) pieces.push(isolate(filters.branch));
+  if (filters.branches) pieces.push(filters.branches.split(" | ").map(isolate).join(" · "));
   if (period) pieces.push(t.ask.periodWords[period] ?? period);
   return pieces.join(" · ");
 }
