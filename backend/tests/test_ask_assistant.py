@@ -704,6 +704,13 @@ def test_a_currency_written_next_to_a_money_fact_is_not_shown_twice():
     assert text.add("It costs MAD [F1]. ") == "It costs MAD 12,122.74."
     french = FactText([Fact("F1", "cost of what to order", "12122.74 MAD", "12 122,74 DH")], (CASA, RABAT))
     assert french.add("Pour [F1] MAD. ") == "Pour 12 122,74 DH."
+    english = FactText(money, (CASA, RABAT))
+    assert english.add("It costs [F1] MAD. ") == "It costs MAD 12,122.74."
+
+
+def test_the_fact_lists_direction_words_are_not_copied_into_the_answer():
+    text = FactText(FACTS, (CASA, RABAT))
+    assert text.add("Rabat est en baisse de [F4] (down). ") == "Rabat est en baisse de -6%."
 
 
 def test_a_change_is_shown_without_a_sign_so_words_say_which_way(shop):

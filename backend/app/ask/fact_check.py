@@ -30,6 +30,8 @@ WRONG_LANGUAGE = "wrong language, the question is in "
 # A money fact already says its currency: "costing MAD [F3]" would show "MAD MAD 1,212,274.00",
 # "[F3] MAD" in French "1 212 274,00 DH MAD". Two currency words in a row keep the first.
 DOUBLE_CURRENCY = re.compile(r"\b(MAD|DH|EUR|USD)\s+(?:MAD|DH|EUR|USD)\b")
+CURRENCY_AFTER = re.compile(r"((?:MAD|EUR|USD) \d[\d,.]*)\s+(?:MAD|DH|EUR|USD)\b")  # "MAD 1,212,274.00 MAD"
+DIRECTION_TAG = re.compile(r"\s*\((?:up|down|same)\)")  # the fact list's own words, copied into the answer
 MISPLACED = re.compile(r"\[(F\d+)\] is (.+), written next to (.+)")
 KIND_WORDS = {**WHEN_WORDS, "up": "a change up", "down": "a change down", "same": "no change"}
 ARABIC_PREFIXES = "وبلف"  # glued to the next word: "والرباط" is "and Rabat"
@@ -106,7 +108,8 @@ class FactText:
         self.wrong = self.problems(ready)
         if self.wrong:
             return ""
-        out = DOUBLE_CURRENCY.sub(r"\1", LABEL.sub(lambda found: self.facts[found.group(1) or found.group(2)].shown, ready))
+        out = LABEL.sub(lambda found: self.facts[found.group(1) or found.group(2)].shown, DIRECTION_TAG.sub("", ready))
+        out = CURRENCY_AFTER.sub(r"\1", DOUBLE_CURRENCY.sub(r"\1", out))
         self.shown += out
         return out
 
