@@ -6,7 +6,7 @@ answer in (app/ask/reply_language.py).
 
 import pytest
 
-from app.ask.answer_parts import Answer
+from app.ask.answer_parts import Answer, family_name
 from app.ask.reply_language import reply_language
 from app.ask.sentences import LANGUAGES, written_answer
 from app.ask.sentences.shown import Shown
@@ -127,3 +127,11 @@ def test_no_reason_found_means_none_is_made_up():
 ])
 def test_answers_are_in_the_questions_language(question, language):
     assert reply_language(question, "fr") == language
+
+
+def test_a_group_of_parts_is_named_by_the_shops_own_family_name():
+    assert family_name(["Oil filter - Kia Picanto 1.0", "Oil filter - VW Golf 7"]) == "Oil filter"
+    assert family_name(["Oil filter - Kia Picanto 1.0", "Air filter - Kia Picanto 1.0"]) is None
+    values = {"subject": {"kind": "matching", "words": "plaquettes frein", "family": "Brake pads front"}, "pieces": 1542,
+              "branch": "Rabat - Agdal"}
+    assert write("stock_of_part", values, "fr") == "Il reste 1 542 pièces de Brake pads front en stock à Rabat - Agdal."

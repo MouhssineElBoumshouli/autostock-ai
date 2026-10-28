@@ -98,6 +98,8 @@ def pick_parts(asked: Asked) -> PartPick | None:
         names = sorted(set(asked.db.scalars(select(Part.name).where(Part.id.in_(ids)))))
         label = names[0] if len(names) == 1 else f"parts matching “{question.part}”"
         subject = {"kind": "part", "name": names[0]} if len(names) == 1 else {"kind": "matching", "words": question.part}
+        if len(names) > 1 and (family := family_name(names)):
+            subject["family"] = family
         if len(ids) > 1:
             subject["count"] = len(ids)
         return PartPick(
@@ -110,6 +112,13 @@ def pick_parts(asked: Asked) -> PartPick | None:
             {"kind": "category", "name": question.category},
         )
     return PartPick(true(), "all parts", {"kind": "all"})
+
+
+def family_name(names: list[str]) -> str | None:
+    """"Oil filter" for "Oil filter - Kia Picanto 1.0" and "Oil filter - VW Golf 7": the shop's own name
+    for what the parts have in common, before " - ". None when they don't share one."""
+    families = {name.split(" - ")[0].strip() for name in names}
+    return families.pop() if len(families) == 1 else None
 
 
 def branch_id(asked: Asked) -> uuid.UUID | None:

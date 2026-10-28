@@ -24,8 +24,8 @@ def subject(v: dict, s: Shown) -> str | None:
     found = v.get("subject") or {}
     if found.get("kind") == "part":
         return s.name(found["name"])
-    if found.get("kind") == "matching":  # the person's own words: "filtres à huile"
-        return s.name(found["words"])
+    if found.get("kind") == "matching":  # the parts' family name ("Oil filter"), else the person's words
+        return s.name(found.get("family") or found["words"])
     if found.get("kind") == "category":
         return f"la famille {s.name(found['name'])}"
     return None
