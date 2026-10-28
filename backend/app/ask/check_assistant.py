@@ -19,7 +19,7 @@ import re
 import statistics
 import sys
 from dataclasses import dataclass, field
-from time import perf_counter
+from time import perf_counter, sleep
 
 from sqlalchemy import select
 
@@ -60,10 +60,13 @@ class Result:
         return not self.misses
 
 
+CLOUD_PAUSE_SECONDS = 6  # Groq's free tier: about 8,000 tokens a minute, an answer uses about 700
 APP_LANGUAGE = "fr"  # the demo shop's language: answers questions too short to tell their own
 
 
 def ask_once(db, organization_id, question: str, earlier: dict | None, model: str, cloud: bool = False) -> Result:
+    if cloud:
+        sleep(CLOUD_PAUSE_SECONDS)
     started = perf_counter()
     first_words = None
     done: dict = {}
@@ -207,8 +210,13 @@ def report(model: str, results: list[Result], show_misses: bool, cloud: bool) ->
     print(f"  follow-ups: {sum(r.good for r in follow_ups)}/{len(follow_ups)}")
     if cloud:
         by_cloud = sum(r.written_by == "cloud" for r in results)
-        print(f"  cloud writer's answer shown {by_cloud}/{len(results)}; the app's answer instead: "
-              f"{sum(bool(r.cloud_problems) for r in results)}; written twice: {sum(r.retried for r in results)}")
+        unreachable = sum(any("cloud writer failed" in problem for problem in r.cloud_problems) for r in results)
+        print(f"  cloud writer's answer shown {by_cloud}/{len(results)}; blocked by the checks (the app's answer instead): "
+              f"{sum(bool(r.cloud_problems) for r in results) - unreachable}; Groq unreachable or limit: {unreachable}; "
+              f"written twice: {sum(r.retried for r in results)}")
+        for r in results:
+            if r.cloud_problems:
+                print(f"  blocked [{r.case.language}] {r.case.question!r}: {'; '.join(r.cloud_problems)[:200]}")
     readers = {name: sum(r.read_by == name for r in results) for name in ("rule", "follow_up", "model")}
     print(f"  read by: {readers}")
     if show_misses:

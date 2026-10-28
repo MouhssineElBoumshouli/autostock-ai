@@ -124,7 +124,7 @@ docker compose exec api python -m app.ask.check_assistant qwen3:4b-instruct --mi
 
 Off by default. It writes the answers in more natural sentences; the app still checks every number,
 branch, part and language, and writes the answer itself if anything is wrong, the internet is down,
-or Groq's free daily limit is reached (about 100 to 150 answers a day with this model: its free tier allows 1,000 requests but only 200,000 word pieces (tokens) a day). **The facts used for each answer
+or Groq's free daily limit is reached (about 250 to 300 answers a day with this model: its free tier allows 1,000 requests but only 200,000 word pieces (tokens) a day, and one answer uses about 700). **The facts used for each answer
 are sent to Groq** (Groq does not train on them). No database access, no customer data.
 
 1. Make a free account at https://console.groq.com and create an API key ("API Keys").

@@ -582,7 +582,7 @@ export const fr: typeof en = {
       description: "Par défaut, l’application rédige chaque réponse elle-même, sur cet ordinateur. Vous pouvez laisser un assistant en ligne (Groq) les rédiger avec des phrases plus naturelles. L’application vérifie toujours chaque chiffre, et rédige la réponse elle-même en cas d’erreur.",
       off: "L’application (sur cet ordinateur)",
       on: "Assistant en ligne (Groq)",
-      note: "Les données utilisées pour chaque réponse sont envoyées à Groq. Gratuit, mais limité : environ 100 à 150 réponses par jour avec ce modèle. Groq ne s’en sert pas pour entraîner ses modèles. Sans internet, ou une fois la limite du jour atteinte, l’application rédige les réponses.",
+      note: "Les données utilisées pour chaque réponse sont envoyées à Groq. Gratuit, mais limité : environ 250 à 300 réponses par jour avec ce modèle. Groq ne s’en sert pas pour entraîner ses modèles. Sans internet, ou une fois la limite du jour atteinte, l’application rédige les réponses.",
       noKey: "Pour l’activer, ajoutez une clé Groq gratuite (GROQ_API_KEY) dans le fichier .env, puis redémarrez l’application. Voir le README.",
     },
     branches: {
