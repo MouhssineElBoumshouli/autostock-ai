@@ -195,7 +195,7 @@ def test_the_right_number_on_the_wrong_period_is_blocked(browser, shop, model):
                 f"{label(prompt, 'the period before', 'pieces sold')} the week before, {label(prompt, 'change')} down."]
 
     result = done(chat_with(model, right, browser, "brake pads sales compared to last week"))
-    assert result["text"] == "Brake pads sold 6 this week, against 12 the week before, -50% down."
+    assert result["text"] == "Brake pads sold 6 this week, against 12 the week before, 50% down."
 
 
 def test_a_change_in_the_wrong_direction_is_blocked(browser, shop, model):
@@ -704,3 +704,26 @@ def test_a_currency_written_next_to_a_money_fact_is_not_shown_twice():
     assert text.add("It costs MAD [F1]. ") == "It costs MAD 12,122.74."
     french = FactText([Fact("F1", "cost of what to order", "12122.74 MAD", "12 122,74 DH")], (CASA, RABAT))
     assert french.add("Pour [F1] MAD. ") == "Pour 12 122,74 DH."
+
+
+def test_a_change_is_shown_without_a_sign_so_words_say_which_way(shop):
+    answer = lookup(shop, "sales_vs_last", part="brake pads")
+    change = next(fact for fact in labeled_facts(answer, Question("sales_vs_last"), "MAD", "fr") if fact.what.startswith("change"))
+    assert change.shown == "50 %" and change.direction == "down", "never « en baisse de -50 % »"
+
+
+def test_why_gives_the_writer_the_apps_conclusions_not_raw_numbers(browser, shop, model):
+    oil = select_part(shop, "Oil filter")
+    with SessionLocal() as db:
+        first = LAST_DAY - timedelta(days=20)
+        db.add(StockOut(organization_id=shop, part_id=oil, branch_id=branch_named(shop, MAIN), first_day=first,
+                        last_day=first + timedelta(days=4)))
+        db.commit()
+    fake = model(writes=[lambda prompt: [f"Down {label(prompt, 'change')}."]])
+    done(chat(browser, "why are oil filter sales down?"))
+    prompt = writer_prompt(fake)
+    assert "Main reason found by the app: the part was out of stock on more days this period than before." in prompt
+    assert "Never add a reason of your own." in prompt
+    facts = [line for line in prompt.splitlines() if line.startswith("[F")]
+    assert any("(the main reason)" in line for line in facts)
+    assert not any("last year" in line or "in stock" in line or "expected" in line for line in facts), facts

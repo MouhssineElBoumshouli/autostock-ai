@@ -13,7 +13,7 @@ from app.ask.answer_parts import (
 from app.ask.overview_answers import change_words, percent_change
 from app.ask.periods import LABELS, day_range, period_used, range_before, same_day_year_before
 from app.ask.sales_answers import pieces_and_value
-from app.ask.why import SalesFacts, direction, reasons
+from app.ask.why import SalesFacts, direction, last_year_compared, reasons
 from app.models import Alert, Branch, Forecast, Part, SaleLine, StockLevel, StockOut
 from app.runs_out import HORIZON_DAYS
 
@@ -59,6 +59,7 @@ def explain_part_change(asked: Asked) -> Answer:
         {"subject": parts.subject, **asked.place(), "period": period, "range": date_range(first, last),
          "before_range": date_range(before_first, before_last), "pieces_now": now, "pieces_before": before,
          "percent_change": percent, "direction": direction(now, before), "reasons": found,
+         "last_year_compared": last_year_compared(now, last_year),
          "same_days_last_year": last_year, "weekly_pieces": weekly,
          "days_out_of_stock_now": out_now, "days_out_of_stock_before": out_before,
          "days_out_of_stock_counts": _days_counted_over(parts.part_ids, shop_branch), "stock_now": in_stock,

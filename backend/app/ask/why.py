@@ -40,6 +40,47 @@ def direction(now: int, before: int) -> str:
     return "up" if change > 0 else "down"
 
 
+def last_year_compared(now: int, last_year: int) -> str | None:
+    """How the same days last year compare with now: "higher", "lower" or "same"; None without sales then."""
+    if not last_year:
+        return None
+    if abs(now - last_year) * 100 <= SEASON_PERCENT * last_year:
+        return "same"
+    return "higher" if last_year > now else "lower"
+
+
+MAIN_REASON = {
+    "out_of_stock": "the part was out of stock on more days this period than before",
+    "back_in_stock": "the part is back in stock: it was out of stock on fewer days this period than before",
+    "price_up": "the average selling price went up",
+    "price_down": "the average selling price went down",
+    "season": "normal for the season: the same days last year sold about as many",
+    "alert": "an open alert points the same way",
+}
+LAST_YEAR = {
+    "higher": "the same days last year sold MORE than this period, so the season does not explain it",
+    "lower": "the same days last year sold FEWER than this period, so the season does not explain it",
+    "same": "the same days last year sold about as many as this period: normal for the season",
+}
+
+
+def conclusions(values: dict) -> list[str]:
+    """The app's conclusions about a change in sales, in plain words, for the cloud writer to say as
+    they are: it gets these instead of raw numbers to interpret, so it can't make up its own reasons."""
+    if values["direction"] == "same":
+        return ["Conclusion found by the app: sales have not really changed."]
+    found = values["reasons"]
+    lines = [f"Conclusion found by the app: sales went {values['direction']}."]
+    if found:
+        lines.append(f"Main reason found by the app: {MAIN_REASON[found[0]['kind']]}.")
+    else:
+        lines.append("Main reason found by the app: none. Stock, prices, alerts and last year don't explain it: say so plainly.")
+    if values.get("last_year_compared"):
+        lines.append(f"Last year: {LAST_YEAR[values['last_year_compared']]}.")
+    lines.append("Say only these conclusions, the main reason first. Never add a reason of your own.")
+    return lines
+
+
 def reasons(facts: SalesFacts) -> list[dict]:
     """The reasons that fit, the main one first. Empty when no rule explains the change."""
     way = direction(facts.now, facts.before)

@@ -36,6 +36,7 @@ from app.ask.sentences import fixed, written_answer
 from app.ask.tools import Lookup, look_up
 from app.ask.understand import shop_words
 from app.ask.understood_line import heading
+from app.ask.why import conclusions
 
 WRITER = """You write answers for an auto parts shop app. Today, for the shop, is {today}.
 Answer the person's question in 2 to 4 short sentences, in {language}, using only the facts below.
@@ -45,14 +46,16 @@ Answer the person's question in 2 to 4 short sentences, in {language}, using onl
 - Say what each number IS: pieces sold, pieces to order, pieces in stock, days out of stock. Never call
   pieces to order "sold". Lead with the direct answer to the question.
 - Name parts without their numbers. Plain words, no tables, no markdown.
-- Use the most useful facts, not all of them. If they don't answer the question, say what they do show.
+- Use the most useful facts, not all of them, in plain sentences: never list facts one after another.
+  If they don't answer the question, say what they do show.
+- A change is shown without a sign ("6 %"): always say which way it went (up or down) next to it.
 - {money_rule}
 Example: with the facts "[F1] Casablanca - Maarif · this period · pieces sold", "[F2] Casablanca - Maarif ·
 change in pieces sold (down)", "[F3] Rabat - Agdal · this period · pieces sold", a good answer is:
 "Casablanca - Maarif sold [F1] pieces this period, [F2] on the period before. Rabat - Agdal sold [F3] pieces."
 The app's own answer, correct but plain, is: "{app_answer}"
 The facts are about: {about}
-Facts:
+{conclusions}Facts:
 {facts}"""
 RETRY = """The app did not show your answer: {problems}.
 Write the whole answer again, in {language}, with the labels only."""
@@ -128,6 +131,8 @@ class CloudWriting:
             today=shop_today(db, organization_id), language=self.language, app_answer=app_answer,
             money_rule=MONEY_SEEN.format(currency=currency) if currency else MONEY_HIDDEN,
             about=heading(understood), facts="\n".join(fact.line() for fact in self.facts),
+            conclusions="".join(f"{line}\n" for line in conclusions(lookup.answer.values))
+            if lookup.answer.key == "explain_part_change" else "",
         )
         self.messages = [{"role": "system", "content": writer},
                          {"role": "user", "content": f"{question}\n(Answer in {self.language}, with the labels.)"}]

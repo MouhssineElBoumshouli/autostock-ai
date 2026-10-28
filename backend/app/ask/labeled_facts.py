@@ -42,6 +42,11 @@ WHAT = {
     "reasons percent": "change in the average selling price (found by the app)",
     "reasons price_now": "average selling price", "reasons price_before": "average selling price",
     "next pieces": "pieces sold",
+    "main_reason days_now": "days out of stock this period (the main reason)",
+    "main_reason days_before": "days out of stock the period before (the main reason)",
+    "main_reason percent": "change in the average selling price (the main reason)",
+    "main_reason price_now": "average selling price now", "main_reason price_before": "average selling price before",
+    "main_reason last_year": "pieces sold the same days last year",
 }
 # The same key means different things in different answers: "pieces" are to order, in stock or left.
 WHAT_FOR = {
@@ -85,7 +90,7 @@ class Fact:
 def labeled_facts(answer: Answer, question: Question, currency: str | None, language: str) -> list[Fact]:
     """`language` is "en", "fr" or "ar": how the numbers are written in the answer."""
     found: list[dict] = []
-    _walk(answer.values, [], {"branch": question.branch}, found)
+    _walk(_writer_values(answer), [], {"branch": question.branch}, found)
     for fact in found:
         fact["what"] = WHAT_FOR.get(answer.key, {}).get(fact["key"], fact["what"])
     # A period is only worth checking when the same kind of number is given for two periods
@@ -102,6 +107,18 @@ def labeled_facts(answer: Answer, question: Question, currency: str | None, lang
             part=fact["part"], when=when, direction=_direction(fact["value"]) if fact["key"].startswith("percent") else None,
         ))
     return facts
+
+
+def _writer_values(answer: Answer) -> dict:
+    """What the writer gets. For "why": only the change and the main reason's own numbers; the app's
+    conclusions go in words (app/ask/why.py), so raw stock-out days or last year aren't listed or read wrongly."""
+    values = answer.values
+    if answer.key != "explain_part_change":
+        return values
+    kept = {key: values[key] for key in ("pieces_now", "pieces_before", "percent_change") if key in values}
+    if values.get("reasons"):
+        kept["main_reason"] = {key: value for key, value in values["reasons"][0].items() if key not in ("kind", "branch")}
+    return kept
 
 
 def _direction(percent: float) -> str:
@@ -163,7 +180,7 @@ def _shown(value: float, key: str, currency: str | None, language: str) -> str:
         amount = _grouped(value / 100, language, decimals=2)
         return f"{currency} {amount}" if language == "en" else f"{amount} {'DH' if currency == 'MAD' else currency}"
     if key.startswith("percent"):
-        return f"{value:+}{'%' if language != 'fr' else ' %'}"
+        return f"{abs(value)}{'%' if language != 'fr' else ' %'}"  # no sign: the words say up or down
     return _grouped(value, language)
 
 

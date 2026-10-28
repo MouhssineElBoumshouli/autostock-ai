@@ -10,7 +10,7 @@ from app.ask.answer_parts import Answer, family_name
 from app.ask.reply_language import reply_language
 from app.ask.sentences import LANGUAGES, written_answer
 from app.ask.sentences.shown import Shown
-from app.ask.why import SalesFacts, direction, reasons
+from app.ask.why import SalesFacts, conclusions, direction, last_year_compared, reasons
 
 PART = {"kind": "part", "name": "Battery 70Ah"}
 BRANCHES = [
@@ -142,3 +142,21 @@ def test_two_branches_asked_about_one_sells_more():
               "branches": BRANCHES[1:], "only_asked": True}
     assert write("compare_branches", values).startswith("Rabat - Agdal sells more: 125 pieces this month")
     assert write("compare_branches", values, "fr").startswith("Rabat - Agdal vend plus : 125 ce mois-ci")
+
+
+@pytest.mark.parametrize(("now", "last_year", "compared"), [(80, 100, "higher"), (80, 60, "lower"), (80, 85, "same"), (80, 0, None)])
+def test_last_year_is_higher_lower_or_the_same(now, last_year, compared):
+    assert last_year_compared(now, last_year) == compared
+
+
+def test_the_conclusions_never_blame_the_season_when_last_year_was_different():
+    lines = conclusions({**EXPLAIN, "last_year_compared": "higher"})
+    assert lines[1] == "Main reason found by the app: the part was out of stock on more days this period than before."
+    assert "the season does not explain it" in lines[2]
+
+
+@pytest.mark.parametrize("language", ["en", "fr", "ar"])
+def test_the_apps_sentences_never_write_a_sign_next_to_up_or_down(language):
+    values = {"subject": PART, "period": "this_month", "range": "2026-10-01/2026-10-28", "pieces": 61, "before_pieces": 51,
+              "before_range": "2026-09-01/2026-09-28", "percent": -20}
+    assert "-20" not in write("sales_vs_last", values, language) and "20" in write("sales_vs_last", values, language)
