@@ -70,7 +70,8 @@ def best_sellers(asked: Asked) -> Answer:
     name, sku, sold = rows[0]
     return Answer(
         "best_sellers",
-        {**values, "name": name, "sku": sku, "pieces": int(sold)},
+        {**values, "name": name, "sku": sku, "pieces": int(sold),
+         "next": [{"name": other, "pieces": int(other_sold)} for other, _, other_sold in rows[1:3]]},
         f"Best seller for {parts.label}{when}: {name} ({sku}), {pieces(int(sold))}.",
         [Number(label=f"{name} ({sku})", value=int(sold), unit="pieces") for name, sku, sold in rows],
     )

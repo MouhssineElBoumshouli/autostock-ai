@@ -9,9 +9,13 @@ from app.api.today import BASELINE_WEEKS, find_late_deliveries, open_alert_group
 from app.ask.answer_parts import Answer, Asked, Number, date_range, part_not_found, pick_parts, range_words
 from app.ask.periods import LABELS, day_range, period_used, range_before
 from app.ask.question import Question
+from app.ask.sales_answers import pieces_and_value
 from app.ask.stock_answers import running_out
 from app.models import Branch, Part, SaleLine
 from app.runs_out import RUNNING_OUT_WITHIN_DAYS
+
+
+WEEK_PERIODS = ("today", "this_week")  # "what's going on today?": this week against a normal week
 
 
 def percent_change(now: int, before: int) -> int | None:
@@ -49,7 +53,9 @@ def today_briefing(asked: Asked) -> Answer:
     }
     numbers = []
     sales_words = "No sales yet."
-    if weekly:
+    if asked.question.period not in (None, *WEEK_PERIODS):
+        values["sales_in_period"], numbers, sales_words = _period_sales(asked)
+    elif weekly:
         first = weekly.weeks[-1].week_start
         percent = percent_change(weekly.this_week, weekly.normal)
         values["sales_this_week"] = {
@@ -81,6 +87,28 @@ def today_briefing(asked: Asked) -> Answer:
         f"Running out within {RUNNING_OUT_WITHIN_DAYS} days: {running} parts.",
         numbers,
     )
+
+
+def _period_sales(asked: Asked) -> tuple[dict, list[Number], str]:
+    """The briefing's sales for the period asked about, against the period before it."""
+    period = asked.question.period
+    first, last = day_range(period, asked.today)
+    before_first, before_last = range_before(period, asked.today)
+    everything = pick_parts(asked)
+    now, _ = pieces_and_value(asked, everything, None, first, last)
+    before, _ = pieces_and_value(asked, everything, None, before_first, before_last)
+    percent = percent_change(now, before)
+    values = {"period": period, "range": date_range(first, last), "pieces": now, "before_range": date_range(before_first, before_last),
+              "before_pieces": before, "percent": percent}
+    numbers = [
+        Number(key="pieces_now", label="Pieces sold, this period", value=now, unit="pieces"),
+        Number(key="pieces_before", label="Pieces sold, period before", value=before, unit="pieces"),
+        Number(key="this_period", label="This period", value=date_range(first, last), unit="date_range"),
+        Number(key="period_before", label="Period before", value=date_range(before_first, before_last), unit="date_range"),
+    ]
+    words = (f"{LABELS[period].capitalize()} ({range_words(first, last)}): {pieces(now)} sold, "
+             f"{change_words(percent)} on {range_words(before_first, before_last)} ({pieces(before)}).")
+    return values, numbers, words
 
 
 def compare_branches(asked: Asked) -> Answer:

@@ -18,7 +18,7 @@ QUESTION_TYPES: dict[str, tuple[str, ...]] = {
     "late_deliveries": (),
     "forecast_of_part": ("part", "branch"),
     "sales_vs_last": ("part", "category", "branch", "period"),
-    "today_briefing": (),
+    "today_briefing": ("period",),  # a period changes only the sales part ("et le mois dernier ?")
     "compare_branches": ("part", "category", "period"),
     "explain_part_change": ("part", "branch", "period"),
     "part_details": ("part", "branch"),

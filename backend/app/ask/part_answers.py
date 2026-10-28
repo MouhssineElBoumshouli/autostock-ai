@@ -13,6 +13,7 @@ from app.ask.answer_parts import (
 from app.ask.overview_answers import change_words, percent_change
 from app.ask.periods import LABELS, day_range, period_used, range_before, same_day_year_before
 from app.ask.sales_answers import pieces_and_value
+from app.ask.why import SalesFacts, direction, reasons
 from app.models import Alert, Branch, Forecast, Part, SaleLine, StockLevel, StockOut
 from app.runs_out import HORIZON_DAYS
 
@@ -21,8 +22,8 @@ RECENT_DAYS = 30
 
 
 def explain_part_change(asked: Asked) -> Answer:
-    """The facts that can explain a change in sales: now vs before vs last year, week by week,
-    days out of stock, open alerts, stock now and the forecast. The model reads them; it doesn't compute them."""
+    """Why sales changed: now vs before vs last year, days out of stock, prices and open alerts, read by
+    rules into reasons, the main one first (app/ask/why.py). Stock now and the forecast are given too."""
     if not asked.question.part:
         return which_part("which_part_forecast", "why are brake pad sales down")
     parts = pick_parts(asked)
@@ -46,13 +47,21 @@ def explain_part_change(asked: Asked) -> Answer:
     in_stock = _stock(asked, parts.condition, shop_branch)
     expected = _forecast(asked, parts.condition, shop_branch)
     percent = percent_change(now, before)
+    found = reasons(SalesFacts(
+        now, before, last_year, out_now, out_before,
+        _average_price(asked, parts.condition, shop_branch, first, last),
+        _average_price(asked, parts.condition, shop_branch, before_first, before_last), tuple(alerts),
+    ))
+    if not asked.currency:  # people who don't see money get the price change, not the prices
+        found = [{k: v for k, v in reason.items() if not k.startswith("price_")} for reason in found]
     return Answer(
         "explain_part_change",
         {"subject": parts.subject, **asked.place(), "period": period, "range": date_range(first, last),
          "before_range": date_range(before_first, before_last), "pieces_now": now, "pieces_before": before,
-         "percent_change": percent, "same_days_last_year": last_year, "weekly_pieces": weekly,
+         "percent_change": percent, "direction": direction(now, before), "reasons": found,
+         "same_days_last_year": last_year, "weekly_pieces": weekly,
          "days_out_of_stock_now": out_now, "days_out_of_stock_before": out_before,
-         "days_out_of_stock_counts": "one day per branch with zero stock", "stock_now": in_stock,
+         "days_out_of_stock_counts": _days_counted_over(parts.part_ids, shop_branch), "stock_now": in_stock,
          "expected_next_30_days": expected, "open_alerts": alerts},
         f"{parts.title}{where_words(asked)}, {LABELS[period]} ({range_words(first, last)}): {pieces(now)}, "
         f"{change_words(percent)} on {range_words(before_first, before_last)} ({pieces(before)}). "
@@ -116,6 +125,25 @@ def part_details(asked: Asked) -> Answer:
         ]
         + [Number(label=f"{row['name']} ({row['sku']})", value=row["stock_total"], unit="pieces") for row in shown],
     )
+
+
+def _days_counted_over(part_ids: tuple, shop_branch: uuid.UUID | None) -> str:
+    """Days out of stock are added up per part and per branch: "parts_and_branches", "branches" or "one"."""
+    if part_ids:
+        return "parts_and_branches"
+    return "one" if shop_branch else "branches"
+
+
+def _average_price(asked: Asked, condition, shop_branch: uuid.UUID | None, first: date, last: date) -> int | None:
+    """Average selling price in centimes over the priced sales of [first, last], None without any."""
+    query = (
+        select(func.sum(SaleLine.quantity * SaleLine.unit_price), func.sum(SaleLine.quantity))
+        .join(Part, Part.id == SaleLine.part_id)
+        .where(SaleLine.organization_id == asked.organization_id, SaleLine.sold_on.between(first, last),
+               SaleLine.unit_price.is_not(None), condition)
+    )
+    value, quantity = asked.db.execute(_in_branch(query, SaleLine.branch_id, shop_branch)).one()
+    return round(value / quantity) if quantity else None
 
 
 def _in_branch(query, column, shop_branch: uuid.UUID | None):
