@@ -7,6 +7,8 @@ from collections.abc import Callable
 from sqlalchemy.orm import Session
 
 from app.ask.answer_parts import Answer, Asked, shop_today
+from app.ask.overview_answers import compare_branches, today_briefing
+from app.ask.part_answers import explain_part_change, part_details
 from app.ask.question import NOT_SURE, Question
 from app.ask.sales_answers import best_sellers, sales_of, sales_vs_last
 from app.ask.shop_answers import late_deliveries, open_alerts, what_to_order
@@ -26,6 +28,10 @@ ANSWERS: dict[str, Callable[[Asked], Answer]] = {
     "late_deliveries": late_deliveries,
     "forecast_of_part": forecast_of_part,
     "sales_vs_last": sales_vs_last,
+    "today_briefing": today_briefing,
+    "compare_branches": compare_branches,
+    "explain_part_change": explain_part_change,
+    "part_details": part_details,
 }
 
 

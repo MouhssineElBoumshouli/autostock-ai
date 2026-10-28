@@ -1,38 +1,5 @@
 // All English text shown to users. fr.ts and ar.ts have exactly the same shape (checked by `npm test`).
 
-// The words an Ask answer is built from, already formatted by src/pages/ask/askSentence.ts.
-export type AnswerWords = {
-  subject: string; // "all parts", "Oil filter (3 parts)", "the Brakes category"
-  Subject: string; // the same with a capital first letter, to start a sentence
-  branch: string | null;
-  period: string; // "this week"
-  range: string; // "Oct 14 – Oct 20"
-  pieces: string; // "5 pieces"
-  money: string | null; // null for people who don't see money
-  count: number;
-  shownCount: string;
-  name: string;
-  sku: string;
-  beforePieces: string;
-  beforeRange: string;
-  percent: number | null;
-  days: string;
-  daysLeft: string; // "4 days"
-  daysLate: string; // "3 days"
-  low: string;
-  high: string;
-  madeFrom: string;
-  madeOn: string;
-  part: string;
-  alertBranch: string;
-  alert: string;
-  orderNumber: string;
-  supplier: string;
-  words: string | null;
-};
-
-const inBranch = (branch: string | null) => (branch ? ` in ${branch}` : "");
-
 export const en = {
   appName: "AutoStock AI",
   common: {
@@ -597,6 +564,14 @@ export const en = {
     language: "Language",
     languageHelp: "Everyone sees the app in this language, unless they choose their own in their account menu.",
     saved: "Settings saved.",
+    cloudWriter: {
+      title: "Who writes the answers on the Ask page",
+      description: "By default the app writes every answer itself, on this computer. You can let a cloud writer (Groq) write them in more natural sentences. The app still checks every number, and writes the answer itself if anything is wrong.",
+      off: "The app (on this computer)",
+      on: "More natural writing (Groq)",
+      note: "The facts used for each answer are sent to Groq. Free, but limited: about 250 to 300 answers a day with this model. Groq does not use them to train its models. Without internet, or once the daily limit is reached, the app writes the answers.",
+      noKey: "To turn it on, add a free Groq key (GROQ_API_KEY) to the .env file, then restart the app. See the README.",
+    },
     branches: {
       title: "Branches",
       description: "Where stock is kept. Rename one, merge two that mean the same place, or remove one you added by mistake.",
@@ -730,6 +705,10 @@ export const en = {
       late_deliveries: "Late deliveries",
       forecast_of_part: "Forecast",
       sales_vs_last: "Sales vs. last period",
+      today_briefing: "Today's briefing",
+      compare_branches: "Branches compared",
+      explain_part_change: "What changed",
+      part_details: "Part details",
     },
     filters: {
       category: "Category",
@@ -770,6 +749,10 @@ export const en = {
         subject ? `Forecast of ${subject} for the next 30 days` : "Forecast for the next 30 days",
       sales_vs_last: (subject: string | null) =>
         subject ? `Sales of ${subject} compared with the period before` : "Sales compared with the period before",
+      today_briefing: () => "Today's briefing",
+      compare_branches: (subject: string | null) => (subject ? `Branches compared, ${subject}` : "Branches compared"),
+      explain_part_change: (subject: string | null) => (subject ? `What changed for ${subject}` : "What changed"),
+      part_details: (subject: string | null) => (subject ? `Details of ${subject}` : "Part details"),
     } as Record<string, (subject: string | null) => string>,
     categorySubject: (category: string) => `${category} (category)`,
     periodWords: {
@@ -783,57 +766,7 @@ export const en = {
       last_30_days: "the last 30 days",
     } as Record<string, string>,
     // What an answer is about, inside a sentence.
-    subjects: {
-      part: (name: string, count: string | null) => (count ? `${name} (${count} parts)` : name),
-      matching: (words: string, count: string) => `parts matching “${words}” (${count} parts)`,
-      category: (name: string) => `the ${name} category`,
-      all: "all parts",
-    },
     // One sentence per answer key. Mirrors the English sentences in backend/app/ask.
-    answers: {
-      not_sure: (w: AnswerWords) => `I'm not sure what you mean${w.words ? ` by “${w.words}”` : ""}. Did you mean one of these?`,
-      cannot_answer: () => "I can't answer that yet.",
-      part_not_found: (w: AnswerWords) => `I couldn't find a part matching “${w.part}”. Try its name or part number.`,
-      which_part_stock: () => "Which part? For example: “how many oil filters in stock”.",
-      which_part_forecast: () => "Which part? For example: “how many brake pads will we sell”.",
-      sales_of: (w: AnswerWords) =>
-        `${w.Subject}: ${w.pieces} sold${inBranch(w.branch)} ${w.period} (${w.range})${w.money ? `, worth ${w.money}` : ""}.`,
-      best_sellers_none: (w: AnswerWords) => `No sales for ${w.subject}${inBranch(w.branch)} ${w.period} (${w.range}).`,
-      best_sellers: (w: AnswerWords) =>
-        `Best seller for ${w.subject}${inBranch(w.branch)} ${w.period} (${w.range}): ${w.name} (${w.sku}), ${w.pieces}.`,
-      sales_vs_last: (w: AnswerWords) =>
-        `${w.Subject}${inBranch(w.branch)}, ${w.period} (${w.range}): ${w.pieces}, ` +
-        (w.percent === null
-          ? "with no sales in the period before."
-          : `${w.percent === 0 ? "the same as" : `${w.percent > 0 ? "up" : "down"} ${Math.abs(w.percent)}% on`} ${w.beforeRange} (${w.beforePieces}).`),
-      stock_of_part: (w: AnswerWords) => `${w.Subject}: ${w.pieces} in stock${inBranch(w.branch)}.`,
-      running_out_none: (w: AnswerWords) =>
-        `Nothing in ${w.subject} is expected to run out${inBranch(w.branch)} within ${w.days} days.`,
-      running_out: (w: AnswerWords) =>
-        `${w.shownCount} ${w.count === 1 ? "part is" : "parts are"} expected to run out${inBranch(w.branch)} within ${w.days} days (${w.subject}). ` +
-        `First: ${w.name} (${w.sku}), ${w.pieces} left, about ${w.daysLeft}.`,
-      dead_stock_none: (w: AnswerWords) => `No dead stock in ${w.subject}${inBranch(w.branch)} (no sale in ${w.days} days).`,
-      dead_stock: (w: AnswerWords) =>
-        `${w.shownCount} ${w.count === 1 ? "part has" : "parts have"} stock but no sale in ${w.days} days (${w.subject}${inBranch(w.branch)}): ` +
-        `${w.pieces} on the shelf${w.money ? `, costing ${w.money}` : ""}.`,
-      forecast_none: (w: AnswerWords) => `No forecast yet for ${w.subject}. Forecasts are made after sales are imported.`,
-      forecast: (w: AnswerWords) =>
-        `${w.Subject}${inBranch(w.branch)}: about ${w.pieces} expected over the next ${w.days} days ` +
-        `(likely between ${w.low} and ${w.high}), from sales up to ${w.madeFrom}.`,
-      what_to_order_no_run: () => "There is no order suggestion yet. A manager can make one on the Orders page.",
-      what_to_order_none: (w: AnswerWords) =>
-        `Nothing left to order for ${w.subject}${inBranch(w.branch)} (latest suggestion, ${w.madeOn}).`,
-      what_to_order: (w: AnswerWords) =>
-        `To order for ${w.subject}${inBranch(w.branch)}: ${w.shownCount} ${w.count === 1 ? "line" : "lines"}, ` +
-        `${w.pieces}${w.money ? `, costing ${w.money}` : ""} (latest suggestion, ${w.madeOn}).`,
-      open_alerts_none: (w: AnswerWords) => `No open alerts for ${w.subject}${inBranch(w.branch)}.`,
-      open_alerts: (w: AnswerWords) =>
-        `${w.shownCount} open ${w.count === 1 ? "alert" : "alerts"} for ${w.subject}${inBranch(w.branch)}. ` +
-        `Newest: ${w.part} in ${w.alertBranch}: ${w.alert}`,
-      late_deliveries_none: () => "No supplier delivery is late.",
-      late_deliveries: (w: AnswerWords) =>
-        `${w.shownCount} ${w.count === 1 ? "delivery is" : "deliveries are"} late. Most late: ${w.orderNumber} from ${w.supplier}, ${w.daysLate}.`,
-    } as Record<string, (w: AnswerWords) => string>,
     // Labels of the real numbers under an answer.
     numberLabels: {
       pieces_sold: "Pieces sold",
@@ -859,11 +792,34 @@ export const en = {
       total_cost: "Total cost",
       open_alerts: "Open alerts",
       late_deliveries: "Late deliveries",
+      pieces_this_week: "Pieces sold this week",
+      normal_week: "A normal week",
+      needs_action: "Alerts that need action",
+      worth_a_look: "Worth a look",
+      same_days_last_year: "Same days last year",
+      days_out_of_stock_now: "Days out of stock, this period",
+      days_out_of_stock_before: "Days out of stock, period before",
+      in_stock: "In stock now",
+      matching_parts: "Matching parts",
+      sold_last_30_days: "Sold, last 30 days",
     } as Record<string, string>,
     numberLabelsAbout: {
       days_left: (about: string) => `${about}, days left`,
       days_late: (about: string) => `${about}, days late`,
     } as Record<string, (about: string) => string>,
+    assistant: {
+      aiOffNote: "AI is off: questions are read with simple keyword rules, so ask them simply (“stock of brake pads in Rabat”).",
+      lookingUp: "Looking up",
+      writing: "Writing…",
+      basedOn: "Based on:",
+      newConversation: "New conversation",
+      followUpHint: "Follow-up questions keep the conversation: “and in Rabat?”, “why?”",
+      clearHistory: "Clear history",
+      clearHistoryTitle: "Clear your saved questions?",
+      clearHistoryText: "Your last questions and their answers will be deleted. This can't be undone.",
+      historyCleared: "History cleared.",
+      writtenByCloud: "Written by the cloud writer (Groq), checked against your data.",
+    },
     homeBox: {
       inputLabel: "Ask your shop",
       placeholder: "Ask your shop…",

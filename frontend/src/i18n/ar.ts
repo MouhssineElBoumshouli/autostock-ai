@@ -1,7 +1,5 @@
 // كل النصوص بالعربية. نفس شكل en.ts (يتحقق منه `npm test`).
-import type { AnswerWords, en } from "./en";
-
-const inBranch = (branch: string | null) => (branch ? ` في ${branch}` : "");
+import type { en } from "./en";
 
 // العدد في العربية: 1 و2 لهما صيغة خاصة، من 3 إلى 10 جمع، ومن 11 فما فوق مفرد.
 function counted(count: number, shown: string, one: string, two: string, few: string, many: string): string {
@@ -587,6 +585,14 @@ export const ar: typeof en = {
     language: "اللغة",
     languageHelp: "يرى الجميع التطبيق بهذه اللغة، إلا من يختار لغته من قائمة حسابه.",
     saved: "تم حفظ الإعدادات.",
+    cloudWriter: {
+      title: "من يكتب الأجوبة في صفحة «اسأل»",
+      description: "افتراضيًا، يكتب التطبيق كل جواب بنفسه، على هذا الحاسوب. يمكنك ترك كاتب سحابي (Groq) يكتبها بجمل أكثر طبيعية. يبقى التطبيق يتحقق من كل رقم، ويكتب الجواب بنفسه إذا كان هناك خطأ.",
+      off: "التطبيق (على هذا الحاسوب)",
+      on: "كتابة أكثر طبيعية (Groq)",
+      note: "تُرسل المعطيات المستعملة في كل جواب إلى Groq. مجاني لكن محدود: حوالي 250 إلى 300 جواب في اليوم مع هذا النموذج. لا تستعملها Groq لتدريب نماذجها. بدون إنترنت، أو عند بلوغ الحد اليومي، يكتب التطبيق الأجوبة.",
+      noKey: "لتفعيله، أضف مفتاح Groq مجانيًا (GROQ_API_KEY) في ملف ‎.env، ثم أعد تشغيل التطبيق. انظر ملف README.",
+    },
     branches: {
       title: "الفروع",
       description: "أماكن تخزين السلع. غيّر اسم فرع، أو ادمج فرعين هما نفس المكان، أو احذف فرعًا أُضيف خطأً.",
@@ -719,6 +725,10 @@ export const ar: typeof en = {
       late_deliveries: "تسليمات متأخرة",
       forecast_of_part: "التوقع",
       sales_vs_last: "المبيعات مقارنة بالفترة السابقة",
+      today_briefing: "ملخص اليوم",
+      compare_branches: "مقارنة الفروع",
+      explain_part_change: "ما الذي تغير",
+      part_details: "تفاصيل القطعة",
     },
     filters: {
       category: "الفئة",
@@ -758,6 +768,10 @@ export const ar: typeof en = {
         subject ? `توقع ${subject} للـ30 يومًا القادمة` : "التوقع للـ30 يومًا القادمة",
       sales_vs_last: (subject: string | null) =>
         subject ? `مبيعات ${subject} مقارنة بالفترة السابقة` : "المبيعات مقارنة بالفترة السابقة",
+      today_briefing: () => "ملخص اليوم",
+      compare_branches: (subject: string | null) => (subject ? `مقارنة الفروع، ${subject}` : "مقارنة الفروع"),
+      explain_part_change: (subject: string | null) => (subject ? `ما الذي تغير في ${subject}` : "ما الذي تغير"),
+      part_details: (subject: string | null) => (subject ? `تفاصيل ${subject}` : "تفاصيل القطعة"),
     },
     categorySubject: (category: string) => `${category} (فئة)`,
     periodWords: {
@@ -769,56 +783,6 @@ export const ar: typeof en = {
       last_month: "الشهر الماضي",
       this_year: "هذه السنة",
       last_30_days: "خلال آخر 30 يومًا",
-    },
-    subjects: {
-      part: (name: string, count: string | null) => (count ? `${name} (${count} قطعة)` : name),
-      matching: (words: string, count: string) => `القطع المطابقة لـ«${words}» (${count} قطعة)`,
-      category: (name: string) => `فئة ${name}`,
-      all: "كل القطع",
-    },
-    answers: {
-      not_sure: (w: AnswerWords) => `لست متأكدًا مما تقصده${w.words ? ` بـ«${w.words}»` : ""}. هل تقصد أحد هذه الأسئلة؟`,
-      cannot_answer: () => "لا أستطيع الإجابة عن هذا بعد.",
-      part_not_found: (w: AnswerWords) => `لم أجد قطعة تطابق «${w.part}». جرّب اسمها أو مرجعها.`,
-      which_part_stock: () => "أي قطعة؟ مثال: «كم عدد فلاتر الزيت في المخزون».",
-      which_part_forecast: () => "أي قطعة؟ مثال: «كم سنبيع من فحمات الفرامل».",
-      sales_of: (w: AnswerWords) =>
-        `${w.Subject}: بيع ${w.pieces}${inBranch(w.branch)} ${w.period} (${w.range})${w.money ? `، بقيمة ${w.money}` : ""}.`,
-      best_sellers_none: (w: AnswerWords) => `لا توجد مبيعات لـ${w.subject}${inBranch(w.branch)} ${w.period} (${w.range}).`,
-      best_sellers: (w: AnswerWords) =>
-        `الأكثر مبيعًا في ${w.subject}${inBranch(w.branch)} ${w.period} (${w.range}): ${w.name} (${w.sku})، ${w.pieces}.`,
-      sales_vs_last: (w: AnswerWords) =>
-        `${w.Subject}${inBranch(w.branch)}، ${w.period} (${w.range}): ${w.pieces}، ` +
-        (w.percent === null
-          ? "ولا مبيعات في الفترة السابقة."
-          : `${w.percent === 0 ? "نفس" : `${w.percent > 0 ? "بارتفاع" : "بانخفاض"} ${Math.abs(w.percent)}% مقارنة بـ`} ${w.beforeRange} (${w.beforePieces}).`),
-      stock_of_part: (w: AnswerWords) => `${w.Subject}: ${w.pieces} في المخزون${inBranch(w.branch)}.`,
-      running_out_none: (w: AnswerWords) =>
-        `لا يُتوقع نفاد أي شيء من ${w.subject}${inBranch(w.branch)} خلال ${w.days} يومًا.`,
-      running_out: (w: AnswerWords) =>
-        `${parts(w.count, w.shownCount)} يُتوقع نفادها${inBranch(w.branch)} خلال ${w.days} يومًا (${w.subject}). ` +
-        `الأولى: ${w.name} (${w.sku})، تبقّى ${w.pieces}، حوالي ${w.daysLeft}.`,
-      dead_stock_none: (w: AnswerWords) =>
-        `لا يوجد مخزون راكد في ${w.subject}${inBranch(w.branch)} (بدون بيع منذ ${w.days} يومًا).`,
-      dead_stock: (w: AnswerWords) =>
-        `${parts(w.count, w.shownCount)} لها مخزون بدون بيع منذ ${w.days} يومًا (${w.subject}${inBranch(w.branch)}): ` +
-        `${w.pieces} على الرف${w.money ? `، بتكلفة ${w.money}` : ""}.`,
-      forecast_none: (w: AnswerWords) => `لا يوجد توقع بعد لـ${w.subject}. تُحسب التوقعات بعد استيراد المبيعات.`,
-      forecast: (w: AnswerWords) =>
-        `${w.Subject}${inBranch(w.branch)}: يُتوقع بيع حوالي ${w.pieces} خلال ${w.days} يومًا القادمة ` +
-        `(على الأرجح بين ${w.low} و${w.high})، بناءً على المبيعات حتى ${w.madeFrom}.`,
-      what_to_order_no_run: () => "لا توجد اقتراحات طلب بعد. يمكن للمدير حسابها في صفحة ما يجب طلبه.",
-      what_to_order_none: (w: AnswerWords) => `لم يبقَ شيء للطلب لـ${w.subject}${inBranch(w.branch)} (آخر حساب، ${w.madeOn}).`,
-      what_to_order: (w: AnswerWords) =>
-        `للطلب لـ${w.subject}${inBranch(w.branch)}: ${counted(w.count, w.shownCount, "سطر واحد", "سطران", "أسطر", "سطرًا")}، ` +
-        `${w.pieces}${w.money ? `، بتكلفة ${w.money}` : ""} (آخر حساب، ${w.madeOn}).`,
-      open_alerts_none: (w: AnswerWords) => `لا توجد تنبيهات مفتوحة لـ${w.subject}${inBranch(w.branch)}.`,
-      open_alerts: (w: AnswerWords) =>
-        `${counted(w.count, w.shownCount, "تنبيه مفتوح واحد", "تنبيهان مفتوحان", "تنبيهات مفتوحة", "تنبيهًا مفتوحًا")} لـ${w.subject}${inBranch(w.branch)}. ` +
-        `الأحدث: ${w.part} في ${w.alertBranch}: ${w.alert}`,
-      late_deliveries_none: () => "لا يوجد تسليم متأخر من الموردين.",
-      late_deliveries: (w: AnswerWords) =>
-        `${counted(w.count, w.shownCount, "تسليم واحد متأخر", "تسليمان متأخران", "تسليمات متأخرة", "تسليمًا متأخرًا")}. الأكثر تأخرًا: ${w.orderNumber} من ${w.supplier}، ${w.daysLate}.`,
     },
     numberLabels: {
       pieces_sold: "القطع المبيعة",
@@ -844,10 +808,33 @@ export const ar: typeof en = {
       total_cost: "التكلفة الإجمالية",
       open_alerts: "التنبيهات المفتوحة",
       late_deliveries: "التسليمات المتأخرة",
+      pieces_this_week: "القطع المباعة هذا الأسبوع",
+      normal_week: "أسبوع عادي",
+      needs_action: "تنبيهات تحتاج إجراء",
+      worth_a_look: "تستحق نظرة",
+      same_days_last_year: "نفس الأيام من السنة الماضية",
+      days_out_of_stock_now: "أيام نفاد المخزون، هذه الفترة",
+      days_out_of_stock_before: "أيام نفاد المخزون، الفترة السابقة",
+      in_stock: "في المخزون الآن",
+      matching_parts: "القطع المطابقة",
+      sold_last_30_days: "المباع، آخر 30 يومًا",
     },
     numberLabelsAbout: {
       days_left: (about: string) => `${about}، الأيام المتبقية`,
       days_late: (about: string) => `${about}، أيام التأخير`,
+    },
+    assistant: {
+      aiOffNote: "الذكاء الاصطناعي متوقف: تُقرأ الأسئلة بكلمات مفتاحية بسيطة، فاسأل ببساطة («مخزون الفرامل في الرباط»).",
+      lookingUp: "بحث",
+      writing: "جارٍ الكتابة…",
+      basedOn: "بناءً على:",
+      newConversation: "محادثة جديدة",
+      followUpHint: "أسئلة المتابعة تحتفظ بالمحادثة: «وفي الرباط؟»، «لماذا؟»",
+      clearHistory: "مسح السجل",
+      clearHistoryTitle: "مسح أسئلتك المحفوظة؟",
+      clearHistoryText: "ستُحذف أسئلتك الأخيرة وأجوبتها. لا يمكن التراجع عن ذلك.",
+      historyCleared: "تم مسح السجل.",
+      writtenByCloud: "كتبه الكاتب السحابي (Groq)، وتم التحقق منه مقارنة ببياناتك.",
     },
     homeBox: {
       inputLabel: "اسأل متجرك",
@@ -912,6 +899,7 @@ export const ar: typeof en = {
       "The file has a header row but no data under it.": "في الملف سطر عناوين لكن لا توجد بيانات تحته.",
       "The column matching doesn't fit this file. Upload it again.": "مطابقة الأعمدة لا تناسب هذا الملف. ارفعه مرة أخرى.",
       "A filter needs the question type it belongs to.": "يحتاج عامل التصفية إلى نوع السؤال الذي ينتمي إليه.",
+      "Add GROQ_API_KEY to the .env file first.": "أضف أولًا GROQ_API_KEY في ملف ‎.env.",
       "That isn't a filter this question type takes.": "نوع السؤال هذا لا يقبل عامل التصفية هذا.",
       "Name is missing (needed for a new part)": "الاسم ناقص (ضروري لقطعة جديدة)",
       "SKU is missing": "المرجع ناقص",

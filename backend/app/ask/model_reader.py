@@ -1,16 +1,27 @@
 """Understanding a question with the optional local model. It only picks a question type and
-filters, as strict JSON from the allowed lists; it never sees or writes numbers.
+filters, as strict JSON from the allowed lists (Ollama's structured output); it never sees or writes numbers.
+
+When there was a question before, the model may answer "same": the new words only change it
+("and in Rabat?"), and the app merges the changes into the question before.
 
 Filters the chosen type doesn't use are dropped (they would be ignored anyway). Anything else
 that isn't allowed makes the whole answer rejected, and the keyword rule is used instead.
 """
 
+import json
+
 from app.ai import llm
 from app.ask.question import FILTERS, PERIODS, QUESTION_TYPES, Question, ShopWords, checked_question
 
+SAME = "same"  # a follow-up: keep the question before, change only the filters given
 TYPE_MEANINGS = {
+    "today_briefing": "open questions about how things are: what's new, how the shop is doing, what to worry about",
     "sales_of": "how many pieces were sold (of a part, a category, in a branch, over a period)",
     "best_sellers": "which parts sell the most",
+    "sales_vs_last": "sales this period compared with the period before",
+    "compare_branches": "branches compared with each other, or which branch sells the most",
+    "explain_part_change": "why the sales of one part went up or down",
+    "part_details": "everything about one part: stock, sales, forecast, alerts",
     "running_out": "which parts will run out of stock soon",
     "what_to_order": "what to order from suppliers and what it costs",
     "stock_of_part": "how many of one part are on the shelf",
@@ -18,20 +29,36 @@ TYPE_MEANINGS = {
     "open_alerts": "unusual things the app noticed (alerts)",
     "late_deliveries": "supplier deliveries that are late",
     "forecast_of_part": "how many of one part will sell in the coming days",
-    "sales_vs_last": "sales this period compared with the period before",
-    "cannot_answer": "anything else: customers, staff, prices, changing or deleting data, other topics",
+    "cannot_answer": "anything else: customers, staff, prices, changing or deleting data, placing orders, other topics",
 }
 
 EXAMPLES = """Examples (the shop's names may differ):
-"how many headlight bulbs did we sell yesterday in Fes" -> {"type": "sales_of", "part": "headlight bulbs", "category": null, "branch": "Fes - Centre", "period": "yesterday"}
-"stock dial les disques" -> {"type": "stock_of_part", "part": "les disques", "category": null, "branch": null, "period": null}
-"ما هي قطع المحرك التي ستنفد" -> {"type": "running_out", "part": null, "category": "Engine", "branch": null, "period": null}
-"ventes de la semaine dernière comparées à celle d'avant" -> {"type": "sales_vs_last", "part": null, "category": null, "branch": null, "period": "last_week"}
-"add 10 batteries to the stock" -> {"type": "cannot_answer", "part": null, "category": null, "branch": null, "period": null}"""
+"how many headlight bulbs did we sell yesterday in Fes" -> {"type": "sales_of", "part": "headlight bulbs", "category": null, "branch": "Fes - Centre", "period": "yesterday", "branches": null}
+"stock dial les disques" -> {"type": "stock_of_part", "part": "les disques", "category": null, "branch": null, "period": null, "branches": null}
+"ما هي قطع المحرك التي ستنفد" -> {"type": "running_out", "part": null, "category": "Engine", "branch": null, "period": null, "branches": null}
+"ventes de la semaine dernière comparées à celle d'avant" -> {"type": "sales_vs_last", "part": null, "category": null, "branch": null, "period": "last_week", "branches": null}
+"kifach dayra lbi3a had chhar?" -> {"type": "today_briefing", "part": null, "category": null, "branch": null, "period": null, "branches": null}
+"3lach na9so lbi3 dyal les filtres?" -> {"type": "explain_part_change", "part": "les filtres", "category": null, "branch": null, "period": null, "branches": null}
+"9aren bin fes w agadir had chhar" -> {"type": "compare_branches", "part": null, "category": null, "branch": null, "period": "this_month", "branches": ["Fes - Centre", "Agadir - Talborjt"]}
+"شكون الفرع اللي كيبيع كثر ديال الزيوت؟" -> {"type": "compare_branches", "part": null, "category": "Oils", "branch": null, "period": null, "branches": null}
+"chhal ba9i mn les amortisseurs f fes?" -> {"type": "stock_of_part", "part": "les amortisseurs", "category": null, "branch": "Fes - Centre", "period": null, "branches": null}
+"عطيني كلشي على البوجي" -> {"type": "part_details", "part": "البوجي", "category": null, "branch": null, "period": null, "branches": null}
+"ach kayn jdid f lhanout?" -> {"type": "today_briefing", "part": null, "category": null, "branch": null, "period": null, "branches": null}
+"شنو خاصني نشري هاد السيمانة؟" -> {"type": "what_to_order", "part": null, "category": null, "branch": null, "period": null, "branches": null}
+"wach kayna chi sel3a ma kat tba3ch f rbat?" -> {"type": "dead_stock", "part": null, "category": null, "branch": "Rabat - Agdal", "period": null, "branches": null}
+"add 10 batteries to the stock" -> {"type": "cannot_answer", "part": null, "category": null, "branch": null, "period": null, "branches": null}"""
+
+FOLLOW_UP_EXAMPLES = """The question before was: {earlier}
+If the new words only change it, use type "same" and give only what changed. Examples:
+"and in Fes?" / "w f fes?" / "وفي فاس؟" -> {{"type": "same", "part": null, "category": null, "branch": "Fes - Centre", "period": null, "branches": null}}
+"et le mois dernier ?" -> {{"type": "same", "part": null, "category": null, "branch": null, "period": "last_month", "branches": null}}
+"why?" / "3lach?" / "علاش؟" -> {{"type": "explain_part_change", "part": null, "category": null, "branch": null, "period": null, "branches": null}}
+If it is a new question of its own, read it as usual."""
 
 
-def instructions_for(shop: ShopWords) -> str:
+def instructions_for(shop: ShopWords, earlier: Question | None = None) -> str:
     types = "\n".join(f"- {name}: {meaning}" for name, meaning in TYPE_MEANINGS.items())
+    follow_up = FOLLOW_UP_EXAMPLES.format(earlier=json.dumps({"type": earlier.type, **earlier.filters()})) if earlier else ""
     return f"""You read questions from an auto parts shop, in French, English, Arabic or Moroccan Darija.
 Reply with JSON only: the question type and its filters. Use null for anything not asked.
 Question types:
@@ -41,31 +68,52 @@ Filters:
 - category: one of {list(shop.categories)} when the question is about a whole category, else null.
 - branch: one of {list(shop.branches)} when a branch or its city is named, else null.
 - period: one of {list(PERIODS)}, else null. "next month" is not a period.
-If the question is not one of the types above, use cannot_answer. Never guess.
-{EXAMPLES}"""
+- branches: for compare_branches only, when two or more branches are named: their names, else null.
+If the question is not one of the types above, use cannot_answer. Never guess a filter nobody asked for.
+{EXAMPLES}
+{follow_up}"""
 
 
-def schema_for(shop: ShopWords) -> dict:
+def schema_for(shop: ShopWords, earlier: Question | None = None) -> dict:
     def one_of(values) -> dict:
         return {"enum": [*values, None]}
 
+    types = [*QUESTION_TYPES, SAME] if earlier else list(QUESTION_TYPES)
     return {
         "type": "object",
         "properties": {
-            "type": {"enum": list(QUESTION_TYPES)},
+            "type": {"enum": types},
             "part": {"type": ["string", "null"]},
             "category": one_of(shop.categories),
             "branch": one_of(shop.branches),
             "period": one_of(PERIODS),
+            "branches": {"type": ["array", "null"], "items": {"enum": list(shop.branches)}},
         },
         "required": ["type", *FILTERS],
     }
 
 
-def read_with_model(text: str, shop: ShopWords, model: str = llm.OLLAMA_MODEL) -> Question | None:
+def read_with_model(text: str, shop: ShopWords, model: str = llm.OLLAMA_MODEL, earlier: Question | None = None) -> Question | None:
     """The model's reading, or None when it is off or its answer is not allowed."""
-    raw = llm.ask_json(instructions_for(shop), text, schema_for(shop), model)
+    raw = llm.ask_json(instructions_for(shop, earlier), text, schema_for(shop, earlier), model)
+    if earlier and isinstance(raw, dict) and (
+        raw.get("type") == SAME or (raw.get("type") == "explain_part_change" and not raw.get("part"))
+    ):
+        raw = _merged(earlier, raw)
     if isinstance(raw, dict) and raw.get("type") in QUESTION_TYPES:
         used = QUESTION_TYPES[raw["type"]]
         raw = {key: value for key, value in raw.items() if key == "type" or key in used or key not in FILTERS}
     return checked_question(raw, shop)
+
+
+def _merged(earlier: Question, changes: dict) -> dict:
+    """The question before, with the filters the follow-up changed. "why?" about it: what changed for its part."""
+    merged = {"type": earlier.type, **earlier.filters()}
+    given = {name: changes.get(name) for name in FILTERS if changes.get(name)}
+    if "part" in given or "category" in given:
+        merged.pop("part", None)
+        merged.pop("category", None)
+    merged.update(given)
+    if changes["type"] == "explain_part_change":
+        merged["type"] = "explain_part_change" if merged.get("part") else earlier.type
+    return merged

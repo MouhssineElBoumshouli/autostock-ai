@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { t } from "@/i18n";
 
 import { formatAskNumber } from "./askFormat";
-import { answerSentence, numberLabel, understoodHeading, understoodLine } from "./askSentence";
+import { numberLabel, understoodHeading, understoodLine } from "./askSentence";
 import { relatedScreen } from "./questionTypes";
 import { UnderstoodChips } from "./UnderstoodChips";
 
@@ -56,7 +56,9 @@ export function AnswerCard({
 
         <div className="grid gap-1">
           {line && <p className="text-body-large text-on-surface">{line}</p>}
-          <p className="text-body-large text-on-surface">{answerSentence(data, currency)}</p>
+          <p dir="auto" lang={data.language} className="text-body-large text-on-surface">
+            {data.answer}
+          </p>
         </div>
 
         {data.numbers.length > 0 && (

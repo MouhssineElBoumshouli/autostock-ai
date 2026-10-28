@@ -8,6 +8,8 @@ from sqlalchemy.engine import make_url
 real_url = make_url(os.environ["DATABASE_URL"])
 test_url = real_url.set(database=f"{real_url.database}_test")
 os.environ["DATABASE_URL"] = test_url.render_as_string(hide_password=False)
+# Tests never reach Groq, whatever .env says: the cloud writer is a scripted fake in them.
+os.environ["GROQ_API_KEY"] = ""
 
 
 def create_test_database() -> None:

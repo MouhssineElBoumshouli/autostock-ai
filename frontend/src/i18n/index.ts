@@ -2,7 +2,6 @@ import { ar } from "./ar";
 import { en } from "./en";
 import { fr } from "./fr";
 
-export type { AnswerWords } from "./en";
 export type Language = "en" | "fr" | "ar";
 export type Messages = typeof en;
 

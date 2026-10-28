@@ -93,17 +93,45 @@ Forecasts are remade by themselves after every sales import, or with `POST /api/
 
 ## Ask your shop (optional local AI)
 
-Questions are read by simple keyword rules; nothing extra is needed. When the rules are unsure, the
-app asks "Did you mean...". To also start the free local model, which then helps only with those
-unsure questions (Ollama, qwen2.5:3b, about 2 GB downloaded once, nothing leaves the computer):
+The app always writes the answers itself, in the question's language (English, French, or Arabic,
+also for Darija questions), from the shop's real numbers. Without AI, questions are read by simple
+keyword rules ("stock of brake pads in Rabat"); nothing extra is needed, and the Ask page says so at
+the top. With the free local AI (Ollama, model `qwen3:4b-instruct`, about 2.5 GB downloaded once,
+nothing leaves the computer), the model reads questions asked in any words and follow-ups
+("and in Rabat?", "et le mois dernier ?"). Each person's last 20 questions are kept and shown again.
+
+On a computer with an NVIDIA graphics card (much faster), start it with:
 
 ```
-docker compose --profile ai up
-docker compose exec api python -m app.ask.check_questions
+docker compose --profile ai-gpu up
 ```
 
-The second command scores the rule, each model, and rule + model on both labeled question sets
-(150 questions), per language, with how often each answers the wrong question.
+Without one: `docker compose --profile ai up` (works, but answers take much longer).
+
+**Close heavy apps (games, animated wallpapers, many browser tabs) before using it on a 4 GB
+graphics card.** Windows and open apps already use part of the card's memory; if the model doesn't
+fit, part of it runs on the processor and answers get several times slower. Check with
+`docker compose exec ollama-gpu ollama ps`: the PROCESSOR column should say mostly GPU. If it says
+100% CPU even with apps closed, restart the AI once: `docker compose --profile ai-gpu restart ollama-gpu`.
+
+To score the reading on the 60 open test questions (good answers, refusals, seconds):
+
+```
+docker compose exec api python -m app.ask.check_assistant qwen3:4b-instruct --misses
+```
+
+### Optional: cloud writer (Groq, free)
+
+Off by default. It writes the answers in more natural sentences; the app still checks every number,
+branch, part and language, and writes the answer itself if anything is wrong, the internet is down,
+or Groq's free daily limit is reached (about 250 to 300 answers a day with this model: its free tier allows 1,000 requests but only 200,000 word pieces (tokens) a day, and one answer uses about 700). **The facts used for each answer
+are sent to Groq** (Groq does not train on them). No database access, no customer data.
+
+1. Make a free account at https://console.groq.com and create an API key ("API Keys").
+2. Put it in `.env`: `GROQ_API_KEY=gsk_...` (never in git), then `docker compose up -d` again.
+3. The owner turns it on in **Settings → Who writes the answers on the Ask page**.
+
+To score it: add `--cloud` to the command above.
 
 ## Database changes
 

@@ -15,6 +15,10 @@ export const ASK_FILTERS: Record<string, readonly string[]> = {
   late_deliveries: [],
   forecast_of_part: ["part", "branch"],
   sales_vs_last: ["part", "category", "branch", "period"],
+  today_briefing: [],
+  compare_branches: ["part", "category", "period"],
+  explain_part_change: ["part", "branch", "period"],
+  part_details: ["part", "branch"],
 };
 
 export const ASK_PERIODS = ["today", "yesterday", "this_week", "last_week", "this_month", "last_month", "this_year"] as const;
@@ -48,6 +52,9 @@ export function relatedScreen(questionType: string, filters: AskFilters, branche
     case "stock_of_part":
     case "sales_vs_last":
     case "forecast_of_part":
+    case "explain_part_change":
+    case "part_details":
+    case "compare_branches":
       return { to: stockLink(stockParams), labelKey: "stock" };
     case "dead_stock":
       stockParams.set("status", "dead");

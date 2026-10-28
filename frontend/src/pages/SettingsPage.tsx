@@ -15,11 +15,12 @@ import { type Language, languageNames, languages, t } from "@/i18n";
 import { requiredError } from "@/lib/validation";
 
 import { BranchesCard } from "./settings/BranchesCard";
+import { CloudWriterCard } from "./settings/CloudWriterCard";
 import { OrderingCard } from "./settings/OrderingCard";
 import { SuppliersCard } from "./settings/SuppliersCard";
 import { SynonymsCard } from "./settings/SynonymsCard";
 
-// Owners only: shop name, currency, language, branches, suppliers and search words.
+// Owners only: shop name, currency, language, branches, suppliers, search words, orders and the cloud writer.
 export function SettingsPage() {
   const settings = useSettings();
 
@@ -46,6 +47,7 @@ export function SettingsPage() {
       <SuppliersCard />
       <SynonymsCard />
       <OrderingCard />
+      <CloudWriterCard />
     </div>
   );
 }
@@ -60,7 +62,10 @@ function SettingsForm({ saved }: { saved: ShopSettings }) {
     event.preventDefault();
     setShowErrors(true);
     if (requiredError(form.name)) return;
-    save.mutate({ ...form, name: form.name.trim() }, { onSuccess: () => toast.success(t.settings.saved) });
+    save.mutate(
+      { name: form.name.trim(), currency: form.currency, language: form.language },
+      { onSuccess: () => toast.success(t.settings.saved) },
+    );
   }
 
   return (

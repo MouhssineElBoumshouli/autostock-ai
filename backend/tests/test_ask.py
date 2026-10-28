@@ -130,7 +130,7 @@ def test_sales_of_a_part_with_branch_and_period(browser, shop):
     assert answer["filters"] == {"part": "oil filters", "period": "this_week"}
     assert numbers(answer)["Pieces sold"] == 5
     assert numbers(answer)["Sales value"] == 5 * 10000
-    assert "5 pieces" in answer["sentence"] and "MAD" in answer["sentence"]
+    assert "5 pieces" in answer["answer"] and "MAD" in answer["answer"]
     # What the website needs to say the same sentence in French or Arabic.
     assert answer["key"] == "sales_of"
     assert answer["values"]["subject"] == {"kind": "part", "name": "Oil filter"}
@@ -151,7 +151,7 @@ def test_sales_of_a_category(browser, shop):
 def test_best_sellers(browser, shop):
     answer = ask(browser, "best sellers this week")
     assert [number["value"] for number in answer["numbers"]] == [6, 5]
-    assert answer["sentence"].startswith("Best seller for all parts this week") and "Brake pads front" in answer["sentence"]
+    assert answer["answer"].startswith("The best seller this week is") and "Brake pads front" in answer["answer"]
 
 
 def test_sales_vs_the_period_before(browser, shop):
@@ -159,7 +159,7 @@ def test_sales_vs_the_period_before(browser, shop):
     assert answer["filters"] == {"part": "brake pads", "period": "this_week"}
     assert numbers(answer)["Pieces sold, this period"] == 6
     assert numbers(answer)["Pieces sold, period before"] == 12
-    assert "down 50%" in answer["sentence"]
+    assert "down 50%" in answer["answer"]
     assert answer["key"] == "sales_vs_last" and answer["values"]["percent"] == -50
     assert numbers(answer)["This period"].count("/") == 1
 
@@ -170,7 +170,7 @@ def test_stock_of_a_part_per_branch(browser, shop):
     shelve(shop, oil, RABAT, 4)
     answer = ask(browser, "stock of oil filter")
     assert numbers(answer) == {MAIN: 7, RABAT: 4}
-    assert "11 pieces in stock" in answer["sentence"]
+    assert answer["answer"].startswith("11 pieces") and "in stock" in answer["answer"]
     assert numbers(ask(browser, "stock of oil filter in rabat")) == {RABAT: 4}
 
 
@@ -210,7 +210,7 @@ def test_unknown_words_get_not_sure_and_buttons_instead_of_a_guess(browser, shop
     answer = ask(browser, "stock of unicorn horns in rabat")
     assert answer["question_type"] == "not_sure"
     assert answer["understood"] is None and answer["numbers"] == []
-    assert answer["sentence"] == "I'm not sure what you mean by “unicorn horns”. Did you mean one of these?"
+    assert answer["answer"] == "I'm not sure what you mean by “unicorn horns”. Did you mean one of these?"
     assert answer["suggestions"][0] == {
         "question_type": "stock_of_part", "label": f"Stock · {RABAT}", "filters": {"branch": RABAT}, "period": None,
     }
@@ -220,7 +220,7 @@ def test_unknown_words_get_not_sure_and_buttons_instead_of_a_guess(browser, shop
     # The button sends the same question with the type picked: the unknown words are searched as a part.
     picked = browser.post("/api/ask", json={"question": "stock of unicorn horns in rabat", "question_type": "stock_of_part"})
     assert picked.json()["understood"] == f"I understood: Stock of unicorn horns · {RABAT}"
-    assert picked.json()["sentence"].startswith("I couldn't find a part")
+    assert picked.json()["answer"].startswith("I couldn't find a part")
 
 
 def test_a_picked_type_must_be_a_real_one(browser, shop):
@@ -266,7 +266,7 @@ def test_running_out_uses_the_forecast(browser, shop):
     shelve(shop, select_part(shop, "Brake pads front"), MAIN, 1000, expected_30d=60)  # 500 days left
     answer = ask(browser, "what is running out")
     assert numbers(answer)["Parts running out"] == 1
-    assert "Oil filter" in answer["sentence"] and "about 5 days" in answer["sentence"]
+    assert "Oil filter" in answer["answer"] and "about 5 days" in answer["answer"]
 
 
 def test_dead_stock(browser, shop):
@@ -317,14 +317,14 @@ def test_open_alerts(browser, shop):
 def test_late_deliveries_when_there_are_none(browser, shop):
     answer = ask(browser, "which deliveries are late")
     assert answer["question_type"] == "late_deliveries"
-    assert answer["sentence"] == "No supplier delivery is late."
+    assert answer["answer"] == "No supplier delivery is late."
 
 
 @pytest.mark.parametrize("question", ["who is our best customer?", "delete all old parts", "print me an invoice"])
 def test_questions_we_cannot_answer_get_no_guess(browser, shop, question):
     answer = ask(browser, question)
     assert answer["question_type"] == "cannot_answer"
-    assert answer["sentence"] == CANNOT_ANSWER_YET
+    assert answer["answer"] == CANNOT_ANSWER_YET
     assert answer["numbers"] == [] and answer["understood"] is None
 
 
@@ -339,7 +339,7 @@ def test_staff_get_the_same_answers_without_money(browser, shop):
         answer = ask(staff, question)
         assert answer["numbers"], question
         assert all(number["unit"] != "money" for number in answer["numbers"]), question
-        assert "MAD" not in answer["sentence"], question
+        assert "MAD" not in answer["answer"], question
         assert "money" not in answer["values"], question
     assert numbers(ask(staff, "how many oil filters did we sell this week"))["Pieces sold"] == 5
 
@@ -350,7 +350,7 @@ def test_staff_see_what_to_order_without_its_cost(browser):
     browser.post("/api/orders/suggestions", json={})
     answer = ask(staff_browser(browser), "what should I order and how much will it cost")
     assert numbers(answer)["Lines to order"] == 1
-    assert "Total cost" not in numbers(answer) and "MAD" not in answer["sentence"]
+    assert "Total cost" not in numbers(answer) and "MAD" not in answer["answer"]
     assert answer["key"] == "what_to_order" and "money" not in answer["values"]
     assert answer["values"]["count"] == 1
 

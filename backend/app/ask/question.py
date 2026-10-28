@@ -18,10 +18,15 @@ QUESTION_TYPES: dict[str, tuple[str, ...]] = {
     "late_deliveries": (),
     "forecast_of_part": ("part", "branch"),
     "sales_vs_last": ("part", "category", "branch", "period"),
+    "today_briefing": ("period",),  # a period changes only the sales part ("et le mois dernier ?")
+    "compare_branches": ("part", "category", "period", "branches"),
+    "explain_part_change": ("part", "branch", "period"),
+    "part_details": ("part", "branch"),
     "cannot_answer": (),
 }
 PERIODS = ("today", "yesterday", "this_week", "last_week", "this_month", "last_month", "this_year")
-FILTERS = ("part", "category", "branch", "period")
+FILTERS = ("part", "category", "branch", "period", "branches")
+BRANCHES_JOINED = " | "  # "branches": two or more branch names asked about together ("compare Casablanca and Rabat")
 PART_TEXT_MAX = 80
 NOT_A_PART = {"null", "none"}  # the word for "nothing", written as text
 
@@ -36,6 +41,7 @@ class Question:
     category: str | None = None
     branch: str | None = None
     period: str | None = None
+    branches: str | None = None  # names joined by BRANCHES_JOINED
     suggestions: tuple[str, ...] = ()  # for NOT_SURE: the closest question types
 
     def filters(self) -> dict[str, str]:
@@ -67,9 +73,16 @@ def checked_question(raw: object, shop: ShopWords) -> Question | None:
         value = raw.get(name)
         if value is None or value == "":
             continue
+        if name == "branches" and isinstance(value, list):
+            value = BRANCHES_JOINED.join(value)
         if not isinstance(value, str) or name not in allowed:
             return None
         value = value.strip()
+        if name == "branches":
+            names = list(dict.fromkeys(name.strip() for name in value.split(BRANCHES_JOINED.strip())))
+            if len(names) < 2 or any(branch not in shop.branches for branch in names):
+                return None
+            value = BRANCHES_JOINED.join(names)
         if name == "category" and value not in shop.categories:
             return None
         if name == "branch" and value not in shop.branches:

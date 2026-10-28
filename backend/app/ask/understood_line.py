@@ -16,6 +16,10 @@ HEADINGS = {
     "late_deliveries": ("Late deliveries", "Late deliveries"),
     "forecast_of_part": ("Forecast for the next 30 days", "Forecast of {} for the next 30 days"),
     "sales_vs_last": ("Sales compared with the period before", "Sales of {} compared with the period before"),
+    "today_briefing": ("Today's briefing", "Today's briefing"),
+    "compare_branches": ("Branches compared", "Branches compared, {}"),
+    "explain_part_change": ("What changed", "What changed for {}"),
+    "part_details": ("Part details", "Details of {}"),
 }
 
 
@@ -26,6 +30,8 @@ def heading(question: Question) -> str:
     pieces = [with_subject.format(subject) if subject else without_subject]
     if question.branch:
         pieces.append(question.branch)
+    if question.branches:
+        pieces.append(question.branches)
     period = shown_period(question)
     if period:
         pieces.append(LABELS[period])
