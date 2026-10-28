@@ -1,11 +1,12 @@
-"""The "Ask your shop" assistant: the app reads the question (rule, follow-up, or the model as strict
-JSON), runs one read-only lookup, and the model writes the answer with fact labels ([F1]) that the app
-replaces with the real numbers. Each sentence is checked before it is shown: no number typed by the
-model, and every label next to its own branch, part, period and direction. Also: money hidden from
-staff, each shop sees only its own data.
+"""The "Ask your shop" assistant: the app reads the question (rule, follow-up, or the local model as
+strict JSON), runs one read-only lookup and writes the answer itself (tests/test_ask_sentences.py).
+When the owner turned the cloud writer on, it writes with fact labels ([F1]) that the app replaces
+with the real numbers. Each sentence is checked before it is shown: no number typed by the writer, and
+every label next to its own branch, part, period and direction; anything wrong -> one second try, then
+the app's own answer. Also: money hidden from staff, each shop sees only its own data.
 
-The model is a scripted fake here: these tests check the app around it, not the model itself
-(that is measured by app/ask/check_assistant.py on the 60 open questions).
+The local model and the cloud writer are scripted fakes here: these tests check the app around them
+(the reading is measured by app/ask/check_assistant.py on the 60 open questions).
 """
 
 import copy
@@ -16,10 +17,13 @@ from datetime import timedelta
 import pytest
 from sqlalchemy import func, select
 
-from app.ai import llm
+from sqlalchemy import update
+
+from app.ai import cloud_writer, llm
 from app.ask import model_reader
 from app.ask.answer_language import written_in
-from app.ask.assistant import DARIJA_ANSWER, MONEY_HIDDEN
+from app.ask.assistant import MONEY_HIDDEN
+from app.ask.reply_language import DARIJA_WRITER_LANGUAGE
 from app.ask.fact_check import FactText
 from app.ask.keyword_rule import read_follow_up, read_with_rule
 from app.ask.labeled_facts import Fact, labeled_facts
@@ -27,7 +31,7 @@ from app.ask.number_check import numbers_in_words, numbers_written
 from app.ask.question import Question, ShopWords
 from app.ask.tools import look_up
 from app.db import SessionLocal
-from app.models import AuditLog, StockOut
+from app.models import AuditLog, Organization, StockOut
 from tests.helpers import OWNER_PASSWORD, create_other_shop, logged_in_browser
 from tests.test_ask import (  # noqa: F401  (shop and several_brake_pads_shop are fixtures)
     LAST_DAY, MAIN, RABAT, branch_named, new_part, select_part, sell, shelve, several_brake_pads_shop, shop,
@@ -42,9 +46,10 @@ NOTHING = {"part": None, "category": None, "branch": None, "period": None}
 
 
 class FakeModel:
-    """Plays back scripted writing and readings, and remembers what it was sent. A scripted writing is
-    a list of pieces, or a function of the writer's prompt (to find a fact's label in it). When the
-    script runs out, the last writing is given again (a writer that makes the same mistake twice)."""
+    """The local model (readings) and the cloud writer (writings), scripted; remembers what each was sent.
+    A scripted writing is a list of pieces, or a function of the writer's prompt (to find a fact's label
+    in it). When the script runs out, the last writing is given again (a writer that makes the same
+    mistake twice)."""
 
     def __init__(self, writes: list, readings: list[object]):
         self.writes, self.readings = list(writes), list(readings)
@@ -52,8 +57,7 @@ class FakeModel:
         self.reads: list[dict] = []
         self.pieces_sent = 0
 
-    def chat(self, messages, model=None, longest=None):
-        assert longest, "the writer is always limited in length"
+    def chat(self, messages):
         self.chats.append(copy.deepcopy(messages))
         reply = self.writes.pop(0) if len(self.writes) > 1 else self.writes[0]  # the last one again, for a retry
         for piece in reply(messages[0]["content"]) if callable(reply) else reply:
@@ -67,13 +71,18 @@ class FakeModel:
 
 @pytest.fixture
 def model(monkeypatch):
-    """model(writes=[...], readings=[json, ...]) installs a fake model and returns it."""
+    """model(writes=[...], readings=[json, ...]) installs the fakes and returns them. With writes, the
+    cloud writer is turned on (a key set, and switched on in every shop's settings)."""
     monkeypatch.setattr(llm, "is_on", lambda model=None: True)
 
     def install(writes=(), readings=()):
         fake = FakeModel(list(writes), list(readings))
-        monkeypatch.setattr(llm, "chat", fake.chat)
         monkeypatch.setattr(llm, "ask_json", fake.ask_json)
+        monkeypatch.setattr(cloud_writer, "chat", fake.chat)
+        monkeypatch.setattr(cloud_writer, "is_ready", lambda: bool(writes))
+        with SessionLocal() as db:
+            db.execute(update(Organization).values(cloud_writer_on=bool(writes)))
+            db.commit()
         return fake
 
     return install
@@ -127,13 +136,13 @@ def test_the_writer_uses_labels_and_the_app_puts_the_numbers_in(browser, shop, m
     result = done(events)
     assert result["read_by"] == "rule" and fake.reads == [], "the model isn't asked to read what the rule is sure of"
     assert result["question"] == {"type": "sales_of", "filters": {"part": "oil filters", "period": "this_week"}}
-    assert result["checked"] is True and result["text"] == "We sold 5 oil filters this week. That is MAD 500.00."
+    assert result["written_by"] == "cloud" and result["text"] == "We sold 5 oil filters this week. That is MAD 500.00."
     # Sent sentence by sentence, with the numbers already in.
     assert [event["text"] for event in events if event["type"] == "text"] == ["We sold 5 oil filters this week.", " That is MAD 500.00."]
     # The writer never sees the numbers themselves, only what each label is.
     facts = [line for line in writer_prompt(fake).splitlines() if line.startswith("[F")]
     assert facts and not any(re.search(r"\d", line.split("] ", 1)[1]) for line in facts)
-    assert result["lookups"][0]["sentence"].startswith("Oil filter: 5 pieces sold")
+    assert result["written_by"] == "cloud" and result["language"] == "en"
 
 
 def test_numbers_are_written_the_way_the_answers_language_writes_them(browser, shop, model):
@@ -145,7 +154,7 @@ def test_a_number_typed_by_the_model_blocks_the_answer(browser, shop, model):
     fake = model(writes=[lambda prompt: [f"We sold {label(prompt, 'pieces sold')} oil filters this week. ", "Next week 77. ", "Great!"]])
     events = chat(browser, "how many oil filters did we sell this week?")
     result = done(events)
-    assert result["checked"] is False and result["wrong_numbers"] == ["typed number 77"]
+    assert result["written_by"] == "app" and result["cloud_problems"] == ["typed number 77"]
     assert "77" not in shown(events) and "Great" not in shown(events)
     assert result["lookups"], "the website shows the app's own sentences from these instead"
     assert len(fake.chats) == 2 and result["retried"] is True, "one second try, then the app's own answer"
@@ -155,7 +164,7 @@ def test_a_number_typed_by_the_model_blocks_the_answer(browser, shop, model):
 @pytest.mark.parametrize("typed", ["We sold 5 oil filters.", "We sold ٥ oil filters.", "We sold ninety-seven oil filters."])
 def test_digits_arabic_digits_and_number_words_typed_by_the_model_are_all_blocked(browser, shop, model, typed):
     model(writes=[[typed]])
-    assert done(chat(browser, "how many oil filters did we sell this week?"))["checked"] is False
+    assert done(chat(browser, "how many oil filters did we sell this week?"))["written_by"] == "app"
 
 
 def test_the_right_number_on_the_wrong_branch_is_blocked(browser, shop, model):
@@ -164,7 +173,7 @@ def test_the_right_number_on_the_wrong_branch_is_blocked(browser, shop, model):
         return [f"Rabat sold {label(prompt, MAIN, 'this period', 'pieces sold')} pieces."]
 
     result = done(chat_with(model, swapped, browser, "compare Atlas and Rabat"))
-    assert result["checked"] is False and "written next to Rabat - Agdal" in result["wrong_numbers"][0]
+    assert result["written_by"] == "app" and "written next to Rabat - Agdal" in result["cloud_problems"][0]
 
     def right(prompt):
         return [f"Rabat sold {label(prompt, RABAT, 'this period', 'pieces sold')} pieces, "
@@ -178,7 +187,7 @@ def test_the_right_number_on_the_wrong_period_is_blocked(browser, shop, model):
     def wrong(prompt):
         return [f"Brake pads sold {label(prompt, 'the period before', 'pieces sold')} pieces this week."]
 
-    assert done(chat_with(model, wrong, browser, "brake pads sales compared to last week"))["checked"] is False
+    assert done(chat_with(model, wrong, browser, "brake pads sales compared to last week"))["written_by"] == "app"
 
     def right(prompt):
         return [f"Brake pads sold {label(prompt, 'this period', 'pieces sold')} this week, against "
@@ -192,7 +201,7 @@ def test_a_change_in_the_wrong_direction_is_blocked(browser, shop, model):
     def wrong(prompt):
         return [f"Brake pad sales went up {label(prompt, 'change')}."]
 
-    assert done(chat_with(model, wrong, browser, "brake pads sales compared to last week"))["checked"] is False
+    assert done(chat_with(model, wrong, browser, "brake pads sales compared to last week"))["written_by"] == "app"
 
 
 def test_the_right_number_on_the_wrong_part_is_blocked(browser, several_brake_pads_shop, model):
@@ -200,7 +209,7 @@ def test_the_right_number_on_the_wrong_part_is_blocked(browser, several_brake_pa
     def wrong(prompt):
         return [f"The rear pads have {label(prompt, 'Brake pads front', 'pieces in stock')} in stock."]
 
-    assert done(chat_with(model, wrong, browser, "details of the brake pads"))["checked"] is False
+    assert done(chat_with(model, wrong, browser, "details of the brake pads"))["written_by"] == "app"
 
     def right(prompt):
         return [f"The rear pads have {label(prompt, 'Brake pads rear', 'pieces in stock')} in stock, "
@@ -218,7 +227,7 @@ def test_a_blocked_answer_is_written_again_once_told_exactly_what_was_wrong(brow
 
     fake = model(writes=[swapped, right])
     result = done(chat(browser, "compare Atlas and Rabat"))
-    assert result["checked"] is True and result["retried"] is True and result["text"] == "Rabat sold 2 pieces."
+    assert result["written_by"] == "cloud" and result["retried"] is True and result["text"] == "Rabat sold 2 pieces."
     second_try = fake.chats[1]
     assert second_try[-2] == {"role": "assistant", "content": swapped(writer_prompt(fake))[0]}
     assert "is the number for Atlas Parts, but you put it next to Rabat - Agdal" in second_try[-1]["content"]
@@ -254,7 +263,7 @@ def test_an_answer_in_the_wrong_language_is_written_again_in_the_right_one(brows
     fake = model(writes=[english, french])
     events = chat(browser, "combien de filtres a huile vendus cette semaine ?")
     result = done(events)
-    assert result["checked"] is True and result["retried"] is True
+    assert result["written_by"] == "cloud" and result["retried"] is True
     assert result["text"] == "Cette semaine, 5 filtres à huile ont été vendus."
     assert "you answered in the wrong language; answer in French" in fake.chats[1][-1]["content"]
     assert [event["type"] for event in events] == ["looking_up", "text", "restart", "text", "done"]
@@ -263,8 +272,9 @@ def test_an_answer_in_the_wrong_language_is_written_again_in_the_right_one(brows
 def test_an_answer_in_the_wrong_language_twice_shows_the_apps_own_answer(browser, shop, model):
     fake = model(writes=[lambda prompt: [f"We sold {label(prompt, 'pieces sold')} oil filters this week."]])
     result = done(chat(browser, "ما هي مبيعات فلاتر الزيت هذا الأسبوع؟"))
-    assert result["checked"] is False and result["text"] == "" and result["lookups"]
-    assert result["wrong_numbers"] == ["wrong language, the question is in Arabic"]
+    assert result["written_by"] == "app" and result["language"] == "ar" and result["lookups"]
+    assert result["text"].startswith("بيعت") and "We sold" not in result["text"]
+    assert result["cloud_problems"] == ["wrong language, the question is in Arabic"]
     assert len(fake.chats) == 2
 
 
@@ -281,13 +291,13 @@ def test_the_language_an_answer_is_written_in(text, found):
 
 def test_an_unknown_label_is_blocked(browser, shop, model):
     model(writes=[["We sold [F99] pieces."]])
-    assert done(chat(browser, "how many oil filters did we sell this week?"))["wrong_numbers"] == ["unknown label F99"]
+    assert done(chat(browser, "how many oil filters did we sell this week?"))["cloud_problems"] == ["unknown label F99"]
 
 
 def test_a_writer_stuck_repeating_itself_is_stopped_by_the_app(browser, shop, model):
     fake = model(writes=[["3 "] * 5000])
     result = done(chat(browser, "how many oil filters did we sell this week?"))
-    assert result["checked"] is False and result["wrong_numbers"] == ["(no end to the sentence)"]
+    assert result["written_by"] == "app" and result["cloud_problems"] == ["(no end to the sentence)"]
     assert fake.pieces_sent < 800, "the app stops reading long before the model's own length limit, both tries"
 
 
@@ -311,25 +321,30 @@ def test_the_model_reads_what_the_rule_is_unsure_about_as_strict_json(browser, s
 def test_a_reading_that_isnt_allowed_means_not_understood(browser, shop, model):
     fake = model(readings=[{**NOTHING, "type": "sales_of", "branch": "Tangier"}])
     result = done(chat(browser, "zzz qqq"))
-    assert result["question"] is None and result["lookups"] == [] and result["checked"] is False
+    assert result["question"] is None and result["lookups"] == [] and result["written_by"] == "app"
     assert fake.chats == [], "nothing to write from"
 
 
-def test_a_refusal_is_written_without_any_lookup_or_number(browser, shop, model):
-    fake = model(writes=[["I can only read your shop's data. A person changes stock in the app."]])
-    result = done(chat(browser, "delete the oil filters"))
-    assert result["question"]["type"] == "cannot_answer" and result["lookups"] == [] and result["checked"] is True
-    assert "never changes data" in writer_prompt(fake)
-    model(writes=[["I can't add 50: a person does that in the app."]])
-    assert done(chat(browser, "add 50 oil filters to the stock"))["checked"] is False
+@pytest.mark.parametrize(("question", "start"), [
+    ("delete the oil filters", "I can't do that."),
+    ("Supprime toutes les alertes", "Je ne peux pas faire ça."),
+    ("احذف كل التنبيهات", "لا أستطيع فعل ذلك."),
+    ("bdel stock dyal amortisseur l 10", "لا أستطيع فعل ذلك."),
+])
+def test_a_refusal_is_the_apps_own_sentence_in_the_persons_language(browser, shop, model, question, start):
+    fake = model(writes=[["Sure, done!"]], readings=[{**NOTHING, "type": "cannot_answer"}])
+    result = done(chat(browser, question))
+    assert result["question"]["type"] == "cannot_answer" and result["lookups"] == []
+    assert result["text"].startswith(start) and result["written_by"] == "app"
+    assert fake.chats == [], "nothing is sent to the cloud writer for a refusal"
 
 
 @pytest.mark.parametrize(("question", "language"), [
     ("What's going on today?", "English"),
     ("Quoi de neuf ?", "French"),
     ("ما الجديد اليوم؟", "Arabic"),
-    ("شحال باقي من الباطري ف كازا؟", DARIJA_ANSWER),
-    ("ch7al bi3na had simana?", DARIJA_ANSWER),
+    ("شحال باقي من الباطري ف كازا؟", DARIJA_WRITER_LANGUAGE),
+    ("ch7al bi3na had simana?", DARIJA_WRITER_LANGUAGE),
 ])
 def test_the_writer_is_told_which_language_to_answer_in(browser, shop, model, question, language):
     fake = model(writes=[["Hello."]], readings=[{**NOTHING, "type": "today_briefing"}])
@@ -352,7 +367,7 @@ def test_and_in_rabat_changes_only_the_branch(browser, shop, model):
 
 def test_a_follow_up_can_not_reuse_an_earlier_number(browser, shop, model):
     model(writes=[["Like before, 6 pieces."]])  # 6 was the whole shop; Rabat sold none
-    assert done(chat(browser, "w f rbat?", PADS_THIS_WEEK))["checked"] is False
+    assert done(chat(browser, "w f rbat?", PADS_THIS_WEEK))["written_by"] == "app"
 
 
 def test_why_about_a_part_explains_what_changed(browser, shop, model):
@@ -384,15 +399,25 @@ def test_ai_off_sends_one_line_so_the_website_uses_the_keyword_rule(browser, sho
     assert browser.get("/api/ask/ai").json() == {"ai_on": False}
 
 
-def test_a_model_failing_before_anything_was_shown_counts_as_ai_off(browser, shop, monkeypatch):
-    monkeypatch.setattr(llm, "is_on", lambda model=None: True)
+def test_a_cloud_writer_failing_gives_the_apps_own_answer(browser, shop, model, monkeypatch):
+    model(writes=[["unused"]])
 
-    def broken(*args, **kwargs):
-        raise llm.ModelFailed("timed out")
-        yield  # a generator, like the real one
+    def broken(messages):
+        yield {"text": "We sold [F1] "}
+        raise cloud_writer.WriterFailed("daily limit reached")
 
-    monkeypatch.setattr(llm, "chat", broken)
-    assert chat(browser, "delete everything") == [{"type": "ai_off"}]
+    monkeypatch.setattr(cloud_writer, "chat", broken)
+    events = chat(browser, "how many oil filters did we sell this week?")
+    result = done(events)
+    assert result["written_by"] == "app" and result["text"].startswith("5 pieces of ")
+    assert "daily limit reached" in result["cloud_problems"][0]
+
+
+def test_without_the_owners_switch_nothing_is_sent_to_the_cloud(browser, shop, model, monkeypatch):
+    fake = model()
+    monkeypatch.setattr(cloud_writer, "is_ready", lambda: True)  # a key is set, but the owner didn't turn it on
+    result = done(chat(browser, "how many oil filters did we sell this week?"))
+    assert result["written_by"] == "app" and fake.chats == []
 
 
 def test_logged_out_people_cannot_chat(browser):
@@ -593,9 +618,9 @@ def test_whats_is_not_read_as_a_part_called_s():
 
 
 @pytest.mark.parametrize(("text", "expected"), [
-    ("What's going on today?", Question("today_briefing")),
+    ("What's going on today?", Question("today_briefing", period="today")),
     ("quoi de neuf", Question("today_briefing")),
-    ("كيداير اليوم", Question("today_briefing")),
+    ("كيداير اليوم", Question("today_briefing", period="today")),
     ("compare Casablanca and Rabat this month", Question("compare_branches", period="this_month")),
     ("which branch sells the most oils", Question("compare_branches", category="Oils")),
     ("why are oil filters", Question("explain_part_change", part="oil filters")),

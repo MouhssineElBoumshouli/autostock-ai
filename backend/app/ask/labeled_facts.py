@@ -36,6 +36,12 @@ WHAT = {
     "open_alerts": "open alerts", "matches": "matching parts", "sale_price_money": "sale price",
     "unit_cost_money": "unit cost", "low": "likely at least", "high": "likely at most", "days_left": "days left",
     "days_late": "days late", "stock_by_branch pieces": "pieces in stock",
+    "reasons days_now": "days out of stock (main reason found by the app)",
+    "reasons days_before": "days out of stock (main reason found by the app)",
+    "reasons last_year": "pieces sold (normal for the season, found by the app)",
+    "reasons percent": "change in the average selling price (found by the app)",
+    "reasons price_now": "average selling price", "reasons price_before": "average selling price",
+    "next pieces": "pieces sold",
 }
 PART_KEYS = ("name", "supplier", "order_number")
 # What period a fact is about, when the answer gives the same kind of number for several periods.
