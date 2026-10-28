@@ -28,7 +28,6 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <DemoBanner />
       <div className="md:flex md:flex-1">
         <a
           href="#content"
@@ -37,7 +36,8 @@ export function AppShell() {
           {t.nav.skipToContent}
         </a>
 
-        <aside className="sticky top-0 hidden h-screen shrink-0 bg-surface-container-low md:block md:w-20 xl:w-80">
+        {/* Exactly the screen's height, so the person's button at its bottom is always in view. */}
+        <aside className="sticky top-0 hidden h-dvh shrink-0 bg-surface-container-low md:block md:w-20 xl:w-80">
           <SidebarContent />
         </aside>
 
@@ -49,6 +49,7 @@ export function AppShell() {
         </Sheet>
 
         <div className="min-w-0 flex-1">
+          <DemoBanner />
           <header className="sticky top-0 z-10 flex h-16 items-center gap-1 bg-surface px-2 sm:px-4 lg:px-6">
             <Button
               variant="text"
