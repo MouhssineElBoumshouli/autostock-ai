@@ -8,9 +8,9 @@ DATABASE_URL = os.environ["DATABASE_URL"]
 APP_ENV = os.environ.get("APP_ENV", "development")
 IS_PRODUCTION = APP_ENV == "production"
 
-# The addresses people use to open the website, separated by commas: the shop PC's own
-# http://localhost:8080, then http://192.168.1.20:8080 or http://PC-NAME:8080 for the other
-# computers and phones. Requests that change data must come from one of them.
+# Addresses that may change data besides the one a page was opened at (app/origin_check.py),
+# separated by commas. The first is the main one. Only needed behind a proxy; https:// here makes
+# login cookies HTTPS-only.
 def read_addresses(text: str) -> list[str]:
     """'http://localhost:8080, http://PC-NAME:8080/' -> ['http://localhost:8080', 'http://pc-name:8080']"""
     return [url.strip().rstrip("/").lower() for url in text.split(",") if url.strip()]

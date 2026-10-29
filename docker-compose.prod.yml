@@ -48,7 +48,7 @@ services:
       <<: *shop-env
       APP_ENV: production
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-autostock}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-autostock}
-      # Every address people type to open AutoStock, separated by commas.
+      # Optional: extra addresses allowed to save, only behind a proxy (.env.example).
       APP_URL: ${APP_URL:-http://localhost:8080}
       BACKUP_DIR: /backups
       OLLAMA_URL: http://ollama:11434
