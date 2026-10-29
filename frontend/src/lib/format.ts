@@ -1,7 +1,24 @@
 import { language, locale, t } from "@/i18n";
 
 // Shops are in Morocco: times are shown in Moroccan time, whatever the computer's own clock says.
-const timeZone = "Africa/Casablanca";
+// This used to ask Intl.DateTimeFormat for "Africa/Casablanca" directly, trusting the browser's
+// (or the shop PC's) own copy of the time zone database. Morocco moved to permanent UTC+0 on 20
+// Sep 2026, and a computer whose copy is older still thinks it's UTC+1 -- every time on the page
+// would read an hour ahead until that computer happens to update itself. So instead the server
+// says what the shop's offset from UTC is right now (GET /api/shop-time, asked once at startup;
+// see main.tsx), this file shifts every moment by that many minutes, and every formatter below
+// is told the result is already "UTC" -- which every browser, old or new, always gets right.
+let shopOffsetMinutes = 0; // correct already for Morocco since 20 Sep 2026, until the real answer arrives
+export function setShopUtcOffsetMinutes(minutes: number): void {
+  shopOffsetMinutes = minutes;
+}
+
+function shopMoment(value: string | number | Date): Date {
+  const date = value instanceof Date ? value : new Date(value);
+  return new Date(date.getTime() + shopOffsetMinutes * 60_000);
+}
+
+const timeZone = "UTC"; // every Date given to a formatter below has already been shifted by shopMoment()
 // French and Arabic write numbers and dates the same way: "1 250,00", "21/10/2026".
 const numberLocale = language === "en" ? "en-US" : "fr-FR";
 
@@ -35,7 +52,7 @@ export function formatNumber(value: number): string {
 
 // "2026-10-18T12:30:00Z" -> "Oct 18, 2026, 1:30 PM" / "18/10/2026 13:30", in Moroccan time.
 export function formatDateTime(value: string): string {
-  return keepTogether(dateTime.format(new Date(value)));
+  return keepTogether(dateTime.format(shopMoment(value)));
 }
 
 const relative = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
@@ -62,7 +79,7 @@ export function formatTimeAgo(value: string, now: number = Date.now()): string {
   if (abs < 3600) return relative.format(Math.round(seconds / 60), "minute");
   if (abs < 86400) return relative.format(Math.round(seconds / 3600), "hour");
   if (abs < 7 * 86400) return relative.format(Math.round(seconds / 86400), "day");
-  return keepTogether(dateOfMoment.format(new Date(value)));
+  return keepTogether(dateOfMoment.format(shopMoment(value)));
 }
 
 // "Sara Benali" -> "SB", for small round avatars.
@@ -134,8 +151,9 @@ const shopDay = new Intl.DateTimeFormat("en-CA", { timeZone }); // "2026-10-29",
 
 // "today 02:00", "yesterday 02:00", then "27/10/2026 02:00": a moment in the shop's time.
 export function formatDayAndTime(value: string, now: number = Date.now()): string {
-  const moment = new Date(value);
-  const daysAgo = Math.round((calendarDay(shopDay.format(now)).getTime() - calendarDay(shopDay.format(moment)).getTime()) / 86_400_000);
+  const moment = shopMoment(value);
+  const today = shopMoment(now);
+  const daysAgo = Math.round((calendarDay(shopDay.format(today)).getTime() - calendarDay(shopDay.format(moment)).getTime()) / 86_400_000);
   const day = daysAgo === 0 || daysAgo === 1 ? relative.format(-daysAgo, "day") : dateOfMoment.format(moment);
   return keepTogether(`${day} ${timeOfDay.format(moment)}`);
 }
