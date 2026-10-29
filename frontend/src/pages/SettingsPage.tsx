@@ -14,13 +14,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { type Language, languageNames, languages, t } from "@/i18n";
 import { requiredError } from "@/lib/validation";
 
+import { BackupsCard } from "./settings/BackupsCard";
 import { BranchesCard } from "./settings/BranchesCard";
 import { CloudWriterCard } from "./settings/CloudWriterCard";
 import { OrderingCard } from "./settings/OrderingCard";
 import { SuppliersCard } from "./settings/SuppliersCard";
 import { SynonymsCard } from "./settings/SynonymsCard";
 
-// Owners only: shop name, currency, language, branches, suppliers, search words, orders and the cloud writer.
+// Owners only: shop name, currency, language, backups, branches, suppliers, search words, orders and the cloud writer.
 export function SettingsPage() {
   const settings = useSettings();
 
@@ -43,6 +44,7 @@ export function SettingsPage() {
           <SettingsForm key={JSON.stringify(settings.data)} saved={settings.data} />
         )}
       </Card>
+      <BackupsCard />
       <BranchesCard />
       <SuppliersCard />
       <SynonymsCard />

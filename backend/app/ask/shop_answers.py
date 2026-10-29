@@ -8,6 +8,7 @@ from app.alerts.problem import pieces
 from app.api.today import PENDING_STATUSES, find_late_deliveries
 from app.ask.answer_parts import SHOWN_ROWS, Answer, Asked, Number, branch_id, part_not_found, pick_parts, where_words
 from app.models import Alert, Branch, OrderRun, OrderSuggestion, Part
+from app.shop_day import shop_today
 
 
 def what_to_order(asked: Asked) -> Answer:
@@ -83,7 +84,7 @@ def open_alerts(asked: Asked) -> Answer:
 
 
 def late_deliveries(asked: Asked) -> Answer:
-    late = find_late_deliveries(asked.db, asked.organization_id, date.today())
+    late = find_late_deliveries(asked.db, asked.organization_id, shop_today())
     if not late:
         return Answer("late_deliveries_none", {}, "No supplier delivery is late.")
     latest = max(late, key=lambda delivery: delivery.days_late)

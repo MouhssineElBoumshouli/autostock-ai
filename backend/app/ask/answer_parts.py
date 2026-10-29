@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import ColumnElement, func, select, true
 from sqlalchemy.orm import Session
 
+from app import shop_day
 from app.alerts.problem import day_label, money
 from app.ask.question import Question
 from app.models import Branch, Part, SaleLine
@@ -84,7 +85,7 @@ class PartPick:
 def shop_today(db: Session, organization_id: uuid.UUID) -> date:
     """The last day with sales, or the calendar day if the shop has no sales yet."""
     last_sale = db.scalar(select(func.max(SaleLine.sold_on)).where(SaleLine.organization_id == organization_id))
-    return last_sale or date.today()
+    return last_sale or shop_day.shop_today()
 
 
 def pick_parts(asked: Asked) -> PartPick | None:

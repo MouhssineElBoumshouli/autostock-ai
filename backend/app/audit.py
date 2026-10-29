@@ -19,6 +19,7 @@ KNOWN_ACTIONS = frozenset({
     "user.logged_in",
     "user.password_changed",
     "user.password_reset",
+    "user.password_set_on_shop_computer",
     "branch.renamed",
     "branch.merged",
     "branch.removed",

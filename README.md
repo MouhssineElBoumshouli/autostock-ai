@@ -8,7 +8,22 @@ The old Odoo-based version is kept on the `archive/odoo-v0` branch. Why we rebui
 
 ![Approved design concept](design/dashboard-concept.png)
 
-## Run it on Windows
+
+## Install it in a shop
+
+**[docs/INSTALL.md](docs/INSTALL.md)** (French, then English): one PC in the shop, the other computers
+and phones open it on the shop network. In short:
+
+```
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Production mode (`docker-compose.prod.yml`): one container serves the built website and `/api` on
+port 8080, with no reload, no `/api/docs`, no `/design`; a strong database password is required;
+every service restarts by itself; a daily checked backup goes to the `backups` folder; an update
+backs up first. The commands in this README (`docker compose up`) are for developing only.
+
+## Run it on Windows (developing)
 
 1. Install and open **Docker Desktop**. Wait until it says "Engine running".
 2. Open a terminal (PowerShell or Command Prompt) in this folder.
@@ -44,7 +59,7 @@ It only exists while developing. New screens are built from these pieces.
 Colors, sizes and corners are defined once, in `frontend/src/index.css`.
 
 Code changes reload by themselves: save a file in `frontend/` or `backend/` and the page or server updates.
-If you change `package.json` or `requirements.txt`, run `docker compose up --build`.
+If you change `package.json`, `requirements.txt` or a `Dockerfile`, run `docker compose up --build`.
 
 ## Accounts
 
@@ -63,7 +78,7 @@ If you change `package.json` or `requirements.txt`, run `docker compose up --bui
 | Import | owners, managers | bring parts, stock and sales in from Excel (.xlsx) or CSV, in 4 steps |
 | Activity | owners, managers | the shop's history in plain sentences, 25 per page, filter by person and type |
 | Team | owners | add people, change roles, reset passwords, deactivate |
-| Settings | owners | shop name and currency (MAD, EUR or USD) |
+| Settings | owners | shop name, currency (MAD, EUR or USD), language, backups (installed version), branches, suppliers, search words, orders |
 
 ## Tests
 

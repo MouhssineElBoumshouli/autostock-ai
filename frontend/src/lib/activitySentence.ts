@@ -63,6 +63,8 @@ export function activitySentence(item: ActivityItem): string {
         .join(" ");
     case "user.password_changed":
       return words.passwordChanged(actor);
+    case "user.password_set_on_shop_computer":
+      return words.passwordSetOnShopComputer(actor);
     case "user.password_reset":
       return words.passwordReset(actor, target);
     case "import.saved":

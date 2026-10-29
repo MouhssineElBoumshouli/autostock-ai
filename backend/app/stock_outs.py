@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.models import Organization, Part, StockLevel, StockOut
+from app.shop_day import shop_today
 from app.stock_history import record_stock_history
 
 log = logging.getLogger(__name__)
@@ -52,8 +53,8 @@ def record_stock_outs(db: Session, organization_id: uuid.UUID, today: date) -> i
 def record_stock_outs_now(organization_id: uuid.UUID) -> None:
     """For one shop, in its own session (used after an import)."""
     with SessionLocal() as db:
-        record_stock_outs(db, organization_id, date.today())
-        record_stock_history(db, organization_id, date.today())
+        record_stock_outs(db, organization_id, shop_today())
+        record_stock_history(db, organization_id, shop_today())
         db.commit()
 
 
@@ -69,7 +70,7 @@ async def keep_recording_stock_outs() -> None:
     """Runs while the server is up. Hourly, so a day is never missed even after a restart."""
     while True:
         try:
-            await asyncio.to_thread(record_all_stock_outs, date.today())
+            await asyncio.to_thread(record_all_stock_outs, shop_today())
         except Exception:
             log.exception("Recording stock-outs failed")
         await asyncio.sleep(CHECK_EVERY_SECONDS)

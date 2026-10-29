@@ -20,8 +20,9 @@ from sqlalchemy.orm import Session
 
 from app.auth.passwords import hash_password
 from app.db import Base, SessionLocal, utc_now
-from app.forecast.calendar import ramadan_flags
 from app.demo.planted_problems import DemoSeries, plant_problems, planted_rows, stock_history_rows
+from app.demo.production_guard import refuse_demo_in_production
+from app.forecast.calendar import ramadan_flags
 from app.models import Branch, DemoPlantedProblem, Organization, Part, SaleLine, Supplier, SynonymGroup, User
 from app.search.default_synonyms import DEFAULT_SYNONYMS
 
@@ -303,6 +304,7 @@ def _copy(db: Session, table: str, columns: list[str], organization_id: uuid.UUI
 
 
 def main() -> None:
+    refuse_demo_in_production()
     with SessionLocal() as db:
         shop, counts = create_demo_shop(db, last_day=date.today() - timedelta(days=1))
         password = add_demo_owner(db, shop)

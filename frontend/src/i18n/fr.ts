@@ -463,6 +463,9 @@ export const fr: typeof en = {
     needsAction: {
       title: "À traiter",
       empty: "Rien à traiter pour l’instant.",
+      backupOverdue: (when: string) => `Aucune sauvegarde depuis ${when}. Vos données ne sont pas protégées.`,
+      backupNone: "Aucune sauvegarde n’a encore été faite. Vos données ne sont pas protégées.",
+      backupOpenSettings: "Ouvrir les paramètres",
     },
     worthALook: {
       title: "À regarder",
@@ -524,6 +527,7 @@ export const fr: typeof en = {
       deactivated: (actor: string, target: string) => `${actor} a désactivé ${target}.`,
       reactivated: (actor: string, target: string) => `${actor} a réactivé ${target}.`,
       passwordChanged: (actor: string) => `${actor} a changé son mot de passe.`,
+      passwordSetOnShopComputer: (actor: string) => `Le mot de passe de ${actor} a été réinitialisé sur l'ordinateur du magasin.`,
       passwordReset: (actor: string, target: string) => `${actor} a réinitialisé le mot de passe de ${target}.`,
       loggedIn: (actor: string) => `${actor} s’est connecté.`,
       importedParts: (actor: string, file: string, created: string, updated: string) =>
@@ -584,6 +588,17 @@ export const fr: typeof en = {
       on: "Écriture plus naturelle (Groq)",
       note: "Les données utilisées pour chaque réponse sont envoyées à Groq. Gratuit, mais limité : environ 250 à 300 réponses par jour avec ce modèle. Groq ne s’en sert pas pour entraîner ses modèles. Sans internet, ou une fois la limite du jour atteinte, l’application rédige les réponses.",
       noKey: "Pour l’activer, ajoutez une clé Groq gratuite (GROQ_API_KEY) dans le fichier .env, puis redémarrez l’application. Voir le README.",
+    },
+    backups: {
+      title: "Sauvegardes",
+      lastBackup: (when: string, kept: string) => `Dernière sauvegarde : ${when} · ${kept} gardées · dossier backups`,
+      none: "Pas encore de sauvegarde. La première est faite quelques minutes après le démarrage d’AutoStock.",
+      copyReminder: "Une fois par semaine, copiez le dossier backups (dans le dossier AutoStock) sur une clé USB ou un espace en ligne. Une sauvegarde sur le même disque disparaît avec le disque.",
+      problems: {
+        disk_full: "La dernière sauvegarde n’a pas été faite : le disque est presque plein. Libérez de la place sur cet ordinateur.",
+        database_unreachable: "La dernière sauvegarde n’a pas pu joindre la base de données. Redémarrez AutoStock.",
+        failed: "La dernière sauvegarde n’a pas marché. Voir « Sauvegardes » dans docs/INSTALL.md.",
+      },
     },
     branches: {
       title: "Succursales",

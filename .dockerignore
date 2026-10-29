@@ -1,0 +1,11 @@
+# Only what the production image needs (Dockerfile): the app's code, never data or secrets.
+*
+!backend/app
+!backend/migrations
+!backend/scripts
+!backend/alembic.ini
+!backend/requirements.txt
+!frontend
+frontend/node_modules
+frontend/dist
+**/__pycache__

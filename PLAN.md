@@ -43,3 +43,4 @@ Each step ends with something the owner can open and click. The owner approves b
 ## Step 8 — Polish and launch
 - French and Arabic (right-to-left). Realistic Moroccan demo shop. Backups. Speed check. Presentation.
 - **Ready for a real shop:** production mode (no developer features, real password required), a one-page install guide, daily backup with a tested restore, updates without losing data, export all data to Excel, friendly error messages, a short "start here" guide for a new shop.
+- [x] 8b-1. Production mode on one shop PC (`docker-compose.prod.yml`, port 8080, several addresses), strong password required, restarts by itself, capped logs, shop time zone; daily checked backups with a tested restore and a backup before every update; forgotten password from the shop PC; `docs/INSTALL.md` (French, English).

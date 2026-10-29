@@ -13,7 +13,7 @@ from app.ask.sales_answers import pieces_and_value
 from app.ask.stock_answers import running_out
 from app.models import Branch, Part, SaleLine
 from app.runs_out import RUNNING_OUT_WITHIN_DAYS
-
+from app.shop_day import shop_today
 
 WEEK_PERIODS = ("today", "this_week")  # "what's going on today?": this week against a normal week
 
@@ -34,7 +34,7 @@ def today_briefing(asked: Asked) -> Answer:
     needs_action, needs_action_total = open_alert_group(db, shop, NEEDS_ACTION, asked.currency)
     worth_a_look, worth_a_look_total = open_alert_group(db, shop, WORTH_A_LOOK, asked.currency)
     to_order = to_order_summary(db, shop, asked.currency is not None)
-    late = find_late_deliveries(db, shop, date.today())
+    late = find_late_deliveries(db, shop, shop_today())
     running = running_out(Asked(db, shop, Question("running_out"), asked.today, asked.currency)).values.get("count", 0)
 
     def alerts(found) -> list[dict]:
