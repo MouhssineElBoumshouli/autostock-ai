@@ -3,7 +3,8 @@
 Needs action and worth a look reuse the alerts engine's own grouping (app/alerts/problem.py).
 To order reads the pending lines of the latest order run. Late deliveries are purchase orders
 sent longer ago than their supplier's delivery time and not yet fully received. This week's
-sales are measured against a simple baseline: the average of the 4 weeks before it.
+sales are measured against a simple baseline: the average of the 4 weeks before it. Owners also
+see when the backups stopped (none good for 2 days, app/backups.py).
 """
 
 import uuid
@@ -17,8 +18,11 @@ from sqlalchemy.orm import Session
 
 from app.alerts.problem import NEEDS_ACTION, SALES_KINDS, WORTH_A_LOOK, money_note
 from app.auth.permissions import require_role
-from app.db import get_session
+from app.backups import backup_folder, backup_status, is_overdue
+from app.config import BACKUP_DIR
+from app.db import get_session, utc_now
 from app.models import Alert, Branch, OrderRun, OrderSuggestion, Organization, Part, PurchaseOrder, SaleLine, Supplier, User
+from app.shop_day import shop_today
 
 router = APIRouter(prefix="/api/today")
 anyone = require_role()
@@ -87,6 +91,12 @@ class WeeklySales(BaseModel):
     top_parts: list[TopPart]
 
 
+class BackupOverdue(BaseModel):
+    """Owners only: the last good backup is older than 2 days, or there is none yet."""
+
+    last_good_at: datetime | None
+
+
 class TodayOut(BaseModel):
     needs_action: list[AlertSummaryWithMoney | AlertSummary]
     needs_action_total: int
@@ -95,6 +105,7 @@ class TodayOut(BaseModel):
     to_order: ToOrderSummary | ToOrderLines | None
     late_deliveries: list[LateDelivery]
     weekly_sales: WeeklySales | None
+    backup_overdue: BackupOverdue | None = None  # owners only
 
 
 Group = Literal["needs_action", "worth_a_look"]
@@ -112,9 +123,17 @@ def today(user: User = Depends(anyone), db: Session = Depends(get_session)) -> T
         worth_a_look=worth_a_look,
         worth_a_look_total=worth_a_look_total,
         to_order=to_order_summary(db, user.organization_id, can_see_money),
-        late_deliveries=find_late_deliveries(db, user.organization_id, date.today()),
+        late_deliveries=find_late_deliveries(db, user.organization_id, shop_today()),
         weekly_sales=weekly_sales(db, user.organization_id),
+        backup_overdue=backup_overdue(user),
     )
+
+
+def backup_overdue(user: User) -> BackupOverdue | None:
+    if user.role != "owner" or not BACKUP_DIR:
+        return None
+    status = backup_status(backup_folder())
+    return BackupOverdue(last_good_at=status.last_good_at) if is_overdue(status, utc_now()) else None
 
 
 def open_alert_group(db: Session, organization_id: uuid.UUID, group: Group, currency: str | None) -> tuple[list[AlertSummary], int]:

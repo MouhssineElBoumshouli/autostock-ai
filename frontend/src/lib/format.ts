@@ -128,3 +128,14 @@ export function parseMoneyInput(text: string): number | null | "invalid" {
 export function moneyInputValue(centimes: number | null): string {
   return centimes === null ? "" : (centimes / 100).toFixed(2).replace(".", ",");
 }
+
+const timeOfDay = new Intl.DateTimeFormat(numberLocale, { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone });
+const shopDay = new Intl.DateTimeFormat("en-CA", { timeZone }); // "2026-10-29", the day in the shop
+
+// "today 02:00", "yesterday 02:00", then "27/10/2026 02:00": a moment in the shop's time.
+export function formatDayAndTime(value: string, now: number = Date.now()): string {
+  const moment = new Date(value);
+  const daysAgo = Math.round((calendarDay(shopDay.format(now)).getTime() - calendarDay(shopDay.format(moment)).getTime()) / 86_400_000);
+  const day = daysAgo === 0 || daysAgo === 1 ? relative.format(-daysAgo, "day") : dateOfMoment.format(moment);
+  return keepTogether(`${day} ${timeOfDay.format(moment)}`);
+}

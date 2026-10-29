@@ -1,5 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 
@@ -9,6 +10,7 @@ from app.api import (
     alerts,
     ask,
     auth,
+    backups,
     branches,
     forecasts,
     health,
@@ -24,8 +26,10 @@ from app.api import (
     today,
     users,
 )
+from app.config import IS_PRODUCTION, WEBSITE_DIR
 from app.origin_check import OriginCheckMiddleware
 from app.stock_outs import keep_recording_stock_outs
+from app.website import serve_website
 
 
 @asynccontextmanager
@@ -37,7 +41,13 @@ async def lifespan(_: FastAPI):
         task.cancel()
 
 
-app = FastAPI(title="AutoStock AI", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
+# The API's developer pages (/api/docs) only exist while developing.
+developer_pages = (
+    {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    if IS_PRODUCTION
+    else {"docs_url": "/api/docs", "openapi_url": "/api/openapi.json"}
+)
+app = FastAPI(title="AutoStock AI", lifespan=lifespan, **developer_pages)
 
 app.add_middleware(OriginCheckMiddleware)
 
@@ -59,3 +69,8 @@ app.include_router(purchase_orders.router)
 app.include_router(alerts.router)
 app.include_router(today.router)
 app.include_router(ask.router)
+app.include_router(backups.router)
+
+# Last, so every /api address above wins over the website's pages.
+if WEBSITE_DIR:
+    serve_website(app, Path(WEBSITE_DIR))

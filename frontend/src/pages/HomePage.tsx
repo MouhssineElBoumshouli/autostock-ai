@@ -72,7 +72,12 @@ function Today({ canReview }: { canReview: boolean }) {
       />
       <AskYourShopCard />
       <div className="grid gap-4 lg:grid-cols-2">
-        <NeedsActionCard alerts={data.needs_action} total={data.needs_action_total} canReview={canReview} />
+        <NeedsActionCard
+          alerts={data.needs_action}
+          total={data.needs_action_total}
+          canReview={canReview}
+          backupOverdue={data.backup_overdue}
+        />
         <div className="grid gap-4">
           <ToOrderCard toOrder={data.to_order} />
           <LateDeliveriesCard deliveries={data.late_deliveries} />

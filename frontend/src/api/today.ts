@@ -43,6 +43,7 @@ export type Today = {
   to_order: ToOrderSummary | null;
   late_deliveries: LateDelivery[];
   weekly_sales: WeeklySales | null;
+  backup_overdue?: { last_good_at: string | null } | null; // owners only: no good backup for 2 days
 };
 
 export function useToday() {
