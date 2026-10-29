@@ -92,10 +92,18 @@ export function activitySentence(item: ActivityItem): string {
       return words.branchMerged(actor, isolate(String(after.from)), isolate(String(after.into)));
     case "branch.removed":
       return words.branchRemoved(actor, isolate(String(before.name)));
+    case "supplier.added":
+      return words.supplierAdded(actor, isolate(String(after.name)));
+    case "supplier.details_updated":
+      return words.supplierDetailsUpdated(actor, isolate(String(after.name)));
     case "supplier.merged":
       return words.supplierMerged(actor, isolate(String(after.from)), isolate(String(after.into)));
     case "supplier.removed":
       return words.supplierRemoved(actor, isolate(String(before.name)));
+    case "data.exported":
+      return words.dataExported(actor);
+    case "start_here.hidden_changed":
+      return after.hidden ? words.startHereHidden(actor) : words.startHereShown(actor);
     case "forecast.requested":
       return words.forecastRequested(actor);
     case "order_suggestions.created":

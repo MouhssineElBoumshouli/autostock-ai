@@ -44,6 +44,54 @@ FIELDS: dict[str, list[Field]] = {
 }
 
 
+# Column headers for the "parts" and "sales" sheets of the data export, and the sample files on
+# the Stock > Import screen, in each language. Copied from frontend/src/i18n/{en,fr,ar}.ts
+# (importFile.fieldNames), which is where these words are normally kept (CLAUDE.md), because this
+# text is written by the server (an exported file has no browser to translate it in): the same
+# exception the Ask answers already use. Every one of these is also recognised by suggest_field()
+# without help (tests/test_export_labels.py), in whichever of the three languages the file is read
+# back in, so a shop's own export always re-imports cleanly.
+FIELD_LABELS: dict[str, dict[ImportKind, dict[str, str]]] = {
+    "en": {
+        "parts": {
+            "sku": "SKU", "name": "Name", "brand": "Brand", "category": "Category",
+            "oem_reference": "OEM reference", "unit_cost": "Unit cost", "sale_price": "Sale price",
+            "min_stock": "Minimum stock", "pack_size": "Pack size", "quantity": "Quantity in stock",
+            "branch": "Branch", "supplier": "Supplier",
+        },
+        "sales": {"date": "Date", "sku": "SKU", "quantity": "Quantity sold", "unit_price": "Unit price", "branch": "Branch"},
+    },
+    "fr": {
+        "parts": {
+            "sku": "Référence", "name": "Désignation", "brand": "Marque", "category": "Famille",
+            "oem_reference": "Référence OEM", "unit_cost": "Prix d’achat", "sale_price": "Prix de vente",
+            "min_stock": "Stock minimum", "pack_size": "Conditionnement", "quantity": "Quantité en stock",
+            "branch": "Succursale", "supplier": "Fournisseur",
+        },
+        "sales": {
+            "date": "Date", "sku": "Référence", "quantity": "Quantité vendue", "unit_price": "Prix unitaire",
+            "branch": "Succursale",
+        },
+    },
+    "ar": {
+        "parts": {
+            "sku": "المرجع", "name": "الاسم", "brand": "العلامة", "category": "الفئة",
+            "oem_reference": "مرجع OEM", "unit_cost": "سعر الشراء", "sale_price": "سعر البيع",
+            "min_stock": "الحد الأدنى للمخزون", "pack_size": "حجم العبوة", "quantity": "الكمية في المخزون",
+            "branch": "الفرع", "supplier": "المورد",
+        },
+        "sales": {
+            "date": "التاريخ", "sku": "المرجع", "quantity": "الكمية المبيعة", "unit_price": "سعر الوحدة",
+            "branch": "الفرع",
+        },
+    },
+}
+
+
+def field_labels(language: str, kind: ImportKind) -> dict[str, str]:
+    return FIELD_LABELS.get(language, FIELD_LABELS["en"])[kind]
+
+
 def check_mapping(kind: ImportKind, mapping: dict[int, str], column_count: int) -> dict[str, int]:
     """Validates "column index -> field" and returns "field -> column index"."""
     known = {field.key for field in FIELDS[kind]}

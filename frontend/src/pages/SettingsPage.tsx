@@ -17,7 +17,9 @@ import { requiredError } from "@/lib/validation";
 import { BackupsCard } from "./settings/BackupsCard";
 import { BranchesCard } from "./settings/BranchesCard";
 import { CloudWriterCard } from "./settings/CloudWriterCard";
+import { ExportCard } from "./settings/ExportCard";
 import { OrderingCard } from "./settings/OrderingCard";
+import { StartHereCard } from "./settings/StartHereCard";
 import { SuppliersCard } from "./settings/SuppliersCard";
 import { SynonymsCard } from "./settings/SynonymsCard";
 
@@ -45,6 +47,8 @@ export function SettingsPage() {
         )}
       </Card>
       <BackupsCard />
+      <ExportCard />
+      <StartHereCard />
       <BranchesCard />
       <SuppliersCard />
       <SynonymsCard />

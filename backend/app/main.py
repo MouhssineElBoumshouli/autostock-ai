@@ -12,6 +12,7 @@ from app.api import (
     auth,
     backups,
     branches,
+    exports,
     forecasts,
     health,
     imports,
@@ -20,6 +21,8 @@ from app.api import (
     purchase_orders,
     settings,
     setup,
+    shop_time,
+    start_here,
     stock,
     suppliers,
     synonyms,
@@ -27,6 +30,7 @@ from app.api import (
     users,
 )
 from app.config import IS_PRODUCTION, WEBSITE_DIR
+from app.error_handling import add_error_handling
 from app.origin_check import OriginCheckMiddleware
 from app.stock_outs import keep_recording_stock_outs
 from app.website import serve_website
@@ -50,8 +54,10 @@ developer_pages = (
 app = FastAPI(title="AutoStock AI", lifespan=lifespan, **developer_pages)
 
 app.add_middleware(OriginCheckMiddleware)
+add_error_handling(app)
 
 app.include_router(health.router)
+app.include_router(shop_time.router)
 app.include_router(setup.router)
 app.include_router(auth.router)
 app.include_router(users.router)
@@ -68,8 +74,10 @@ app.include_router(orders.router)
 app.include_router(purchase_orders.router)
 app.include_router(alerts.router)
 app.include_router(today.router)
+app.include_router(start_here.router)
 app.include_router(ask.router)
 app.include_router(backups.router)
+app.include_router(exports.router)
 
 # Last, so every /api address above wins over the website's pages.
 if WEBSITE_DIR:
