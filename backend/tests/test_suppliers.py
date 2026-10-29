@@ -117,6 +117,48 @@ def test_staff_and_manager_cannot_manage_suppliers(browser):
         assert member.patch(f"/api/suppliers/{supplier_id}", json={"name": "X"}).status_code == 403
 
 
+def test_owner_adds_a_supplier_with_contact_details(browser):
+    set_up_shop(browser)
+
+    response = browser.post(
+        "/api/suppliers", json={"name": "Atlas Distribution", "phone": "+212 522-301145", "delivery_days": 6}
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["name"] == "Atlas Distribution"
+    assert body["phone"] == "+212 522-301145"
+    assert body["delivery_days"] == 6
+    assert body["in_use"] is False
+    row = audit_rows("supplier.added")[-1]
+    assert row.after["name"] == "Atlas Distribution"
+    assert row.after["delivery_days"] == 6
+
+
+def test_cannot_add_a_supplier_with_a_name_already_used(browser):
+    set_up_shop(browser)
+    browser.post("/api/suppliers", json={"name": "Atlas Distribution"})
+
+    response = browser.post("/api/suppliers", json={"name": "atlas distribution"})
+
+    assert response.status_code == 409
+
+
+def test_owner_sets_a_suppliers_delivery_time(browser):
+    set_up_shop(browser)
+    add_part(browser, "AA-1", "Auto Hall")
+    supplier_id = supplier_map(browser)["Auto Hall"]
+
+    response = browser.patch(f"/api/suppliers/{supplier_id}/details", json={"delivery_days": 9, "email": "a@autohall.ma"})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["delivery_days"] == 9
+    assert response.json()["email"] == "a@autohall.ma"
+    row = audit_rows("supplier.details_updated")[-1]
+    assert row.before["delivery_days"] is None
+    assert row.after["delivery_days"] == 9
+
+
 def test_owner_cannot_manage_another_shops_suppliers(browser):
     set_up_shop(browser)
     other_owner = create_other_shop()

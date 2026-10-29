@@ -1,11 +1,21 @@
-import { useMergeSupplier, useRemoveSupplier, useRenameSupplier, useSuppliers } from "@/api/suppliers";
+import {
+  useAddSupplier,
+  useMergeSupplier,
+  useRemoveSupplier,
+  useRenameSupplier,
+  useSaveSupplierDetails,
+  useSuppliers,
+} from "@/api/suppliers";
 import { t } from "@/i18n";
 
 import { EntityManagerCard } from "./EntityManagerCard";
+import { AddSupplierDialog, DeliveryTimeButton } from "./SupplierDialogs";
 
 export function SuppliersCard() {
   const suppliers = useSuppliers();
+  const add = useAddSupplier();
   const rename = useRenameSupplier();
+  const saveDetails = useSaveSupplierDetails();
   const merge = useMergeSupplier();
   const remove = useRemoveSupplier();
 
@@ -22,6 +32,8 @@ export function SuppliersCard() {
       rename={rename}
       merge={merge}
       remove={remove}
+      headerAction={<AddSupplierDialog add={add} />}
+      rowExtra={(supplier) => <DeliveryTimeButton supplier={supplier} save={saveDetails} />}
     />
   );
 }

@@ -6,7 +6,7 @@ The browser sends the file again at each step, so nothing half-done is kept on t
 import json
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Response, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -24,8 +24,9 @@ from app.imports.parts_import import plan_parts, save_parts
 from app.imports.plan import Summary
 from app.imports.reading import MAX_FILE_BYTES, Table, read_table
 from app.imports.sales_import import plan_sales, save_sales
+from app.imports.sample_files import build_sample_file
 from app.imports.values import normalize_header, show_cell
-from app.models import ImportMapping, User
+from app.models import ImportMapping, Organization, User
 
 router = APIRouter(prefix="/api/imports")
 can_import = require_role("owner", "manager")
@@ -65,6 +66,21 @@ class SummaryOut(BaseModel):
     new_branches: list[str]
     problems: list[ProblemOut]  # the first 200
     problem_count: int
+
+
+@router.get("/sample")
+def sample_file(
+    kind: ImportKind, user: User = Depends(can_import), db: Session = Depends(get_session)
+) -> Response:
+    if kind == "equivalents":
+        raise HTTPException(404, "There is no sample file for that kind of import.")
+    language = db.scalar(select(Organization.language).where(Organization.id == user.organization_id)) or "en"
+    content = build_sample_file(kind, language)
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={kind}-example.xlsx"},
+    )
 
 
 @router.post("/preview")

@@ -1,5 +1,5 @@
-"""Suppliers: the owner can rename, merge (moving its parts to another supplier) or remove one
-that no part uses.
+"""Suppliers: the owner can add one, rename, set its delivery time and contact details, merge
+(moving its parts to another supplier) or remove one that no part uses.
 """
 
 import uuid
@@ -22,15 +22,42 @@ owner_only = require_role("owner")
 class SupplierOut(BaseModel):
     id: uuid.UUID
     name: str
+    phone: str | None = None
+    email: str | None = None
+    delivery_days: int | None = None
     in_use: bool  # has parts pointing to it; can be merged but not removed
+
+
+class SupplierCreate(BaseModel):
+    name: NameText
+    phone: str | None = None
+    email: str | None = None
+    delivery_days: int | None = None
 
 
 class SupplierRename(BaseModel):
     name: NameText
 
 
+class SupplierDetails(BaseModel):
+    phone: str | None = None
+    email: str | None = None
+    delivery_days: int | None = None
+
+
 class SupplierMerge(BaseModel):
     into: uuid.UUID
+
+
+def _out(supplier: Supplier, used: set[uuid.UUID]) -> SupplierOut:
+    return SupplierOut(
+        id=supplier.id, name=supplier.name, phone=supplier.phone, email=supplier.email,
+        delivery_days=supplier.delivery_days, in_use=supplier.id in used,
+    )
+
+
+def _snapshot(supplier: Supplier) -> dict:
+    return {"phone": supplier.phone, "email": supplier.email, "delivery_days": supplier.delivery_days}
 
 
 @router.get("")
@@ -39,7 +66,28 @@ def list_suppliers(owner: User = Depends(owner_only), db: Session = Depends(get_
         select(Supplier).where(Supplier.organization_id == owner.organization_id).order_by(Supplier.name)
     ).all()
     used = _suppliers_in_use(db, owner.organization_id)
-    return [SupplierOut(id=supplier.id, name=supplier.name, in_use=supplier.id in used) for supplier in suppliers]
+    return [_out(supplier, used) for supplier in suppliers]
+
+
+@router.post("", status_code=201)
+def add_supplier(
+    body: SupplierCreate,
+    owner: User = Depends(owner_only),
+    db: Session = Depends(get_session),
+) -> SupplierOut:
+    _check_name_free(db, owner, body.name, exclude=None)
+    supplier = Supplier(
+        organization_id=owner.organization_id, name=body.name, phone=body.phone, email=body.email,
+        delivery_days=body.delivery_days,
+    )
+    db.add(supplier)
+    db.flush()
+    record_change(
+        db, owner, "supplier.added", "supplier", supplier.id,
+        after={"name": supplier.name, **_snapshot(supplier)},
+    )
+    db.commit()
+    return _out(supplier, set())
 
 
 @router.patch("/{supplier_id}")
@@ -58,7 +106,29 @@ def rename_supplier(
             db, owner, "supplier.renamed", "supplier", supplier.id, before={"name": before}, after={"name": supplier.name}
         )
     db.commit()
-    return SupplierOut(id=supplier.id, name=supplier.name, in_use=supplier.id in _suppliers_in_use(db, owner.organization_id))
+    return _out(supplier, _suppliers_in_use(db, owner.organization_id))
+
+
+@router.patch("/{supplier_id}/details")
+def update_supplier_details(
+    supplier_id: uuid.UUID,
+    body: SupplierDetails,
+    owner: User = Depends(owner_only),
+    db: Session = Depends(get_session),
+) -> SupplierOut:
+    supplier = _find(db, owner, supplier_id, lock=True)
+    before = _snapshot(supplier)
+    supplier.phone = body.phone
+    supplier.email = body.email
+    supplier.delivery_days = body.delivery_days
+    after = _snapshot(supplier)
+    if after != before:
+        record_change(
+            db, owner, "supplier.details_updated", "supplier", supplier.id,
+            before={"name": supplier.name, **before}, after={"name": supplier.name, **after},
+        )
+    db.commit()
+    return _out(supplier, _suppliers_in_use(db, owner.organization_id))
 
 
 @router.post("/{supplier_id}/merge", status_code=204)
@@ -105,14 +175,11 @@ def _find(db: Session, owner: User, supplier_id: uuid.UUID, lock: bool = False) 
     return supplier
 
 
-def _check_name_free(db: Session, owner: User, name: str, exclude: uuid.UUID) -> None:
-    clash = db.scalar(
-        select(Supplier.id).where(
-            Supplier.organization_id == owner.organization_id,
-            Supplier.id != exclude,
-            func.lower(Supplier.name) == name.lower(),
-        )
-    )
+def _check_name_free(db: Session, owner: User, name: str, exclude: uuid.UUID | None) -> None:
+    filters = [Supplier.organization_id == owner.organization_id, func.lower(Supplier.name) == name.lower()]
+    if exclude is not None:
+        filters.append(Supplier.id != exclude)
+    clash = db.scalar(select(Supplier.id).where(*filters))
     if clash:
         raise HTTPException(409, "A supplier with this name already exists.")
 

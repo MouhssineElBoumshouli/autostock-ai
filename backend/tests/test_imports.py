@@ -332,3 +332,37 @@ def test_pack_size_of_zero_is_a_problem_row(browser):
     assert summary["counts"]["problem_rows"] == 1
     with SessionLocal() as db:
         assert dict(db.execute(select(Part.sku, Part.pack_size)).all()) == {"OF-2": 2}
+
+
+# Sample files (Start here, empty states)
+
+
+def test_sample_files_are_recognised_without_help(browser):
+    from openpyxl import load_workbook
+    from io import BytesIO
+
+    from app.imports.fields import FIELDS
+
+    set_up_shop(browser)  # the shop's language is French
+
+    for kind in ("parts", "sales"):
+        response = browser.get(f"/api/imports/sample?kind={kind}")
+        assert response.status_code == 200, response.text
+        workbook = load_workbook(BytesIO(response.content))
+        assert workbook.active.max_row > 1
+
+        preview = send(browser, "preview", kind, f"{kind}.xlsx", content=response.content).json()
+        mapped_fields = set(preview["mapping"].values())
+        required = {field.key for field in FIELDS[kind] if field.required}
+        assert required <= mapped_fields, f"{kind}: {required - mapped_fields} not recognised without help"
+
+        summary = send(browser, "save", kind, f"{kind}.xlsx", {int(k): v for k, v in preview["mapping"].items()}, content=response.content).json()
+        assert summary["counts"]["problem_rows"] == 0
+
+
+def test_there_is_no_sample_file_for_equivalents(browser):
+    set_up_shop(browser)
+
+    response = browser.get("/api/imports/sample?kind=equivalents")
+
+    assert response.status_code == 404

@@ -24,3 +24,5 @@ class Organization(Base):
     order_service_target: Mapped[float] = mapped_column(default=0.9)
     # The owner let the cloud writer (Groq) write "Ask your shop" answers. Off: the app writes them.
     cloud_writer_on: Mapped[bool] = mapped_column(default=False, server_default="false")
+    # The owner or a manager hid the "Start here" checklist on Today (a new shop finished it, or knows its own way).
+    start_here_hidden: Mapped[bool] = mapped_column(default=False, server_default="false")

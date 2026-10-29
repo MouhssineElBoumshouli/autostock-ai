@@ -43,6 +43,8 @@ SHOWN_FIELDS = {
     "from", "into",
     # what to order and purchase orders
     "branch", "supplier", "order_number", "quantity", "lines", "cut", "cost", "budget",
+    # the "Start here" checklist
+    "hidden",
 }
 
 

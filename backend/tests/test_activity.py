@@ -128,3 +128,14 @@ def test_activity_never_shows_passwords(browser):
     assert "password_hash" not in text
     assert "$argon2" not in text
     assert OWNER_PASSWORD not in text
+
+
+def test_hiding_the_start_here_checklist_shows_up_in_activity(browser):
+    set_up_shop(browser)
+
+    browser.patch("/api/start-here", json={"hidden": True})
+
+    item = browser.get("/api/activity").json()["items"][0]
+    assert item["action"] == "start_here.hidden_changed"
+    assert item["before"]["hidden"] is False
+    assert item["after"]["hidden"] is True

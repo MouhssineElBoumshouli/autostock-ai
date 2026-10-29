@@ -1,5 +1,5 @@
 import type { UseMutationResult } from "@tanstack/react-query";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 import { toast } from "sonner";
 
 import { ErrorState } from "@/components/ErrorState";
@@ -7,7 +7,7 @@ import { FormError } from "@/components/FormError";
 import { FormField } from "@/components/FormField";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogClose,
@@ -28,7 +28,7 @@ export type ManagedEntity = { id: string; name: string; in_use: boolean };
 
 // Branches and suppliers are managed the same way: rename, merge one into another
 // (moving its stock/sales or parts along), or remove one that was never used.
-export function EntityManagerCard({
+export function EntityManagerCard<T extends ManagedEntity>({
   title,
   description,
   usedNote,
@@ -40,11 +40,13 @@ export function EntityManagerCard({
   rename,
   merge,
   remove,
+  headerAction,
+  rowExtra,
 }: {
   title: string;
   description: string;
   usedNote: string;
-  items: ManagedEntity[] | undefined;
+  items: T[] | undefined;
   isPending: boolean;
   isError: boolean;
   onRetry: () => void;
@@ -52,11 +54,14 @@ export function EntityManagerCard({
   rename: UseMutationResult<ManagedEntity, Error, { id: string; name: string }>;
   merge: UseMutationResult<void, Error, { id: string; into: string }>;
   remove: UseMutationResult<void, Error, string>;
+  headerAction?: ReactNode;
+  rowExtra?: (item: T) => ReactNode;
 }) {
   return (
     <Card className="max-w-2xl">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
+        {headerAction && <CardAction>{headerAction}</CardAction>}
       </CardHeader>
       <CardContent className="grid gap-1 px-0">
         {isError ? (
@@ -82,7 +87,8 @@ export function EntityManagerCard({
                       </Badge>
                     )}
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex items-center gap-1">
+                    {rowExtra?.(item)}
                     <RenameButton item={item} rename={rename} />
                     {items!.length > 1 && <MergeButton item={item} items={items!} merge={merge} />}
                     {/* Removing something in use would just fail on the server, for a reason the
