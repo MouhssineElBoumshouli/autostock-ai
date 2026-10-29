@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 
 import {
   type ImportKind,
@@ -18,11 +19,16 @@ import { MatchStep } from "./MatchStep";
 import { type Step, StepList } from "./StepList";
 import { UploadStep } from "./UploadStep";
 
+const KINDS: ImportKind[] = ["parts", "sales", "equivalents"];
+
 // Import in four steps. The file stays in the browser and is sent again at each step,
-// so leaving the page halfway leaves nothing behind.
+// so leaving the page halfway leaves nothing behind. A link can open it pre-selecting which
+// kind of file ("Start here", other screens' empty states): /stock/import?kind=sales.
 export function ImportPage() {
+  const [params] = useSearchParams();
+  const fromLink = params.get("kind");
   const [step, setStep] = useState<Step>("upload");
-  const [kind, setKind] = useState<ImportKind>("parts");
+  const [kind, setKind] = useState<ImportKind>(KINDS.includes(fromLink as ImportKind) ? (fromLink as ImportKind) : "parts");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [mapping, setMapping] = useState<Mapping>({});

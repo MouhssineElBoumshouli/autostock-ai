@@ -1,5 +1,6 @@
-import { useToday } from "@/api/today";
+import { useStartHere } from "@/api/startHere";
 import { useStockSummary } from "@/api/stock";
+import { useToday } from "@/api/today";
 import { useSignedIn } from "@/components/SignedIn";
 import { ErrorState } from "@/components/ErrorState";
 import { PageHeader } from "@/components/PageHeader";
@@ -12,6 +13,7 @@ import { StockStats } from "@/pages/stock/StockStats";
 import { AskYourShopCard } from "./home/AskYourShopCard";
 import { LateDeliveriesCard } from "./home/LateDeliveriesCard";
 import { NeedsActionCard } from "./home/NeedsActionCard";
+import { StartHereChecklist } from "./home/StartHereChecklist";
 import { ToOrderCard } from "./home/ToOrderCard";
 import { TodayHeadline } from "./home/TodayHeadline";
 import { WeeklySalesCard } from "./home/WeeklySalesCard";
@@ -40,7 +42,9 @@ export function HomePage() {
 }
 
 function Today({ canReview }: { canReview: boolean }) {
+  const me = useSignedIn();
   const today = useToday();
+  const startHere = useStartHere(canReview && !me.organization.is_demo);
 
   if (today.isError) {
     return (
@@ -61,6 +65,11 @@ function Today({ canReview }: { canReview: boolean }) {
   }
 
   const data = today.data;
+  // A real, brand-new shop (never the demo) sees the "Start here" checklist instead of what
+  // would otherwise be five empty-looking cards -- until it's done or hidden.
+  const showChecklist =
+    canReview && !me.organization.is_demo && Boolean(startHere.data) && !startHere.data!.hidden && !startHere.data!.all_done;
+
   return (
     // grid-cols-1 (not bare "grid"): without a defined track, a long unbreakable line deep inside
     // (e.g. a truncated part name) can force this whole column wider than the viewport.
@@ -71,20 +80,26 @@ function Today({ canReview }: { canReview: boolean }) {
         lateDeliveries={data.late_deliveries.length}
       />
       <AskYourShopCard />
-      <div className="grid gap-4 lg:grid-cols-2">
-        <NeedsActionCard
-          alerts={data.needs_action}
-          total={data.needs_action_total}
-          canReview={canReview}
-          backupOverdue={data.backup_overdue}
-        />
-        <div className="grid gap-4">
-          <ToOrderCard toOrder={data.to_order} />
-          <LateDeliveriesCard deliveries={data.late_deliveries} />
-        </div>
-      </div>
-      <WorthALookCard alerts={data.worth_a_look} total={data.worth_a_look_total} />
-      <WeeklySalesCard sales={data.weekly_sales} />
+      {showChecklist ? (
+        <StartHereChecklist />
+      ) : (
+        <>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <NeedsActionCard
+              alerts={data.needs_action}
+              total={data.needs_action_total}
+              canReview={canReview}
+              backupOverdue={data.backup_overdue}
+            />
+            <div className="grid gap-4">
+              <ToOrderCard toOrder={data.to_order} />
+              <LateDeliveriesCard deliveries={data.late_deliveries} />
+            </div>
+          </div>
+          <WorthALookCard alerts={data.worth_a_look} total={data.worth_a_look_total} />
+          <WeeklySalesCard sales={data.weekly_sales} />
+        </>
+      )}
     </div>
   );
 }

@@ -8,8 +8,9 @@ export type StartHere = { hidden: boolean; all_done: boolean; steps: StartHereSt
 
 const startHereQueryKey = ["start-here"];
 
-export function useStartHere() {
-  return useQuery({ queryKey: startHereQueryKey, queryFn: () => apiRequest<StartHere>("/api/start-here") });
+// `enabled` false for staff (who the server refuses anyway) and the demo shop (never shown there).
+export function useStartHere(enabled = true) {
+  return useQuery({ queryKey: startHereQueryKey, queryFn: () => apiRequest<StartHere>("/api/start-here"), enabled });
 }
 
 export function useSetStartHereHidden() {

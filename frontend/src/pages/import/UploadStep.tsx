@@ -101,6 +101,14 @@ export function UploadStep({
             />
           </label>
         </div>
+        {kind !== "equivalents" && (
+          <p className="text-body-small text-on-surface-variant">
+            {t.importFile.sample.text}{" "}
+            <a href={`/api/imports/sample?kind=${kind}`} className="font-medium text-primary underline">
+              {kind === "sales" ? t.importFile.sample.sales : t.importFile.sample.parts}
+            </a>
+          </p>
+        )}
         <FormError message={(showProblem && problem) || error} />
       </CardContent>
       <CardFooter className="justify-end border-t pt-6">
