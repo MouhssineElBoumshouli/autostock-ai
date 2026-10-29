@@ -6,7 +6,7 @@
 
 ## Français
 
-AutoStock tourne sur **un seul PC du magasin**. Les autres ordinateurs et les téléphones l'ouvrent dans leur navigateur, sur le même réseau (Wi-Fi ou câble). Rien n'est envoyé sur Internet.
+AutoStock tourne sur **un seul PC du magasin**. Les autres ordinateurs et les téléphones l'ouvrent dans leur navigateur, sur le même réseau (Wi-Fi ou câble). Rien n'est envoyé sur Internet, sauf si vous activez l'écriture Groq dans Paramètres.
 
 Toutes les commandes se tapent dans **PowerShell**, ouvert dans le dossier AutoStock (dans l'Explorateur : ouvrir le dossier, cliquer dans la barre d'adresse, taper `powershell`, Entrée).
 
@@ -30,8 +30,7 @@ Décompressez le zip dans `C:\AutoStock` (par exemple). Ce dossier contient le p
    -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 24 | % {[char]$_})
    ```
    Copiez le résultat après `POSTGRES_PASSWORD=`. Notez-le sur papier, rangé en lieu sûr. **Ne le changez plus ensuite** : la base de données garde le mot de passe de sa création.
-3. Ligne `APP_URL` : enlevez le `#` et mettez les adresses du PC (étape 7). Pour commencer : `APP_URL=http://localhost:8080`.
-4. Enregistrez. AutoStock refuse de démarrer avec un mot de passe faible et dit pourquoi.
+3. Enregistrez (le reste du fichier peut rester tel quel). AutoStock refuse de démarrer avec un mot de passe faible et dit pourquoi.
 
 ### 5. Démarrer
 ```
@@ -43,14 +42,14 @@ La première fois prend quelques minutes (téléchargements). Ensuite, AutoStock
 Sur le PC du magasin, ouvrez **http://localhost:8080**. Entrez le nom du magasin, votre nom, votre email et un mot de passe : vous devenez le propriétaire. Ajoutez votre équipe dans **Équipe**.
 
 ### 7. Ouvrir AutoStock depuis les autres ordinateurs et téléphones
-1. Sur le PC du magasin : `ipconfig` → notez l'**Adresse IPv4** (par exemple `192.168.1.20`). `hostname` → le nom du PC (par exemple `COMPTOIR-PC`).
-2. Dans `.env` : `APP_URL=http://localhost:8080,http://192.168.1.20:8080,http://COMPTOIR-PC:8080`, puis relancez la commande de l'étape 5.
-3. Ouvrez le port dans le pare-feu Windows (PowerShell **en administrateur**, une seule fois) :
+1. Sur le PC du magasin : `ipconfig` → notez l'**Adresse IPv4** (par exemple `192.168.1.20`).
+2. Ouvrez le port dans le pare-feu Windows (PowerShell **en administrateur**, une seule fois) :
    ```
    New-NetFirewallRule -DisplayName "AutoStock" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Private
    ```
    Le réseau du magasin doit être en « Privé » (Paramètres → Réseau et Internet → votre réseau).
-4. Les employés ouvrent `http://192.168.1.20:8080` (ou `http://COMPTOIR-PC:8080`). Si l'adresse IPv4 change après un redémarrage de la box, demandez à votre installateur de la fixer dans la box, ou utilisez le nom du PC.
+3. Les employés et les téléphones ouvrent `http://192.168.1.20:8080`. Rien à changer dans `.env`.
+4. Conseillé : faites **réserver cette adresse** au PC dans la box internet (« bail DHCP statique », votre installateur sait le faire). Sinon elle peut changer quand la box redémarre : refaites alors l'étape 1 et donnez la nouvelle adresse. Sur les ordinateurs, le nom du PC (`hostname`, par exemple `http://COMPTOIR-PC:8080`) marche souvent aussi ; sur les téléphones, rarement.
 
 ### 8. Sauvegardes
 - Chaque jour à **02:00**, et au démarrage si la dernière date de plus de 24 h (PC éteint la nuit), AutoStock fait une sauvegarde dans le dossier **`backups`**, à côté du programme : `autostock-2026-10-29.dump`. Il garde les 14 derniers jours et 1 par mois pendant 12 mois. Une sauvegarde ne compte qu'une fois relue et vérifiée.
@@ -73,6 +72,8 @@ AutoStock sauvegarde d'abord les données actuelles (`autostock-before-restore-.
 
 Si la base doit changer, AutoStock fait d'abord une sauvegarde (`autostock-before-update-....dump`). Si le changement échoue, rien n'est perdu : AutoStock ne démarre pas et la page http://localhost:8080 dit quoi faire (remettre l'ancien dossier et, seulement si besoin, quelle sauvegarde restaurer). Gardez l'ancien dossier une semaine.
 
+**Revenir à l'ancienne version après une mise à jour réussie** : une base mise à jour ne marche plus avec l'ancienne version (elle refuse de démarrer et le dit). Il faut donc **les deux** : remettre l'ancien dossier **et** restaurer la sauvegarde faite avant la mise à jour (étape 9, fichier `autostock-before-update-....dump`). **Tout ce qui a été saisi depuis la mise à jour est perdu.**
+
 ### 11. Mot de passe oublié
 ```
 docker compose -f docker-compose.prod.yml exec app python -m app.reset_password proprietaire@magasin.ma
@@ -86,16 +87,16 @@ Avec une carte graphique NVIDIA : `docker compose -f docker-compose.prod.yml --p
 - Docker Desktop est-il ouvert (« Engine running ») ? Ouvrez-le, attendez une minute.
 - `docker compose -f docker-compose.prod.yml ps` : chaque ligne doit dire « Up ». Sinon : `docker compose -f docker-compose.prod.yml logs app` (ou `logs db`, `logs backup`) et lisez les dernières lignes.
 - « POSTGRES_PASSWORD … missing or too weak » : refaites l'étape 4.
-- Port 8080 déjà pris : `APP_PORT=8090` dans `.env` (et `:8090` dans `APP_URL`), puis l'étape 5.
-- « This request did not come from the AutoStock website » : l'adresse tapée dans le navigateur doit être dans `APP_URL`.
-- La page dit « AutoStock could not update » : suivez ce qu'elle dit (étape 10).
+- Port 8080 déjà pris : `APP_PORT=8090` dans `.env`, puis l'étape 5, et ouvrez `:8090` au lieu de `:8080`.
+- « This request did not come from the AutoStock website » : ouvrez AutoStock directement à l'adresse du PC (`http://localhost:8080` ou `http://<adresse IPv4>:8080`), pas à travers un autre site.
+- La page dit « AutoStock could not update » ou « This database was updated by a newer AutoStock » : suivez ce qu'elle dit (étape 10).
 - Disque plein : Paramètres le dit ; libérez de la place, copiez les vieilles sauvegardes ailleurs.
 
 ---
 
 ## English
 
-AutoStock runs on **one PC in the shop**. The other computers and phones open it in their browser, on the same network (Wi-Fi or cable). Nothing is sent to the internet.
+AutoStock runs on **one PC in the shop**. The other computers and phones open it in their browser, on the same network (Wi-Fi or cable). Nothing is sent to the internet, unless you turn on Groq writing in Settings.
 
 Type every command in **PowerShell**, opened in the AutoStock folder (in Explorer: open the folder, click the address bar, type `powershell`, Enter).
 
@@ -119,8 +120,7 @@ Unzip it into `C:\AutoStock` (for example). This folder is the program. Your dat
    -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 24 | % {[char]$_})
    ```
    Paste the result after `POSTGRES_PASSWORD=`. Write it on paper, kept somewhere safe. **Never change it afterwards**: the database keeps the password it was created with.
-3. The `APP_URL` line: remove the `#` and put the PC's addresses (step 7). To start: `APP_URL=http://localhost:8080`.
-4. Save. AutoStock refuses to start with a weak password and says why.
+3. Save (the rest of the file can stay as it is). AutoStock refuses to start with a weak password and says why.
 
 ### 5. Start
 ```
@@ -132,14 +132,14 @@ The first time takes a few minutes (downloads). After that, AutoStock starts by 
 On the shop PC, open **http://localhost:8080**. Enter the shop name, your name, email and a password: you become the owner. Add your team on **Team**.
 
 ### 7. Open AutoStock from the other computers and phones
-1. On the shop PC: `ipconfig` → note the **IPv4 Address** (for example `192.168.1.20`). `hostname` → the PC's name (for example `COMPTOIR-PC`).
-2. In `.env`: `APP_URL=http://localhost:8080,http://192.168.1.20:8080,http://COMPTOIR-PC:8080`, then run the step 5 command again.
-3. Allow the port in Windows Firewall (PowerShell **as administrator**, once):
+1. On the shop PC: `ipconfig` → note the **IPv4 Address** (for example `192.168.1.20`).
+2. Allow the port in Windows Firewall (PowerShell **as administrator**, once):
    ```
    New-NetFirewallRule -DisplayName "AutoStock" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Private
    ```
    The shop network must be "Private" (Settings → Network & internet → your network).
-4. Employees open `http://192.168.1.20:8080` (or `http://COMPTOIR-PC:8080`). If the IPv4 address changes after the router restarts, ask your installer to fix it in the router, or use the PC's name.
+3. Employees and phones open `http://192.168.1.20:8080`. Nothing to change in `.env`.
+4. Recommended: have this address **reserved** for the PC in the internet box ("static DHCP lease", your installer knows how). Otherwise it can change when the box restarts: then do step 1 again and share the new address. On computers the PC's name (`hostname`, for example `http://COMPTOIR-PC:8080`) often works too; on phones, rarely.
 
 ### 8. Backups
 - Every day at **02:00**, and at start if the last one is older than 24 hours (PC off at night), AutoStock saves a backup in the **`backups`** folder next to the program: `autostock-2026-10-29.dump`. It keeps the last 14 days and 1 per month for 12 months. A backup only counts once it has been read back and checked.
@@ -162,6 +162,8 @@ AutoStock first backs up the current data (`autostock-before-restore-....dump`),
 
 If the database must change, AutoStock backs it up first (`autostock-before-update-....dump`). If the change fails, nothing is lost: AutoStock does not start, and the page at http://localhost:8080 says what to do (put the old folder back and, only if needed, which backup to restore). Keep the old folder for a week.
 
+**Going back to the old version after a successful update**: an updated database no longer works with the old version (it refuses to start and says so). So you need **both**: put the old folder back **and** restore the backup made before the update (step 9, the `autostock-before-update-....dump` file). **Everything entered since the update is lost.**
+
 ### 11. Forgotten password
 ```
 docker compose -f docker-compose.prod.yml exec app python -m app.reset_password owner@shop.ma
@@ -175,7 +177,7 @@ With an NVIDIA graphics card: `docker compose -f docker-compose.prod.yml --profi
 - Is Docker Desktop open ("Engine running")? Open it, wait a minute.
 - `docker compose -f docker-compose.prod.yml ps`: every line should say "Up". If not: `docker compose -f docker-compose.prod.yml logs app` (or `logs db`, `logs backup`) and read the last lines.
 - "POSTGRES_PASSWORD … missing or too weak": do step 4 again.
-- Port 8080 already used: `APP_PORT=8090` in `.env` (and `:8090` in `APP_URL`), then step 5.
-- "This request did not come from the AutoStock website": the address in the browser bar must be in `APP_URL`.
-- The page says "AutoStock could not update": do what it says (step 10).
+- Port 8080 already used: `APP_PORT=8090` in `.env`, then step 5, and open `:8090` instead of `:8080`.
+- "This request did not come from the AutoStock website": open AutoStock directly at the PC's address (`http://localhost:8080` or `http://<IPv4 address>:8080`), not through another site.
+- The page says "AutoStock could not update" or "This database was updated by a newer AutoStock": do what it says (step 10).
 - Disk full: Settings says so; free some space, copy old backups elsewhere.
