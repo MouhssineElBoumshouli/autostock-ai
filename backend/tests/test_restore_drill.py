@@ -75,12 +75,12 @@ def test_an_update_backs_up_first_then_changes_the_database(browser, tmp_path, m
     set_up_shop(browser)
     monkeypatch.setattr("app.backups.BACKUP_DIR", str(tmp_path))
     command.downgrade(Config("alembic.ini"), "-1")  # as if the shop still ran the previous version
-    assert start.update_waiting()
+    assert start.database_version() == "older"
 
     assert start.update_database() is None
 
     [backup] = tmp_path.glob("autostock-before-update-*.dump")
-    assert not start.update_waiting()
+    assert start.database_version() == "same"
     assert start.update_database() is None  # nothing waiting: no new backup
     assert list(tmp_path.glob("autostock-before-update-*.dump")) == [backup]
 
@@ -99,12 +99,27 @@ def test_a_failed_update_leaves_the_database_as_it_was_and_names_the_backup(brow
 
     [backup] = tmp_path.glob("autostock-before-update-*.dump")
     assert "could not update its database: disk error" in problem and backup.name in problem
-    assert start.update_waiting()  # still the previous version, untouched
+    assert start.database_version() == "older"  # still the previous version, untouched
     command.upgrade(Config("alembic.ini"), "head")
 
 
+def test_an_older_version_refuses_a_database_a_newer_one_updated(browser, tmp_path, monkeypatch):
+    set_up_shop(browser)
+    monkeypatch.setattr("app.backups.BACKUP_DIR", str(tmp_path))
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE alembic_version SET version_num = '0099'"))  # made by a future version
+    try:
+        assert start.database_version() == "newer"
+        problem = start.update_database()
+        assert problem == start.NEWER_DATABASE and "autostock-before-update-" in problem
+        assert list(tmp_path.iterdir()) == []  # nothing backed up, nothing changed
+    finally:
+        with engine.begin() as connection:
+            connection.execute(text("UPDATE alembic_version SET version_num = '0015'"))
+
+
 def test_a_new_database_needs_no_backup_before_its_first_start(tmp_path, monkeypatch):
-    monkeypatch.setattr(start, "update_waiting", lambda: False)
+    monkeypatch.setattr(start, "database_version", lambda: "new")
     monkeypatch.setattr("app.backups.BACKUP_DIR", str(tmp_path))
 
     assert start.update_database() is None
