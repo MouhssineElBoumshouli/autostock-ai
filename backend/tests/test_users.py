@@ -68,7 +68,7 @@ def test_staff_and_manager_cannot_manage_people(browser):
 
     for email in ["staff@shop.ma", "manager@shop.ma"]:
         member = member_with_own_password(email)
-        assert member.get("/api/users").json() == {"detail": "You don't have access to this."}
+        assert member.get("/api/users").json() == {"detail": "Only the owner can do this."}
         new = {"name": "X", "email": "x@shop.ma", "role": "owner", "temporary_password": MEMBER_PASSWORD}
         assert member.post("/api/users", json=new).status_code == 403
         assert member.patch(f"/api/users/{staff_member['id']}", json={"role": "owner"}).status_code == 403

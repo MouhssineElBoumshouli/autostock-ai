@@ -11,6 +11,12 @@ from app.models import Role, User
 
 MUST_CHANGE_PASSWORD = "Choose a new password first."
 
+# One fixed sentence per role combination actually used (see grep -rn 'require_role(' app/), so
+# the message says exactly who can -- "Only the owner can do this.", not a vague refusal. The
+# website recognises these exact sentences and shows them in the person's own language
+# (frontend/src/i18n/*.ts: serverMessages.fixed).
+_NO_ACCESS = {frozenset({"owner"}): "Only the owner can do this.", frozenset({"owner", "manager"}): "Only the owner or a manager can do this."}
+
 
 def require_role(*allowed: Role, before_password_change: bool = False) -> Callable[..., User]:
     """Use as `user: User = Depends(require_role("owner"))`. No roles given = any logged-in person.
@@ -30,7 +36,7 @@ def require_role(*allowed: Role, before_password_change: bool = False) -> Callab
         if user.must_change_password and not before_password_change:
             raise HTTPException(403, MUST_CHANGE_PASSWORD)
         if allowed and user.role not in allowed:
-            raise HTTPException(403, "You don't have access to this.")
+            raise HTTPException(403, _NO_ACCESS.get(frozenset(allowed), "You don't have access to this."))
         return user
 
     return check

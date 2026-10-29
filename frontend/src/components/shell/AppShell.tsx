@@ -1,8 +1,9 @@
 import { MenuIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Outlet, useMatches } from "react-router";
+import { Outlet, useLocation, useMatches } from "react-router";
 
 import { DemoBanner } from "@/components/DemoBanner";
+import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { useSignedIn } from "@/components/SignedIn";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -15,6 +16,7 @@ import { SidebarContent } from "./SidebarContent";
 // navigation drawer on desktop, navigation rail on tablets, modal drawer on phones, and a top app bar.
 export function AppShell() {
   const me = useSignedIn();
+  const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const handle = [...useMatches()].reverse().find((match) => match.handle)?.handle as PageHandle | undefined;
   const title = handle ? t.nav[handle.title] : t.appName;
@@ -73,7 +75,9 @@ export function AppShell() {
             </p>
           </header>
           <main id="content" tabIndex={-1} className="mx-auto max-w-6xl px-4 pt-2 pb-12 outline-none sm:px-6 lg:px-8">
-            <Outlet />
+            <PageErrorBoundary key={location.pathname}>
+              <Outlet />
+            </PageErrorBoundary>
           </main>
         </div>
       </div>
