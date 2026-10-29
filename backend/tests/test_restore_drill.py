@@ -4,6 +4,7 @@ back identical (row counts and a checksum of every row). Then the update and pas
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.engine import make_url
 
@@ -106,6 +107,10 @@ def test_a_failed_update_leaves_the_database_as_it_was_and_names_the_backup(brow
 def test_an_older_version_refuses_a_database_a_newer_one_updated(browser, tmp_path, monkeypatch):
     set_up_shop(browser)
     monkeypatch.setattr("app.backups.BACKUP_DIR", str(tmp_path))
+    # Whatever head actually is right now: the database's schema is already at head (conftest),
+    # so this is the one version_num that puts the version row back in step with it -- a number
+    # written in here instead would go stale the next time a migration is added.
+    head = ScriptDirectory.from_config(Config("alembic.ini")).get_current_head()
     with engine.begin() as connection:
         connection.execute(text("UPDATE alembic_version SET version_num = '0099'"))  # made by a future version
     try:
@@ -115,7 +120,7 @@ def test_an_older_version_refuses_a_database_a_newer_one_updated(browser, tmp_pa
         assert list(tmp_path.iterdir()) == []  # nothing backed up, nothing changed
     finally:
         with engine.begin() as connection:
-            connection.execute(text("UPDATE alembic_version SET version_num = '0015'"))
+            connection.execute(text("UPDATE alembic_version SET version_num = :head"), {"head": head})
 
 
 def test_a_new_database_needs_no_backup_before_its_first_start(tmp_path, monkeypatch):
