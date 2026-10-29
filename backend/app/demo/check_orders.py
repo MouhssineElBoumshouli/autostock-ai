@@ -25,6 +25,7 @@ from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.demo.demo_shop import create_demo_shop
+from app.demo.production_guard import refuse_demo_in_production
 from app.forecast.engine import forecast_all
 from app.forecast.run import load_demand
 from app.models import DemoTrueDemand, Part, Supplier
@@ -39,6 +40,7 @@ MINIMUM_MULTIPLES = (1.5, 2.0, 3.0, 4.0)
 
 
 def main() -> None:
+    refuse_demo_in_production()
     started = perf_counter()
     with SessionLocal() as db:
         shop, _ = create_demo_shop(db, last_day=LAST_DAY)

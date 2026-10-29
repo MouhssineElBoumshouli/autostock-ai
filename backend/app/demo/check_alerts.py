@@ -22,9 +22,10 @@ from sqlalchemy import delete, select
 
 from app.alerts.problem import KINDS, NEEDS_ACTION, WORTH_A_LOOK, group_of
 from app.alerts.run import DAILY_LIMIT, SALES_DAILY_LIMIT, raise_alerts
-from app.alerts.shop_data import replayable_method, load_shop_data
+from app.alerts.shop_data import load_shop_data, replayable_method
 from app.db import SessionLocal
 from app.demo.demo_shop import create_demo_shop
+from app.demo.production_guard import refuse_demo_in_production
 from app.forecast.run import run_forecasts
 from app.models import Alert, DemoPlantedProblem, Forecast, SaleLine
 
@@ -34,6 +35,7 @@ LATE_DAYS = 7  # an alert up to a week after a problem ended still counts as cau
 
 
 def main() -> None:
+    refuse_demo_in_production()
     started = perf_counter()
     first_replayed = LAST_DAY - timedelta(days=REPLAY_DAYS - 1)
     with SessionLocal() as db:
