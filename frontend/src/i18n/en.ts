@@ -449,6 +449,9 @@ export const en = {
     needsAction: {
       title: "Needs action",
       empty: "Nothing needs action right now.",
+      backupOverdue: (when: string) => `No backup since ${when}. Your data is not protected.`,
+      backupNone: "No backup has been made yet. Your data is not protected.",
+      backupOpenSettings: "Open Settings",
     },
     worthALook: {
       title: "Worth a look",
@@ -512,6 +515,7 @@ export const en = {
       deactivated: (actor: string, target: string) => `${actor} deactivated ${target}.`,
       reactivated: (actor: string, target: string) => `${actor} reactivated ${target}.`,
       passwordChanged: (actor: string) => `${actor} changed their password.`,
+      passwordSetOnShopComputer: (actor: string) => `${actor}'s password was reset on the shop computer.`,
       passwordReset: (actor: string, target: string) => `${actor} reset ${target}'s password.`,
       loggedIn: (actor: string) => `${actor} logged in.`,
       importedParts: (actor: string, file: string, created: string, updated: string) =>
@@ -571,6 +575,17 @@ export const en = {
       on: "More natural writing (Groq)",
       note: "The facts used for each answer are sent to Groq. Free, but limited: about 250 to 300 answers a day with this model. Groq does not use them to train its models. Without internet, or once the daily limit is reached, the app writes the answers.",
       noKey: "To turn it on, add a free Groq key (GROQ_API_KEY) to the .env file, then restart the app. See the README.",
+    },
+    backups: {
+      title: "Backups",
+      lastBackup: (when: string, kept: string) => `Last backup: ${when} · ${kept} kept · folder backups`,
+      none: "No backup yet. The first one is made a few minutes after AutoStock starts.",
+      copyReminder: "Once a week, copy the backups folder (inside the AutoStock folder) to a USB stick or a cloud drive. A backup on the same disk is lost with the disk.",
+      problems: {
+        disk_full: "The last backup was skipped: the disk is almost full. Free some space on this computer.",
+        database_unreachable: "The last backup could not reach the database. Restart AutoStock.",
+        failed: "The last backup did not work. See \"Backups\" in docs/INSTALL.md.",
+      },
     },
     branches: {
       title: "Branches",

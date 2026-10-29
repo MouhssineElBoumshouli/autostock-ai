@@ -472,6 +472,9 @@ export const ar: typeof en = {
     needsAction: {
       title: "يحتاج إلى إجراء",
       empty: "لا شيء يحتاج إلى إجراء حاليًا.",
+      backupOverdue: (when: string) => `لا توجد نسخة احتياطية منذ ${when}. بياناتك غير محمية.`,
+      backupNone: "لم تُصنع أي نسخة احتياطية بعد. بياناتك غير محمية.",
+      backupOpenSettings: "افتح الإعدادات",
     },
     worthALook: {
       title: "يستحق النظر",
@@ -533,6 +536,7 @@ export const ar: typeof en = {
       deactivated: (actor: string, target: string) => `عطّل ${actor} حساب ${target}.`,
       reactivated: (actor: string, target: string) => `أعاد ${actor} تفعيل حساب ${target}.`,
       passwordChanged: (actor: string) => `غيّر ${actor} كلمة مروره.`,
+      passwordSetOnShopComputer: (actor: string) => `تم تعيين كلمة مرور جديدة لـ ${actor} من حاسوب المحل.`,
       passwordReset: (actor: string, target: string) => `أعاد ${actor} تعيين كلمة مرور ${target}.`,
       loggedIn: (actor: string) => `سجّل ${actor} الدخول.`,
       importedParts: (actor: string, file: string, created: string, updated: string) =>
@@ -592,6 +596,17 @@ export const ar: typeof en = {
       on: "كتابة أكثر طبيعية (Groq)",
       note: "تُرسل المعطيات المستعملة في كل جواب إلى Groq. مجاني لكن محدود: حوالي 250 إلى 300 جواب في اليوم مع هذا النموذج. لا تستعملها Groq لتدريب نماذجها. بدون إنترنت، أو عند بلوغ الحد اليومي، يكتب التطبيق الأجوبة.",
       noKey: "لتفعيله، أضف مفتاح Groq مجانيًا (GROQ_API_KEY) في ملف ‎.env، ثم أعد تشغيل التطبيق. انظر ملف README.",
+    },
+    backups: {
+      title: "النسخ الاحتياطية",
+      lastBackup: (when: string, kept: string) => `آخر نسخة احتياطية: ${when} · ${kept} محفوظة · مجلد backups`,
+      none: "لا توجد نسخة احتياطية بعد. تُصنع الأولى بعد دقائق من تشغيل AutoStock.",
+      copyReminder: "مرة في الأسبوع، انسخ مجلد backups (داخل مجلد AutoStock) إلى مفتاح USB أو إلى تخزين سحابي. النسخة الموجودة على نفس القرص تضيع مع القرص.",
+      problems: {
+        disk_full: "لم تُصنع آخر نسخة احتياطية: القرص ممتلئ تقريبًا. وفّر بعض المساحة على هذا الحاسوب.",
+        database_unreachable: "لم تتمكن آخر نسخة احتياطية من الوصول إلى قاعدة البيانات. أعد تشغيل AutoStock.",
+        failed: "لم تنجح آخر نسخة احتياطية. انظر «النسخ الاحتياطية» في docs/INSTALL.md.",
+      },
     },
     branches: {
       title: "الفروع",

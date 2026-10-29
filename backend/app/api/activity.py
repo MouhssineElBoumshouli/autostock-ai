@@ -22,7 +22,7 @@ PAGE_SIZE = 25
 Kind = Literal["team", "passwords", "logins", "settings", "stock"]
 ACTIONS_BY_KIND: dict[str, list[str]] = {
     "team": ["user.created", "user.updated"],
-    "passwords": ["user.password_changed", "user.password_reset"],
+    "passwords": ["user.password_changed", "user.password_reset", "user.password_set_on_shop_computer"],
     "logins": ["user.logged_in"],
     "settings": ["organization.created", "organization.updated", "synonyms.updated"],
     "stock": ["import.saved", "part.updated", "part_equivalent.linked", "part_equivalent.removed"],

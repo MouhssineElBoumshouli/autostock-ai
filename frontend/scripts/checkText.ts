@@ -12,9 +12,9 @@ const problems: string[] = [];
 
 // Words that are the same in every language: names, file types, units, examples of search words.
 const SAME_EVERYWHERE = [
-  "AutoStock AI", "Excel", "CSV", "PDF", "OEM", "MAD", "EUR", "USD", "DH", "xlsx", "xls", "csv", "Total", "Stock",
+  "AutoStock AI", "AutoStock", "Excel", "CSV", "PDF", "OEM", "MAD", "EUR", "USD", "DH", "xlsx", "xls", "csv", "Total", "Stock",
   "Date", "Minimum", "Budget", "Pages", "Filtres", "Famille", "brake pads", "plaquettes de frein", "name@shop.ma",
-  "GROQ_API_KEY", "Groq", ".env", "README",
+  "GROQ_API_KEY", "Groq", ".env", "README", "docs/INSTALL.md", "backups", "USB",
 ];
 // Texts that really are the same in French: "Inactive" (une pièce inactive), "Euro".
 const SAME_IN_FRENCH = ["stock.inactive", "settings.currencies.EUR"];
