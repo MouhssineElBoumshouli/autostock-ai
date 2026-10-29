@@ -14,8 +14,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     APP_ENV=production \
     WEBSITE_DIR=/app/website
 WORKDIR /app
-COPY backend/scripts/install-postgres-tools.sh /tmp/
-RUN sh /tmp/install-postgres-tools.sh
+COPY backend/scripts/install-system-packages.sh /tmp/
+RUN sh /tmp/install-system-packages.sh
 COPY backend/requirements.txt .
 RUN grep -v "^pytest" requirements.txt > requirements-shop.txt && pip install --no-cache-dir -r requirements-shop.txt
 COPY backend/alembic.ini ./

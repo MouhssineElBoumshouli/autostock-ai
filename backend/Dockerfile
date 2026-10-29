@@ -5,9 +5,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# pg_dump and pg_restore: the backup and restore tests use them.
-COPY scripts/install-postgres-tools.sh /tmp/
-RUN sh /tmp/install-postgres-tools.sh
+# pg_dump and pg_restore (the backup and restore tests use them) and the time zone files.
+COPY scripts/install-system-packages.sh /tmp/
+RUN sh /tmp/install-system-packages.sh
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
