@@ -20,6 +20,7 @@ from app.alerts.shop_data import ShopData, load_shop_data
 from app.alerts.stock_rules import stock_problems
 from app.db import SessionLocal
 from app.models import Alert, Organization
+from app.shop_day import shop_today
 
 log = logging.getLogger(__name__)
 DAILY_LIMIT = 10
@@ -94,7 +95,7 @@ def run_alerts_now(organization_id: uuid.UUID) -> None:
     """For one shop, in its own session (used after an import)."""
     with SessionLocal() as db:
         try:
-            run_alerts(db, organization_id, date.today())
+            run_alerts(db, organization_id, shop_today())
             db.commit()
         except Exception:
             log.exception("Alerts failed for %s", organization_id)
@@ -105,7 +106,7 @@ async def keep_raising_alerts() -> None:
     Real shops only: the demo shop's alerts come from its replay (app/demo/check_alerts.py)."""
     checked_on: dict[uuid.UUID, date] = {}
     while True:
-        today = date.today()
+        today = shop_today()
         try:
             with SessionLocal() as db:
                 shops = db.scalars(select(Organization.id).where(~Organization.is_demo)).all()

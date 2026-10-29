@@ -19,6 +19,7 @@ from sqlalchemy import and_, case, exists, func, not_, select
 from sqlalchemy.sql import ColumnElement
 
 from app.models import Part, SaleLine, StockLevel
+from app.shop_day import shop_today
 
 StockStatus = Literal["healthy", "low", "out", "inactive", "running_out"]
 DEAD_AFTER_DAYS = 90
@@ -44,7 +45,7 @@ def status_of(quantity: ColumnElement) -> ColumnElement:
 
 
 def is_dead(quantity: ColumnElement, branch_id: uuid.UUID | None = None, today: date | None = None) -> ColumnElement:
-    since = (today or date.today()) - timedelta(days=DEAD_AFTER_DAYS)
+    since = (today or shop_today()) - timedelta(days=DEAD_AFTER_DAYS)
     recent_sale = select(SaleLine.id).where(SaleLine.part_id == Part.id, SaleLine.sold_on >= since)
     if branch_id:
         recent_sale = recent_sale.where(SaleLine.branch_id == branch_id)
