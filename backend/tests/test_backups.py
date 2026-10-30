@@ -25,6 +25,20 @@ def test_a_backup_is_checked_before_it_counts(browser, tmp_path):
     assert status.kept == 1 and status.problem is None and not is_overdue(status, datetime.now(UTC))
 
 
+def test_a_backup_never_overwrites_an_existing_file(browser, tmp_path):
+    set_up_shop(browser)
+    first = make_backup("autostock-2026-10-29", tmp_path)
+    first_bytes = first.read_bytes()
+    added = browser.post("/api/users", json={"name": "Late", "email": "late@shop.ma", "role": "staff", "temporary_password": "temporary-pass-1"})
+    assert added.status_code == 201
+
+    second = make_backup("autostock-2026-10-29", tmp_path)  # same name as the first, on purpose
+
+    assert first.exists() and second.exists() and first != second
+    assert second.name == "autostock-2026-10-29-2.dump"
+    assert first.read_bytes() == first_bytes  # the first backup was not touched
+
+
 def test_an_empty_or_broken_file_is_not_a_backup(tmp_path):
     (tmp_path / "empty.dump").write_bytes(b"")
     (tmp_path / "broken.dump").write_bytes(b"not a backup")
