@@ -9,6 +9,10 @@ Same true demand, starting stock, supplier delivery times and pack sizes for all
 line is approved as is. Forecasts are made once per week of the replay from the demo's recorded
 sales (with its own empty-shelf days unknown) and reused for every service target.
 
+The full demo shop is ~2,000 parts x 3 branches; replaying 6 months for all of them here would
+take over an hour, so this script samples about 1 in 3 part-branch pairs, keeping each demand
+type's (smooth/erratic/slow/lumpy/no_sales) share the same as the full catalog (app/demo/sampling.py).
+
 It builds a fresh demo shop (same recipe and seed as app.demo.demo_shop) inside a transaction that
 is rolled back at the end, so the real demo shop and its login are never touched and the numbers
 are the same every time.
@@ -26,8 +30,9 @@ from sqlalchemy import select
 from app.db import SessionLocal
 from app.demo.demo_shop import create_demo_shop
 from app.demo.production_guard import refuse_demo_in_production
+from app.demo.sampling import SAMPLE_EVERY, sample_every_third
 from app.forecast.engine import forecast_all
-from app.forecast.run import load_demand
+from app.forecast.run import ShopDemand, load_demand
 from app.models import DemoTrueDemand, Part, Supplier
 from app.ordering.replay import ReplayResult, four_week_forecasts, minimum_rule, replay, weekly_rule
 from app.ordering.run import DEFAULT_DELIVERY_DAYS
@@ -45,10 +50,13 @@ def main() -> None:
     with SessionLocal() as db:
         shop, _ = create_demo_shop(db, last_day=LAST_DAY)
         db.flush()
-        history = load_demand(db, shop.id)
+        full = load_demand(db, shop.id)
+        start = full.demand.shape[1] - REPLAY_DAYS
+        sample = sample_every_third(full.demand[:, :start])
+        history = ShopDemand([full.keys[i] for i in sample], full.demand[sample], full.first_day, full.last_day)
+        print(f"Sampling 1 in {SAMPLE_EVERY} by demand type: {len(sample)} of {len(full.keys)} part-branch pairs.")
         rows = len(history.keys)
         index = {key: i for i, key in enumerate(history.keys)}
-        start = history.demand.shape[1] - REPLAY_DAYS
         first_replayed = history.first_day + timedelta(days=start)
 
         truth = np.zeros((rows, REPLAY_DAYS))
@@ -75,7 +83,7 @@ def main() -> None:
     minimums = branch_minimums(history.keys, [p.min_stock for p in info], past)
     start_stock = np.round(1.5 * minimums)  # halfway between the rule's reorder point and its target
 
-    print(f"Demo shop: {rows} part-branch pairs, replaying {first_replayed} to {LAST_DAY} ({REPLAY_DAYS} days).")
+    print(f"Demo shop (measured on a 1-in-{SAMPLE_EVERY} sample): {rows} part-branch pairs, replaying {first_replayed} to {LAST_DAY} ({REPLAY_DAYS} days).")
     began = perf_counter()
     review_days = range(0, REPLAY_DAYS, REVIEW_DAYS)
     autostock = {day: engine_forecasts(history.demand[:, : start + day], history.first_day) for day in review_days}

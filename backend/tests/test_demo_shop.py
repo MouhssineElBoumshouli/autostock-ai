@@ -139,7 +139,7 @@ def test_every_part_has_a_supplier_with_a_real_delivery_time():
         assert all(part.supplier_id is not None for part in parts)
         suppliers = db.scalars(select(Supplier).where(Supplier.organization_id == shop.id)).all()
         assert len(suppliers) == len(SUPPLIERS)
-        assert all(3 <= s.delivery_days <= 21 for s in suppliers)
+        assert all(1 <= s.delivery_days <= 45 for s in suppliers)  # local (1-3 days) and importers (15-45 days)
         assert all(s.phone and s.email for s in suppliers)
 
 

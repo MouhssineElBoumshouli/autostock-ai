@@ -9,11 +9,17 @@ The forecast methods are chosen from the sales before the replay only, so no day
 It builds a fresh demo shop (same recipe and seed as app.demo.demo_shop) inside a transaction that
 is rolled back at the end, so the real demo shop and its login are never touched.
 
+The full demo shop is ~2,000 parts x 3 branches; replaying 8 weeks day by day for all of them
+takes too long for a routine check, so this script samples about 1 in 3 part-branch pairs, keeping
+each demand type's share the same as the full catalog (app/demo/sampling.py) — every planted
+problem is always kept, so the catch rate is exact; only the false-alarm rate is a sample.
+
 Run inside Docker:  docker compose exec api python -m app.demo.check_alerts
 These are results on made-up data, not what a real shop will see.
 """
 
 from collections import Counter, defaultdict
+from dataclasses import replace
 from datetime import date, timedelta
 from time import perf_counter
 
@@ -26,6 +32,7 @@ from app.alerts.shop_data import load_shop_data, replayable_method
 from app.db import SessionLocal
 from app.demo.demo_shop import create_demo_shop
 from app.demo.production_guard import refuse_demo_in_production
+from app.demo.sampling import SAMPLE_EVERY, sample_every_third
 from app.forecast.run import run_forecasts
 from app.models import Alert, DemoPlantedProblem, Forecast, SaleLine
 
@@ -42,13 +49,28 @@ def main() -> None:
         shop, _ = create_demo_shop(db, last_day=LAST_DAY)
         db.flush()
         methods = _methods_before(db, shop.id, first_replayed)
-        data = load_shop_data(db, shop.id, LAST_DAY)
+        full = load_shop_data(db, shop.id, LAST_DAY)
+        key_index = {key: i for i, key in enumerate(full.keys)}
+        planted = db.scalars(select(DemoPlantedProblem).where(DemoPlantedProblem.organization_id == shop.id)).all()
+        planted_rows = np.array([key_index[(p.part_id, p.branch_id)] for p in planted if (p.part_id, p.branch_id) in key_index], dtype=int)
+
+        cutoff = (first_replayed - full.first_day).days
+        sample = sample_every_third(full.demand[:, :cutoff], planted_rows)
+        data = replace(
+            full,
+            keys=[full.keys[i] for i in sample],
+            sold=full.sold[sample],
+            demand=full.demand[sample],
+            shelf=full.shelf[sample],
+            price=full.price[sample],
+            cost=full.cost[sample],
+        )
         data.methods = [replayable_method(methods.get(key)) for key in data.keys]
+        print(f"Sampling 1 in {SAMPLE_EVERY} by demand type (every planted problem kept): {len(sample)} of {len(full.keys)} part-branch pairs.")
 
         for offset in range(REPLAY_DAYS):
             raise_alerts(db, shop.id, data, first_replayed + timedelta(days=offset))
         alerts = db.scalars(select(Alert).where(Alert.organization_id == shop.id)).all()
-        planted = db.scalars(select(DemoPlantedProblem).where(DemoPlantedProblem.organization_id == shop.id)).all()
         report(planted, alerts, len(data.keys))
         db.rollback()
     print(f"\n(took {perf_counter() - started:.0f} s)")
