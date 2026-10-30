@@ -53,6 +53,11 @@ make_backup() {
     problem "Backup failed: the new file could not be read back, so it was deleted."
     return 1
   fi
+  n=1
+  while [ -e "$file" ]; do # never overwrite an existing backup: autostock-NAME-2.dump, -3, ...
+    n=$((n + 1))
+    file="$DIR/$1-$n.dump"
+  done
   mv -f "$partial" "$file"
   rm -f "$PROBLEM"
   say "Backup saved and checked: $file ($(($(wc -c < "$file") / 1024)) KB)"
