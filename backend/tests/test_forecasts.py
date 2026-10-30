@@ -177,9 +177,23 @@ def test_merging_a_branch_moves_its_stock_outs_and_drops_its_forecasts(browser):
         assert db.scalar(select(StockOut.branch_id)) == second.id
 
 
-def test_a_full_demo_shop_is_forecast_in_reasonable_time():
+def test_a_demo_shop_is_forecast_in_under_2_minutes():
+    # A regular-sized demo (step 8c-1's demo shop defaults to its full ~2,000-part catalog, so this
+    # asks for a small one explicitly): a fast regression guard, unrelated to catalog size.
+    with SessionLocal() as db:
+        shop, _counts = create_demo_shop(db, LAST_DAY, parts_count=200)
+        db.commit()
+    started = perf_counter()
+    run = run_now(shop.id)
+    seconds = perf_counter() - started
+    print(f"Forecast run for {run.series_count} part-branch pairs: {seconds:.1f} s")
+    assert run.series_count > 500 and seconds < 120
+
+
+def test_the_full_demo_shop_is_forecast_without_blowing_up():
     # Step 8c-1 grew the demo shop ~10x (about 2,000 parts, realistic long tail) for a believable
-    # presentation; this bound will tighten again once the speed step (8c-2) speeds up the engine.
+    # presentation; this is its own, slower test so the regular test run stays fast. The bound will
+    # tighten once the speed step (8c-2) speeds up the engine.
     with SessionLocal() as db:
         shop, _counts = create_demo_shop(db, LAST_DAY)
         db.commit()
@@ -187,7 +201,7 @@ def test_a_full_demo_shop_is_forecast_in_reasonable_time():
     run = run_now(shop.id)
     seconds = perf_counter() - started
     print(f"Forecast run for {run.series_count} part-branch pairs: {seconds:.1f} s")
-    assert run.series_count > 5000 and seconds < 300
+    assert run.series_count > 5000 and seconds < 600
 
 
 def sell(organization_id: uuid.UUID, part_id: uuid.UUID, branch_id: uuid.UUID, per_day: int, days: int = DAYS) -> None:

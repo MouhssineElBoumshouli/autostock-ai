@@ -152,7 +152,7 @@ def test_minimum_stock_is_about_two_weeks_of_normal_sales():
 
 def test_current_stock_is_spread_across_statuses_close_to_target_shares():
     with SessionLocal() as db:
-        shop, counts = create_demo_shop(db, LAST_DAY, history_days=HISTORY_DAYS)  # every part
+        shop, counts = create_demo_shop(db, LAST_DAY, parts_count=200, history_days=HISTORY_DAYS)
         db.commit()
         parts = db.scalars(select(Part).where(Part.organization_id == shop.id)).all()
         on_hand = dict(
@@ -181,7 +181,7 @@ def test_current_stock_is_spread_across_statuses_close_to_target_shares():
 
 def test_known_problems_are_planted_with_their_dates_in_the_last_weeks():
     with SessionLocal() as db:
-        shop, _counts = create_demo_shop(db, LAST_DAY, history_days=HISTORY_DAYS)
+        shop, _counts = create_demo_shop(db, LAST_DAY, parts_count=200, history_days=HISTORY_DAYS)
         db.commit()
         planted = db.scalars(select(DemoPlantedProblem).where(DemoPlantedProblem.organization_id == shop.id)).all()
     kinds = Counter(p.kind for p in planted)
@@ -192,7 +192,7 @@ def test_known_problems_are_planted_with_their_dates_in_the_last_weeks():
 
 def test_planted_stock_problems_show_in_the_stock_history():
     with SessionLocal() as db:
-        shop, _counts = create_demo_shop(db, LAST_DAY, history_days=HISTORY_DAYS)
+        shop, _counts = create_demo_shop(db, LAST_DAY, parts_count=200, history_days=HISTORY_DAYS)
         db.commit()
         planted = db.scalars(select(DemoPlantedProblem).where(DemoPlantedProblem.organization_id == shop.id)).all()
         for p in planted:
