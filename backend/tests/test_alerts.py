@@ -9,7 +9,7 @@ from app.alerts import sales_rules
 from app.alerts.counts import chance_at_least, chance_at_most, spread
 from app.alerts.problem import Problem, money, money_note
 from app.alerts.run import DAILY_LIMIT, REPEAT_DAYS, SALES_DAILY_LIMIT, find_problems, pick_new, raise_alerts
-from app.alerts.sales_rules import TARGET_FALSE_PER_WEEK, sales_problems
+from app.alerts.sales_rules import sales_problems
 from app.alerts.shop_data import ShopData, load_shop_data
 from app.alerts.stock_rules import stock_problems
 from app.db import SessionLocal
@@ -85,8 +85,8 @@ def test_too_little_history_raises_nothing():
 
 
 def test_a_rare_week_is_not_a_spike_unless_it_is_up_by_half():
-    assert sales_problems(shop_data([steady(20, last_week=28)]), LAST) == []  # +40%: rare for Poisson, but not +50%
-    [problem] = sales_problems(shop_data([steady(20, last_week=30)]), LAST)  # +50%
+    assert sales_problems(shop_data([steady(20, last_week=28)]), LAST) == []  # +40%: blocked before rarity is even checked
+    [problem] = sales_problems(shop_data([steady(20, last_week=40)]), LAST)  # +100%: clearly up by more than half, and rare
     assert problem.kind == "sales_spike"
 
 
@@ -97,20 +97,22 @@ def six_a_week(last_week: list[int]) -> np.ndarray:
 
 
 def test_a_change_needs_at_least_five_pieces(monkeypatch):
-    monkeypatch.setattr(sales_rules, "TARGET_FALSE_PER_WEEK", 1e9)  # every week counts as rare here
+    monkeypatch.setattr(sales_rules, "PER_PART_BAR", 1.0)  # every week counts as rare here
     monkeypatch.setattr(sales_rules, "MIN_EXPECTED_WEEKLY", 1.0)
     assert sales_problems(shop_data([six_a_week([2, 2, 2, 1, 1, 1, 1])]), LAST) == []  # 10 sold: +67%, but only +4 pieces
     [problem] = sales_problems(shop_data([six_a_week([2, 2, 2, 2, 2, 1, 1])]), LAST)
     assert problem.numbers["sold"] == 12
 
 
-def test_the_bar_rises_with_the_number_of_parts_checked():
-    """About 2 false alarms a week for the whole shop: the more parts judged, the rarer a week must be."""
-    spiky = steady(2, last_week=4)  # 28 sold, 14 expected
-    surprise = chance_at_least(28, 14, 0.0)
+def test_the_bar_does_not_depend_on_how_many_parts_are_checked():
+    """Step 8c-1's bug: the bar used to be a shop-wide false-alarm budget split across every judged
+    part, so a real spike could stop being caught just because more (unrelated, normal-selling)
+    parts were judged that day — a bigger catalog meant a stricter bar, not more sales alerts.
+    PER_PART_BAR is fixed now: checking many more ordinary parts alongside a real spike must not
+    suppress it."""
+    spiky = steady(2, last_week=8)  # 56 sold, 14 expected: very rare regardless of the bar chosen
     assert len(sales_problems(shop_data([spiky]), LAST)) == 1
-    many = int(TARGET_FALSE_PER_WEEK / (surprise * 14)) + 2  # enough parts that this week is no longer rare enough
-    assert sales_problems(shop_data([spiky] + [steady(3)] * many), LAST) == []
+    assert len(sales_problems(shop_data([spiky] + [steady(3)] * 500), LAST)) == 1
 
 
 def uneven() -> np.ndarray:

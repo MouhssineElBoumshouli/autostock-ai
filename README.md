@@ -88,6 +88,13 @@ With the app running, in another terminal:
 docker compose exec api pytest
 ```
 
+This skips the one `slow` test, which builds and forecasts the full ~2,000-part demo shop (a few
+minutes on its own). Run it with:
+
+```
+docker compose exec api pytest -m slow
+```
+
 Tests use their own database (`autostock_test`), so they never touch your data.
 Example import files (a messy French one and a clean English one per kind) are in `backend/tests/fixtures/`.
 They are only for tests; `python tests/fixtures/make_fixtures.py` (inside the api container) rebuilds them.

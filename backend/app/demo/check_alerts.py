@@ -64,6 +64,7 @@ def main() -> None:
             shelf=full.shelf[sample],
             price=full.price[sample],
             cost=full.cost[sample],
+            method_tables={},  # its own cache: `full`'s forecast tables are indexed by `full`'s rows, not this sample's
         )
         data.methods = [replayable_method(methods.get(key)) for key in data.keys]
         print(f"Sampling 1 in {SAMPLE_EVERY} by demand type (every planted problem kept): {len(sample)} of {len(full.keys)} part-branch pairs.")
@@ -118,7 +119,8 @@ def report(planted: list[DemoPlantedProblem], alerts: list[Alert], series: int) 
     for group, label in ((NEEDS_ACTION, "Needs action"), (WORTH_A_LOOK, "Worth a look")):
         in_group = [a for a in alerts if group_of(a.kind) == group]
         wrong = sum(1 for a in false if group_of(a.kind) == group)
-        print(f"  {label}: {len(in_group)} alerts, {wrong} of them false alarms.")
+        real_pct = 100 * (len(in_group) - wrong) / len(in_group) if in_group else 0
+        print(f"  {label}: {len(in_group)} alerts ({len(in_group) / REPLAY_DAYS:.1f}/day), {wrong} of them false alarms ({real_pct:.0f}% real).")
     per_day = Counter(a.raised_on for a in alerts)
     sales_per_day = Counter(a.raised_on for a in alerts if group_of(a.kind) == WORTH_A_LOOK)
     print(f"Days the daily limit of {DAILY_LIMIT} was reached: {sum(1 for n in per_day.values() if n >= DAILY_LIMIT)} of {REPLAY_DAYS}.")

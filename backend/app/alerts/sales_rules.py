@@ -6,9 +6,12 @@ that part in that branch, judged with a count model (see counts.py).
 - Spread: how far the part's sales usually land from that forecast, from its past 26 weeks
   (negative binomial; Poisson when it sells evenly). 26 counts give a steadier spread than reading
   a rare tail straight off a few past weeks.
-- How rare is rare enough: set from a target of TARGET_FALSE_PER_WEEK false alarms for the whole
-  shop. Every judged part is checked every day on a rolling week (7 checks a week) in both
-  directions, so each check may be wrong at most target / (judged parts x 7 x 2) of the time.
+- How rare is rare enough: PER_PART_BAR, fixed. Up to step 8c-1 this was a shop-wide weekly budget
+  split across every judged part, so a bigger shop meant a stricter bar per part and, with a
+  ~2,000-part catalog, almost no sales alerts at all — the catalog size, not the demand, decided
+  whether a real spike or drop got caught. A fixed per-part bar judges every shop the same way; a
+  bigger shop naturally sees more sales alerts, capped for the owner by SALES_DAILY_LIMIT
+  (app/alerts/run.py), which keeps only the ones worth the most money.
 - And a real change: at least 50% above or below what was expected, and at least 5 pieces.
 """
 
@@ -21,9 +24,13 @@ from app.alerts.shop_data import ShopData
 WEEK = 7
 PAST_WEEKS = 26  # past weeks the spread is learned from
 MIN_PAST_WEEKS = 8
-# Chosen with the owner as "about 2 a week for the whole shop" (Step 6a review).
-TARGET_FALSE_PER_WEEK = 2.0
-CHECKS_PER_WEEK = 7  # the rolling week is judged every day
+# How rare a week must be, for one part checked one way (spike or drop) on one day, to be a real
+# problem rather than ordinary chance. Fixed per part: a bigger catalog is judged exactly as
+# strictly as a small one, not more leniently. Chosen on the second demo shop (seed 8), never the
+# main one (step 6a's own rule): tried 2e-5 to 5e-3; catches peak and flatten at 1e-3 (11 of 15
+# spikes, 8 of 15 drops) and going looser only adds false alarms that start crowding real ones out
+# of the daily cap (5e-3: still 11/15 spikes but drops fall back to 5/15).
+PER_PART_BAR = 1e-3
 MIN_CHANGE = 0.5  # +50% for a spike, -50% for a drop
 MIN_PIECES = 5
 # Parts expected to sell fewer than 8 a week are not judged: for them a week of 0, or double the
@@ -44,7 +51,7 @@ def sales_problems(data: ShopData, end: int) -> list[Problem]:
     week_known = np.column_stack([known[:, o : o + WEEK].sum(axis=1) for o in [*origins, start]])
     week_sold = np.column_stack([filled[:, o : o + WEEK].sum(axis=1) for o in [*origins, start]])
 
-    judged = []  # (row, expected this week, the part's extra spread)
+    problems = []
     for row, method in enumerate(data.methods):
         table = data.forecast_table(method)
         expected = float(table[row, start]) * WEEK
@@ -52,25 +59,22 @@ def sales_problems(data: ShopData, end: int) -> list[Problem]:
         if expected < MIN_EXPECTED_WEEKLY or full_weeks.sum() < MIN_PAST_WEEKS:
             continue
         predicted = table[row, origins][full_weeks] * WEEK
-        judged.append((row, expected, spread(predicted, week_sold[row, :-1][full_weeks])))
+        extra_spread = spread(predicted, week_sold[row, :-1][full_weeks])
 
-    rare = TARGET_FALSE_PER_WEEK / (max(len(judged), 1) * CHECKS_PER_WEEK * 2)
-    problems = []
-    for row, expected, extra_spread in judged:
         days_known = int(week_known[row, -1])
         sold = int(data.sold[row, start : end + 1].sum())
         if (
             days_known >= MIN_KNOWN_DAYS_FOR_SPIKE
             and sold >= (1 + MIN_CHANGE) * expected
             and sold - expected >= MIN_PIECES
-            and chance_at_least(sold, expected * days_known / WEEK, extra_spread) <= rare
+            and chance_at_least(sold, expected * days_known / WEEK, extra_spread) <= PER_PART_BAR
         ):
             problems.append(_problem(data, row, "sales_spike", start, end, sold, expected, extra_spread))
         elif (
             days_known == WEEK
             and sold <= (1 - MIN_CHANGE) * expected
             and expected - sold >= MIN_PIECES
-            and chance_at_most(sold, expected, extra_spread) <= rare
+            and chance_at_most(sold, expected, extra_spread) <= PER_PART_BAR
         ):
             problems.append(_problem(data, row, "sales_drop", start, end, sold, expected, extra_spread))
     return problems

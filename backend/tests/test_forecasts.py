@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from time import perf_counter
 
 import numpy as np
+import pytest
 from sqlalchemy import delete, func, select
 
 from app.db import SessionLocal
@@ -190,10 +191,11 @@ def test_a_demo_shop_is_forecast_in_under_2_minutes():
     assert run.series_count > 500 and seconds < 120
 
 
+@pytest.mark.slow
 def test_the_full_demo_shop_is_forecast_without_blowing_up():
     # Step 8c-1 grew the demo shop ~10x (about 2,000 parts, realistic long tail) for a believable
-    # presentation; this is its own, slower test so the regular test run stays fast. The bound will
-    # tighten once the speed step (8c-2) speeds up the engine.
+    # presentation; slow (demo creation alone takes a few minutes), so it's skipped by default —
+    # run it with `pytest -m slow`. The bound will tighten once the speed step (8c-2) lands.
     with SessionLocal() as db:
         shop, _counts = create_demo_shop(db, LAST_DAY)
         db.commit()
