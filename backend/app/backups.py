@@ -6,6 +6,7 @@ backups folder) only holds checked backups: a file gets its .dump name once it h
 """
 
 import os
+import re
 import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -20,6 +21,7 @@ from app.config import BACKUP_DIR, DATABASE_URL
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "backup.sh"
 PROBLEM_FILE = "last-problem.txt"
+SAVED_AS = re.compile(r"Backup saved and checked: (\S+) \(")
 OVERDUE_AFTER = timedelta(days=2)
 # Taken while the database is changed as a whole (an update or a restore), so two never overlap.
 MAINTENANCE_LOCK = 802_2026
@@ -46,13 +48,15 @@ def run_script(*args: str, folder: Path) -> subprocess.CompletedProcess:
 
 
 def make_backup(name: str, folder: Path) -> Path:
-    """Backs up the whole database now as folder/name.dump, checked. Raises BackupFailed with the reason."""
+    """Backs up the whole database now as folder/name.dump (or name-2.dump... if that name is already
+    taken, so a backup never overwrites one), checked. Raises BackupFailed with the reason."""
     done = run_script("make", name, folder=folder)
     print(done.stdout, end="")
     if done.returncode != 0:
         reason = done.stderr.strip().splitlines()
         raise BackupFailed(reason[-1] if reason else "the backup could not be made.")
-    return folder / f"{name}.dump"
+    saved_as = SAVED_AS.search(done.stdout)
+    return Path(saved_as.group(1)) if saved_as else folder / f"{name}.dump"
 
 
 def is_good_backup(file: Path) -> bool:
