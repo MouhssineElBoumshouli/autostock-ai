@@ -12,7 +12,7 @@ from app.ask import understand as understand_module
 from app.ask.answers import CANNOT_ANSWER_YET
 from app.db import SessionLocal
 from app.models import AuditLog, Branch, Forecast, Organization, Part, SaleLine, StockLevel
-from tests.helpers import OWNER_PASSWORD, add_member, create_other_shop, logged_in_browser, member_with_own_password, set_up_shop
+from tests.helpers import OWNER_PASSWORD, add_member, create_other_shop, logged_in_browser, member_with_own_password, run_lines, set_up_shop
 from tests.test_orders import add_part
 from tests.test_today import add_alert
 
@@ -300,8 +300,8 @@ def test_what_to_order(browser):
     add_part(organization_id, sku="OIL-2", per_week=5, on_hand=1)
     run = browser.post("/api/orders/suggestions", json={}).json()
     answer = ask(browser, "what should I order")
-    assert numbers(answer)["Lines to order"] == len(run["lines"]) == 2
-    assert numbers(answer)["Total cost"] == sum(line["line_cost"] for line in run["lines"])
+    assert numbers(answer)["Lines to order"] == len(run_lines(browser, run)) == 2
+    assert numbers(answer)["Total cost"] == sum(line["line_cost"] for line in run_lines(browser, run))
 
 
 def test_open_alerts(browser, shop):

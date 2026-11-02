@@ -1,14 +1,17 @@
 """What to order: a manager asks for suggestions (optionally within a budget), approves, edits
 or rejects each line, and reads them back. Approving turns a line into a purchase order line
-(see app/api/purchase_orders.py)."""
+(see app/api/purchase_orders.py).
+
+A run is read in two steps, so a big shop never sends all its lines at once: the run with one
+total per supplier, then one supplier's lines, 50 at a time."""
 
 import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import String, case, cast, func, select
 from sqlalchemy.orm import Session
 
 from app.audit import record_change
@@ -25,6 +28,10 @@ anyone = require_role()
 
 # Save money (fewer safety stock), Balanced, Never run out (more safety stock).
 ServiceTarget = Literal[0.8, 0.9, 0.95]
+PAGE_SIZE = 50
+DIDNT_FIT = "didnt_fit"  # the group of lines cut by the budget, across suppliers
+NO_SUPPLIER = "none"  # the group of lines whose part has no supplier
+URGENT_FIRST = (OrderSuggestion.status.desc(), OrderSuggestion.value_per_dirham.desc().nulls_first())
 
 
 class SuggestionsRequest(BaseModel):
@@ -60,6 +67,16 @@ class LineOut(BaseModel):
     reason: str  # English; the website builds it in the person's language from the numbers above
 
 
+class GroupOut(BaseModel):
+    """One supplier's lines (or the lines with no supplier, or the lines cut by the budget)."""
+    key: str  # the supplier's id, NO_SUPPLIER or DIDNT_FIT
+    supplier_id: uuid.UUID | None
+    supplier_name: str | None
+    line_count: int
+    pending_count: int  # lines still waiting for a decision
+    total_cost: int  # what the lines cost, at the approved quantity when there is one
+
+
 class RunOut(BaseModel):
     id: uuid.UUID
     created_at: datetime
@@ -69,7 +86,14 @@ class RunOut(BaseModel):
     kept_cost: int
     kept_lines: int
     cut_lines: int
-    lines: list[LineOut]
+    groups: list[GroupOut]  # most urgent first, the lines cut by the budget last
+
+
+class LinesPage(BaseModel):
+    items: list[LineOut]
+    total: int
+    page: int
+    page_size: int
 
 
 class DecisionRequest(BaseModel):
@@ -120,6 +144,21 @@ def latest_suggestions(user: User = Depends(anyone), db: Session = Depends(get_s
     return _run_out(db, run) if run else None
 
 
+@router.get("/runs/{run_id}/lines")
+def run_lines(
+    run_id: uuid.UUID, group: str, page: int = Query(1, ge=1), user: User = Depends(anyone), db: Session = Depends(get_session)
+) -> LinesPage:
+    """One group's lines (see GroupOut.key), most urgent first."""
+    in_group = (OrderSuggestion.organization_id == user.organization_id, OrderSuggestion.run_id == run_id, _group_key() == group)
+    total = db.scalar(select(func.count()).select_from(OrderSuggestion).where(*in_group))
+    lines = db.scalars(
+        select(OrderSuggestion).where(*in_group).order_by(*URGENT_FIRST, OrderSuggestion.id)
+        .offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
+    ).all()
+    names = _names(db, user.organization_id, lines)
+    return LinesPage(items=[_line_out(db, line, names) for line in lines], total=total, page=page, page_size=PAGE_SIZE)
+
+
 @router.post("/suggestions/{suggestion_id}/decide")
 def decide(
     suggestion_id: uuid.UUID, body: DecisionRequest, user: User = Depends(managers), db: Session = Depends(get_session)
@@ -133,7 +172,7 @@ def decide(
 @router.post("/runs/{run_id}/suppliers/{supplier_id}/approve-all")
 def approve_all(
     run_id: uuid.UUID, supplier_id: uuid.UUID, user: User = Depends(managers), db: Session = Depends(get_session)
-) -> list[LineOut]:
+) -> dict[str, int]:
     suggestions = db.scalars(
         select(OrderSuggestion).where(
             OrderSuggestion.organization_id == user.organization_id,
@@ -146,8 +185,7 @@ def approve_all(
         raise HTTPException(404, "Nothing to approve for this supplier.")
     approve_all_for_supplier(db, user, suggestions)
     db.commit()
-    names = _names(db, user.organization_id)  # once, not once per line: a big shop has 50,000 parts
-    return [_line_out(db, suggestion, names) for suggestion in suggestions]
+    return {"approved": len(suggestions)}
 
 
 def _find_suggestion(db: Session, user: User, suggestion_id: uuid.UUID) -> OrderSuggestion:
@@ -161,21 +199,43 @@ def _find_suggestion(db: Session, user: User, suggestion_id: uuid.UUID) -> Order
     return suggestion
 
 
-def _run_out(db: Session, run: OrderRun) -> RunOut:
-    lines = db.scalars(
-        select(OrderSuggestion)
-        .where(OrderSuggestion.organization_id == run.organization_id, OrderSuggestion.run_id == run.id)
-        .order_by(OrderSuggestion.status.desc(), OrderSuggestion.value_per_dirham.desc().nulls_first())
-    ).all()
-    names = _names(db, run.organization_id)
-    return RunOut(
-        **{field: getattr(run, field) for field in RunOut.model_fields if field != "lines"},
-        lines=[_line_out(db, line, names) for line in lines],
+def _group_key():
+    return case(
+        (OrderSuggestion.status == "cut_by_budget", DIDNT_FIT),
+        (OrderSuggestion.supplier_id.is_(None), NO_SUPPLIER),
+        else_=cast(OrderSuggestion.supplier_id, String),
     )
 
 
+def _run_out(db: Session, run: OrderRun) -> RunOut:
+    """The run with one total per group. Groups come in the order of their most urgent line."""
+    ranked = select(
+        _group_key().label("key"),
+        OrderSuggestion.status,
+        (func.coalesce(OrderSuggestion.approved_quantity, OrderSuggestion.quantity)
+         * func.coalesce(OrderSuggestion.unit_cost, 0)).label("cost"),
+        func.row_number().over(order_by=URGENT_FIRST).label("rank"),
+    ).where(OrderSuggestion.organization_id == run.organization_id, OrderSuggestion.run_id == run.id).subquery()
+    rows = db.execute(
+        select(
+            ranked.c.key,
+            func.min(ranked.c.rank),
+            func.count(),
+            func.count().filter(ranked.c.status.in_(("suggested", "cut_by_budget"))),
+            func.sum(ranked.c.cost),
+        ).group_by(ranked.c.key)
+    ).all()
+    suppliers = dict(db.execute(select(Supplier.id, Supplier.name).where(Supplier.organization_id == run.organization_id)).all())
+    groups = []
+    for key, _rank, count, pending, cost in sorted(rows, key=lambda row: (row[0] == DIDNT_FIT, row[1])):
+        supplier_id = None if key in (DIDNT_FIT, NO_SUPPLIER) else uuid.UUID(key)
+        groups.append(GroupOut(key=key, supplier_id=supplier_id, supplier_name=suppliers.get(supplier_id),
+                               line_count=count, pending_count=pending, total_cost=cost))
+    return RunOut(**{field: getattr(run, field) for field in RunOut.model_fields if field != "groups"}, groups=groups)
+
+
 def _line_out(db: Session, line: OrderSuggestion, names: dict[uuid.UUID, tuple[str, str]] | None = None) -> LineOut:
-    names = names or _names(db, line.organization_id)
+    names = names or _names(db, line.organization_id, [line])
     part_sku, part_name = names[line.part_id]
     branch_name = names[line.branch_id][0]
     supplier_name = names.get(line.supplier_id, (None,))[0] if line.supplier_id else None
@@ -191,10 +251,14 @@ def _line_out(db: Session, line: OrderSuggestion, names: dict[uuid.UUID, tuple[s
     )
 
 
-def _names(db: Session, organization_id: uuid.UUID) -> dict[uuid.UUID, tuple[str, str]]:
-    """id -> (primary text, secondary text). Parts: (sku, name). Branches and suppliers: (name, name)."""
+def _names(db: Session, organization_id: uuid.UUID, lines: list[OrderSuggestion]) -> dict[uuid.UUID, tuple[str, str]]:
+    """id -> (primary text, secondary text). Parts (only those of `lines`): (sku, name).
+    Branches and suppliers: (name, name)."""
     found: dict[uuid.UUID, tuple[str, str]] = {}
-    for part_id, sku, name in db.execute(select(Part.id, Part.sku, Part.name).where(Part.organization_id == organization_id)):
+    part_ids = {line.part_id for line in lines}
+    for part_id, sku, name in db.execute(
+        select(Part.id, Part.sku, Part.name).where(Part.organization_id == organization_id, Part.id.in_(part_ids))
+    ):
         found[part_id] = (sku, name)
     for branch_id, name in db.execute(select(Branch.id, Branch.name).where(Branch.organization_id == organization_id)):
         found[branch_id] = (name, name)

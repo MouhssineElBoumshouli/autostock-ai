@@ -145,6 +145,9 @@ export const en = {
     noSupplier: "No supplier set. Add one in Settings to approve this line.",
     noSupplierGroup: "No supplier set",
     supplierTotal: (cost: string) => `Supplier total ${cost}`,
+    allSuppliers: "All suppliers",
+    groupLines: (count: number, shown: string, pending: string) =>
+      `${count === 1 ? "1 line" : `${shown} lines`}, ${pending} to decide`,
     grandTotal: "Total to order",
     didntFitBudget: "Didn't fit the budget",
     quantityError: "Enter a whole number of at least 1",

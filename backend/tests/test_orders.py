@@ -3,11 +3,11 @@
 import uuid
 from datetime import date, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.db import SessionLocal
 from app.models import Branch, Forecast, OrderRun, OrderSuggestion, Organization, Part, SaleLine, StockLevel, Supplier
-from tests.helpers import add_member, audit_rows, create_other_shop, member_with_own_password, set_up_shop
+from tests.helpers import OWNER_PASSWORD, add_member, audit_rows, create_other_shop, logged_in_browser, member_with_own_password, run_lines, set_up_shop
 
 LAST_DAY = date(2026, 9, 30)
 
@@ -51,7 +51,7 @@ def test_manager_gets_one_line_per_part_to_order_with_its_reason(browser):
     run = response.json()
     assert run["history_last_day"] == "2026-09-30"
     assert run["kept_lines"] == 1 and run["cut_lines"] == 0
-    [line] = run["lines"]
+    [line] = run_lines(browser, run)
     assert line["part_id"] == str(oil)
     assert line["status"] == "suggested"
     assert line["days_covered"] == 21
@@ -105,16 +105,76 @@ def test_budget_keeps_the_most_valuable_lines_and_says_which_were_cut(browser):
     good_margin = add_part(shop, "HIGH-MARGIN", per_week=9, on_hand=0, unit_cost=5000, sale_price=10000)
 
     everything = browser.post("/api/orders/suggestions", json={}).json()
-    one_line = max(line["line_cost"] for line in everything["lines"])
+    one_line = max(line["line_cost"] for line in run_lines(browser, everything))
     run = browser.post("/api/orders/suggestions", json={"budget": one_line}).json()
 
-    by_part = {line["part_id"]: line for line in run["lines"]}
+    by_part = {line["part_id"]: line for line in run_lines(browser, run)}
     assert by_part[str(good_margin)]["status"] == "suggested"
     assert by_part[str(cheap_margin)]["status"] == "cut_by_budget"
     assert by_part[str(cheap_margin)]["reason"].endswith("Cut to stay within the budget.")
     assert (run["kept_lines"], run["cut_lines"]) == (1, 1)
     assert run["kept_cost"] <= one_line < run["suggested_cost"]
-    assert run["lines"][0]["status"] == "suggested"  # kept lines come first
+    assert run_lines(browser, run)[0]["status"] == "suggested"  # kept lines come first
+
+
+
+def test_the_run_has_one_total_per_supplier_and_lines_come_50_at_a_time(browser):
+    set_up_shop(browser)
+    shop = shop_id()
+    parts = [add_part(shop, f"OIL-{n:02}", per_week=9, on_hand=0) for n in range(51)]
+    alone = add_part(shop, "ALONE-1", per_week=2, on_hand=0)
+    no_supplier = add_part(shop, "NONE-1", per_week=9, on_hand=0)
+    with SessionLocal() as db:
+        first = db.get(Part, parts[0])
+        db.execute(update(Part).where(Part.id.in_(parts)).values(supplier_id=first.supplier_id))
+        db.execute(update(Part).where(Part.id == no_supplier).values(supplier_id=None))
+        db.commit()
+        supplier_id = str(first.supplier_id)
+        alone_supplier = str(db.get(Part, alone).supplier_id)
+
+    run = browser.post("/api/orders/suggestions", json={}).json()
+    by_key = {group["key"]: group for group in run["groups"]}
+    assert set(by_key) == {supplier_id, alone_supplier, "none"}
+    assert by_key[supplier_id]["line_count"] == by_key[supplier_id]["pending_count"] == 51
+    assert by_key[supplier_id]["supplier_name"] == "Supplier OIL-00"
+    assert by_key["none"]["supplier_id"] is None
+    assert sum(group["total_cost"] for group in run["groups"]) == run["suggested_cost"]
+    assert run["groups"][-1]["key"] == alone_supplier  # sells the least: least urgent
+
+    path = f"/api/orders/runs/{run['id']}/lines"
+    first_page = browser.get(path, params={"group": supplier_id}).json()
+    second_page = browser.get(path, params={"group": supplier_id, "page": 2}).json()
+    assert (first_page["total"], len(first_page["items"]), len(second_page["items"])) == (51, 50, 1)
+    assert {line["part_sku"] for line in first_page["items"] + second_page["items"]} == {f"OIL-{n:02}" for n in range(51)}
+    [line] = browser.get(path, params={"group": "none"}).json()["items"]
+    assert line["part_sku"] == "NONE-1" and line["supplier_name"] is None
+
+
+def test_lines_cut_by_the_budget_are_their_own_group_shown_last(browser):
+    set_up_shop(browser)
+    shop = shop_id()
+    add_part(shop, "LOW-MARGIN", per_week=9, on_hand=0, unit_cost=9500, sale_price=10000)
+    add_part(shop, "HIGH-MARGIN", per_week=9, on_hand=0, unit_cost=5000, sale_price=10000)
+    everything = browser.post("/api/orders/suggestions", json={}).json()
+    one_line = max(line["line_cost"] for line in run_lines(browser, everything))
+
+    run = browser.post("/api/orders/suggestions", json={"budget": one_line}).json()
+    assert [group["key"] for group in run["groups"]][-1] == "didnt_fit"
+    assert run["groups"][-1]["supplier_name"] is None and run["groups"][-1]["line_count"] == 1
+    [cut] = browser.get(f"/api/orders/runs/{run['id']}/lines", params={"group": "didnt_fit"}).json()["items"]
+    assert cut["part_sku"] == "LOW-MARGIN" and cut["status"] == "cut_by_budget"
+
+
+def test_another_shop_cannot_read_the_lines_of_a_run(browser):
+    set_up_shop(browser)
+    add_part(shop_id(), "OIL-1", per_week=9, on_hand=6)
+    run = browser.post("/api/orders/suggestions", json={}).json()
+    [group] = run["groups"]
+
+    other = create_other_shop()
+    stranger = logged_in_browser(other.email, OWNER_PASSWORD)
+    page = stranger.get(f"/api/orders/runs/{run['id']}/lines", params={"group": group["key"]}).json()
+    assert (page["total"], page["items"]) == (0, [])
 
 
 def test_slow_seller_without_recent_sales_is_left_out_unless_out_of_stock(browser):
@@ -122,7 +182,7 @@ def test_slow_seller_without_recent_sales_is_left_out_unless_out_of_stock(browse
     shop = shop_id()
     add_part(shop, "SLOW-ON-SHELF", per_week=0.2, on_hand=1, sold_recently=False)
     out = add_part(shop, "SLOW-OUT", per_week=0.2, on_hand=0, sold_recently=False)
-    [line] = browser.post("/api/orders/suggestions", json={}).json()["lines"]
+    [line] = run_lines(browser, browser.post("/api/orders/suggestions", json={}).json())
     assert line["part_id"] == str(out)
     assert line["rule"] == "slow_out_of_stock"
     assert line["quantity"] == line["need"] >= 1  # nothing on the shelf: the full need
@@ -131,7 +191,7 @@ def test_slow_seller_without_recent_sales_is_left_out_unless_out_of_stock(browse
 def test_pack_size_and_unknown_delivery_time(browser):
     set_up_shop(browser)
     add_part(shop_id(), "BOXED", per_week=9, on_hand=6, pack_size=10, delivery_days=None)
-    [line] = browser.post("/api/orders/suggestions", json={}).json()["lines"]
+    [line] = run_lines(browser, browser.post("/api/orders/suggestions", json={}).json())
     assert line["quantity"] % 10 == 0
     assert line["delivery_days"] == 7
     assert "(packs of 10)" in line["reason"]
@@ -141,7 +201,7 @@ def test_pack_size_and_unknown_delivery_time(browser):
 def test_a_shop_without_forecasts_gets_an_empty_run(browser):
     set_up_shop(browser)
     run = browser.post("/api/orders/suggestions", json={}).json()
-    assert run["lines"] == [] and run["history_last_day"] is None
+    assert run_lines(browser, run) == [] and run["history_last_day"] is None
 
 
 def test_negative_budget_is_refused(browser):
@@ -165,7 +225,7 @@ def test_each_shop_only_sees_its_own_suggestions(browser):
     other = create_other_shop()
     add_part(other.organization_id, "OTHER-1", per_week=9, on_hand=0)
     run = browser.post("/api/orders/suggestions", json={}).json()
-    assert [line["reason"] for line in run["lines"]][0].endswith("safety cushion of 7.")
+    assert [line["reason"] for line in run_lines(browser, run)][0].endswith("safety cushion of 7.")
     with SessionLocal() as db:
         parts = {line.part_id for line in db.scalars(select(OrderSuggestion))}
         assert db.scalars(select(Part.sku).where(Part.id.in_(parts))).all() == ["OIL-1"]

@@ -6,14 +6,14 @@ from sqlalchemy import select, update
 
 from app.db import SessionLocal
 from app.models import Branch, Forecast, Part, PurchaseOrder, SaleLine, StockLevel, Supplier
-from tests.helpers import add_member, audit_rows, create_other_shop, member_with_own_password, set_up_shop
+from tests.helpers import add_member, audit_rows, create_other_shop, member_with_own_password, run_lines, set_up_shop
 from tests.test_orders import LAST_DAY, add_part, shop_id
 
 
 def one_suggestion(browser, **kwargs) -> tuple[str, dict]:
     part = add_part(shop_id(), **kwargs)
     run = browser.post("/api/orders/suggestions", json={}).json()
-    [line] = [line for line in run["lines"] if line["part_id"] == str(part)]
+    [line] = [line for line in run_lines(browser, run) if line["part_id"] == str(part)]
     return part, line
 
 
@@ -74,8 +74,10 @@ def test_approve_all_for_one_supplier(browser):
     run = browser.post("/api/orders/suggestions", json={}).json()
     response = browser.post(f"/api/orders/runs/{run['id']}/suppliers/{supplier_id}/approve-all")
     assert response.status_code == 200, response.text
-    lines = response.json()
-    assert len(lines) == 2 and all(line["status"] == "approved" for line in lines)
+    assert response.json() == {"approved": 2}
+    assert all(line["status"] == "approved" for line in run_lines(browser, run))
+    [group] = browser.get("/api/orders/suggestions/latest").json()["groups"]
+    assert group["pending_count"] == 0
     [po] = browser.get("/api/orders/purchase-orders").json()
     assert po["line_count"] == 2
 
@@ -86,9 +88,9 @@ def test_approving_a_cut_by_budget_line_overrides_the_budget(browser):
     add_part(shop, sku="LOW-MARGIN", per_week=9, on_hand=0, unit_cost=9500, sale_price=10000)
     add_part(shop, sku="HIGH-MARGIN", per_week=9, on_hand=0, unit_cost=5000, sale_price=10000)
     everything = browser.post("/api/orders/suggestions", json={}).json()
-    one_line = max(line["line_cost"] for line in everything["lines"])
+    one_line = max(line["line_cost"] for line in run_lines(browser, everything))
     run = browser.post("/api/orders/suggestions", json={"budget": one_line}).json()
-    cut = next(line for line in run["lines"] if line["status"] == "cut_by_budget")
+    cut = next(line for line in run_lines(browser, run) if line["status"] == "cut_by_budget")
 
     response = browser.post(f"/api/orders/suggestions/{cut['id']}/decide", json={"decision": "approve"})
     assert response.json()["status"] == "approved"
@@ -116,7 +118,7 @@ def test_sending_locks_the_line_and_counts_as_already_ordered_next_run(browser):
         db.execute(update(Forecast).where(Forecast.part_id == part).values(quantity=Forecast.quantity * 2, high=Forecast.high * 2))
         db.commit()
     next_run = browser.post("/api/orders/suggestions", json={}).json()
-    [next_line] = [row for row in next_run["lines"] if row["part_id"] == str(part)]
+    [next_line] = [row for row in run_lines(browser, next_run) if row["part_id"] == str(part)]
     assert next_line["on_order"] == line["quantity"]
     assert next_line["quantity"] > 0
 
@@ -201,7 +203,7 @@ def test_approving_a_part_with_no_supplier_is_refused(browser):
         db.commit()
 
     run = browser.post("/api/orders/suggestions", json={}).json()
-    [line] = run["lines"]
+    [line] = run_lines(browser, run)
     response = browser.post(f"/api/orders/suggestions/{line['id']}/decide", json={"decision": "approve"})
     assert response.status_code == 422
 
@@ -224,9 +226,9 @@ def test_a_more_careful_target_orders_a_bigger_safety_cushion(browser):
     add_part(shop_id(), sku="OIL-1", per_week=9, on_hand=6)
 
     browser.patch("/api/orders/settings", json={"service_target": 0.8})
-    cautious_off = browser.post("/api/orders/suggestions", json={}).json()["lines"][0]["cushion"]
+    cautious_off = run_lines(browser, browser.post("/api/orders/suggestions", json={}).json())[0]["cushion"]
     browser.patch("/api/orders/settings", json={"service_target": 0.95})
-    cautious_on = browser.post("/api/orders/suggestions", json={}).json()["lines"][0]["cushion"]
+    cautious_on = run_lines(browser, browser.post("/api/orders/suggestions", json={}).json())[0]["cushion"]
     assert cautious_on > cautious_off
 
 

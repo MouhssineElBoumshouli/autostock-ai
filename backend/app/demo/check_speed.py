@@ -102,6 +102,10 @@ def check_pages(site: Site, email: str, password: str, tries: int = TRIES) -> li
     orders = site.json("GET", "/api/orders/purchase-orders")
     if orders:
         pages.append(("Purchase order panel", f"/api/orders/purchase-orders/{orders[0]['id']}"))
+    if run and run["groups"]:
+        biggest = max(run["groups"], key=lambda group: group["line_count"])
+        pages.append((f"What to order: one supplier ({biggest['line_count']:,} lines)",
+                      f"/api/orders/runs/{run['id']}/lines?group={biggest['key']}"))
     results += [timed(site, label, "GET", path, tries=tries) for label, path in pages]
     for words in [*SEARCHES, oem]:
         results.append(timed(site, f"Search: {words}", "GET", "/api/stock/parts?" + urllib.parse.urlencode({"search": words}), tries=tries))
@@ -118,12 +122,10 @@ def check_actions(site: Site) -> None:
     supplier with the fewest lines, so the shop has a purchase order to show."""
     timed(site, "Make order suggestions (button)", "POST", "/api/orders/suggestions", {}, 1)
     run = site.json("GET", "/api/orders/suggestions/latest")
-    lines = {}
-    for line in run["lines"]:
-        if line["supplier_id"] and line["status"] == "suggested":
-            lines[line["supplier_id"]] = lines.get(line["supplier_id"], 0) + 1
-    supplier = min(lines, key=lines.get)
-    timed(site, f"Approve all ({lines[supplier]} lines)", "POST", f"/api/orders/runs/{run['id']}/suppliers/{supplier}/approve-all", {}, 1)
+    group = min((group for group in run["groups"] if group["supplier_id"] and group["pending_count"]),
+                key=lambda group: group["pending_count"])
+    timed(site, f"Approve all ({group['pending_count']} lines)", "POST",
+          f"/api/orders/runs/{run['id']}/suppliers/{group['supplier_id']}/approve-all", {}, 1)
 
 
 def check_while_forecasting(site: Site, tries: int) -> None:

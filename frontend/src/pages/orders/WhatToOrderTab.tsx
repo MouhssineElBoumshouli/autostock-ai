@@ -1,6 +1,7 @@
 import { ClipboardListIcon } from "lucide-react";
+import { useSearchParams } from "react-router";
 
-import { type OrderLine, useCreateSuggestions, useLatestRun } from "@/api/orders";
+import { useCreateSuggestions, useLatestRun } from "@/api/orders";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
 import { Card } from "@/components/ui/card";
@@ -9,33 +10,21 @@ import { t } from "@/i18n";
 import { formatDateTime } from "@/lib/format";
 
 import { BudgetBar } from "./BudgetBar";
+import { SupplierList } from "./SupplierList";
 import { SupplierSection } from "./SupplierSection";
 
-type SupplierGroup = { supplierId: string | null; supplierName: string | null; lines: OrderLine[] };
-
-// Groups kept lines by supplier, in the order suggestions came back (most urgent first).
-// Lines still cut by the budget are pulled out into their own section, across suppliers.
-function group(lines: OrderLine[]): { groups: SupplierGroup[]; didntFit: OrderLine[] } {
-  const didntFit = lines.filter((line) => line.status === "cut_by_budget");
-  const groups: SupplierGroup[] = [];
-  const index = new Map<string, SupplierGroup>();
-  for (const line of lines) {
-    if (line.status === "cut_by_budget") continue;
-    const key = line.supplier_id ?? "none";
-    let found = index.get(key);
-    if (!found) {
-      found = { supplierId: line.supplier_id, supplierName: line.supplier_name, lines: [] };
-      index.set(key, found);
-      groups.push(found);
-    }
-    found.lines.push(line);
-  }
-  return { groups, didntFit };
-}
-
+// The suppliers to order from, with their totals; one opens to show its lines (?supplier=).
 export function WhatToOrderTab({ canEdit }: { canEdit: boolean }) {
   const run = useLatestRun();
   const create = useCreateSuggestions();
+  const [params, setParams] = useSearchParams();
+
+  function openGroup(key: string | null) {
+    const next = new URLSearchParams(params);
+    if (key) next.set("supplier", key);
+    else next.delete("supplier");
+    setParams(next);
+  }
 
   if (run.isError) {
     return (
@@ -55,7 +44,11 @@ export function WhatToOrderTab({ canEdit }: { canEdit: boolean }) {
   }
 
   const data = run.data;
-  const { groups, didntFit } = data ? group(data.lines) : { groups: [], didntFit: [] };
+  const opened = data?.groups.find((group) => group.key === params.get("supplier"));
+
+  if (data && opened) {
+    return <SupplierSection key={`${data.id}-${opened.key}`} runId={data.id} group={opened} canEdit={canEdit} onBack={() => openGroup(null)} />;
+  }
 
   return (
     <div className="grid gap-4">
@@ -74,32 +67,12 @@ export function WhatToOrderTab({ canEdit }: { canEdit: boolean }) {
         <Card className="py-0">
           <EmptyState icon={ClipboardListIcon} title={t.orders.noRunYet} />
         </Card>
-      ) : groups.length === 0 && didntFit.length === 0 ? (
+      ) : data.groups.length === 0 ? (
         <Card className="py-0">
           <EmptyState icon={ClipboardListIcon} title={t.orders.emptyTitle} description={t.orders.emptyText} />
         </Card>
       ) : (
-        <>
-          {groups.map((group) => (
-            <SupplierSection
-              key={group.supplierId ?? "none"}
-              runId={data.id}
-              supplierId={group.supplierId}
-              supplierName={group.supplierName}
-              lines={group.lines}
-              canEdit={canEdit}
-            />
-          ))}
-          {didntFit.length > 0 && (
-            <SupplierSection
-              runId={data.id}
-              supplierId={null}
-              supplierName={t.orders.didntFitBudget}
-              lines={didntFit}
-              canEdit={canEdit}
-            />
-          )}
-        </>
+        <SupplierList groups={data.groups} onOpen={openGroup} />
       )}
     </div>
   );
