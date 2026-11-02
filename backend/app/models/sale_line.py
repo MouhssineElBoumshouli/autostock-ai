@@ -13,8 +13,9 @@ class SaleLine(Base):
     __tablename__ = "sale_lines"
     __table_args__ = (
         Index("ix_sale_lines_part_date", "organization_id", "part_id", "sold_on"),
-        # Carries part, branch and quantity: "sales between two days" is answered from the index alone.
-        Index("ix_sale_lines_org_day", "organization_id", "sold_on", postgresql_include=["part_id", "branch_id", "quantity"]),
+        # Carries part, branch, quantity and price: "sales between two days" (Today, What to order,
+        # Ask, the data export) is answered from the index alone.
+        Index("ix_sale_lines_org_day", "organization_id", "sold_on", postgresql_include=["part_id", "branch_id", "quantity", "unit_price"]),
     )
 
     organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"))
