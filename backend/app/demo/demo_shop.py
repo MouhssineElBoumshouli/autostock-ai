@@ -17,7 +17,7 @@ from datetime import date, timedelta
 from time import perf_counter
 
 import numpy as np
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.orm import Session
 
 from app.auth.passwords import hash_password
@@ -220,9 +220,10 @@ def stock_out_periods(rng: np.random.Generator, history_days: int) -> list[tuple
     return periods
 
 
-def remove_demo_shops(db: Session) -> None:
-    """Deletes every demo shop and all its rows. Real shops (is_demo false) are never touched."""
-    demo_ids = db.scalars(select(Organization.id).where(Organization.is_demo)).all()
+def remove_demo_shop(db: Session, name: str) -> None:
+    """Deletes the demo shop with this name and all its rows. Real shops (is_demo false) and the
+    other demo shop (the big speed-test shop, app/demo/big_shop.py) are never touched."""
+    demo_ids = db.scalars(select(Organization.id).where(Organization.is_demo, Organization.name == name)).all()
     if not demo_ids:
         return
     for table in reversed(Base.metadata.sorted_tables):
@@ -231,13 +232,22 @@ def remove_demo_shops(db: Session) -> None:
     db.execute(delete(Organization).where(Organization.id.in_(demo_ids)))
 
 
+def skip_reference_checks(db: Session) -> None:
+    """For the rest of this transaction, PostgreSQL stops checking, row by row, that each new or
+    deleted row's part, branch and shop exist (about 5 times faster for millions of demo rows; the
+    demo makes every row itself, so none can point at a missing part). Needs the database's main
+    user, which the app is in Docker. Demo shops only, never a real shop's data."""
+    db.execute(text("SET LOCAL session_replication_role = replica"))
+
+
 def create_demo_shop(
     db: Session, last_day: date, parts_count: int | None = None, history_days: int = HISTORY_DAYS, seed: int = 7
 ) -> tuple[Organization, Counter]:
     """Replaces any old demo shop with a new one whose sales history ends on `last_day`.
     Returns the shop and how many parts started out of stock, low, running out soon, or healthy."""
     rng = np.random.default_rng(seed)
-    remove_demo_shops(db)
+    skip_reference_checks(db)
+    remove_demo_shop(db, DEMO_SHOP_NAME)
     shop = Organization(name=DEMO_SHOP_NAME, currency="MAD", is_demo=True)
     db.add(shop)
     db.flush()
@@ -245,13 +255,13 @@ def create_demo_shop(
     db.add_all(SynonymGroup(organization_id=shop.id, words=words) for words in DEFAULT_SYNONYMS)
     branches = {Branch(organization_id=shop.id, name=name): factor for name, factor in BRANCHES.items()}
     db.add_all(branches)
-    suppliers = _make_suppliers(shop.id)
+    suppliers = make_suppliers(shop.id)
     db.add_all(suppliers)
     db.flush()
     parts = _make_parts(shop.id, parts_count, rng, suppliers)
     db.add_all(item.part for item in parts)
     db.flush()
-    buckets = _stock_buckets(rng, len(parts))
+    buckets = stock_buckets(rng, len(parts))
 
     first_day = last_day - timedelta(days=history_days - 1)
     series, outs = [], []
@@ -272,8 +282,8 @@ def create_demo_shop(
         daily_rate = branch_rates.sum()
         min_days = rng.uniform(8, 12) if bucket == "running_out" else rng.uniform(10, 18)  # "about 2 weeks"
         item.part.min_stock = max(1, round(daily_rate * min_days))
-        total = _target_quantity(rng, bucket, item.part.min_stock, daily_rate, min_days)
-        for s, quantity in zip(group, _branch_quantities(rng, total, branch_rates)):
+        total = target_quantity(rng, bucket, item.part.min_stock, daily_rate, min_days)
+        for s, quantity in zip(group, branch_quantities(rng, total, branch_rates)):
             s.quantity = quantity
         series += group
         counts[bucket] += 1
@@ -299,7 +309,7 @@ def create_demo_shop(
     return shop, counts
 
 
-def _target_quantity(rng: np.random.Generator, bucket: str, min_stock: int, daily_rate: float, min_days: float) -> int:
+def target_quantity(rng: np.random.Generator, bucket: str, min_stock: int, daily_rate: float, min_days: float) -> int:
     """How many pieces the part starts with in total, to land in its assigned bucket."""
     if bucket == "out":
         return 0
@@ -325,7 +335,7 @@ def add_demo_owner(db: Session, shop: Organization) -> str:
     return password
 
 
-def _make_suppliers(organization_id: uuid.UUID) -> list[Supplier]:
+def make_suppliers(organization_id: uuid.UUID) -> list[Supplier]:
     return [
         Supplier(organization_id=organization_id, name=name, phone=phone, email=email, delivery_days=days)
         for name, phone, email, days in SUPPLIERS
@@ -363,7 +373,7 @@ def _make_parts(organization_id: uuid.UUID, parts_count: int | None, rng: np.ran
     return [parts[i * len(parts) // parts_count] for i in range(parts_count)]  # spread over all families
 
 
-def _stock_buckets(rng: np.random.Generator, n: int) -> list[str]:
+def stock_buckets(rng: np.random.Generator, n: int) -> list[str]:
     """One bucket per part ("out", "low", "running_out" or "healthy"), shuffled, in the shares of
     STOCK_BUCKETS (rounding goes to "healthy", the largest and least sensitive share)."""
     counts = {name: round(n * share) for name, share in STOCK_BUCKETS}
@@ -373,7 +383,7 @@ def _stock_buckets(rng: np.random.Generator, n: int) -> list[str]:
     return buckets
 
 
-def _branch_quantities(rng: np.random.Generator, total: int, weights: np.ndarray) -> list[int]:
+def branch_quantities(rng: np.random.Generator, total: int, weights: np.ndarray) -> list[int]:
     """Splits `total` whole pieces across branches, busier branches getting more."""
     if total <= 0:
         return [0] * len(weights)
@@ -387,8 +397,15 @@ def _copy(db: Session, table: str, columns: list[str], organization_id: uuid.UUI
     cursor = db.connection().connection.dbapi_connection.cursor()
     names = ", ".join(["id", "created_at", "organization_id", *columns])
     with cursor.copy(f"COPY {table} ({names}) FROM STDIN") as copy:
-        for row in rows:
-            copy.write_row((uuid.uuid4(), now, organization_id, *row))
+        for row_id, row in zip(increasing_ids(len(rows)), rows):
+            copy.write_row((row_id, now, organization_id, *row))
+
+
+def increasing_ids(count: int) -> list[uuid.UUID]:
+    """New row ids in increasing order from a random start: PostgreSQL then adds them at the end
+    of its id index instead of all over it (about 4 times faster for millions of demo rows)."""
+    start = secrets.randbits(64) << 64
+    return [uuid.UUID(int=start + n) for n in range(count)]
 
 
 def main() -> None:
