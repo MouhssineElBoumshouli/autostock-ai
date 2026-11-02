@@ -64,7 +64,6 @@ def main() -> None:
             shelf=full.shelf[sample],
             price=full.price[sample],
             cost=full.cost[sample],
-            method_tables={},  # its own cache: `full`'s forecast tables are indexed by `full`'s rows, not this sample's
         )
         data.methods = [replayable_method(methods.get(key)) for key in data.keys]
         print(f"Sampling 1 in {SAMPLE_EVERY} by demand type (every planted problem kept): {len(sample)} of {len(full.keys)} part-branch pairs.")

@@ -51,14 +51,16 @@ def sales_problems(data: ShopData, end: int) -> list[Problem]:
     week_known = np.column_stack([known[:, o : o + WEEK].sum(axis=1) for o in [*origins, start]])
     week_sold = np.column_stack([filled[:, o : o + WEEK].sum(axis=1) for o in [*origins, start]])
 
+    columns = [*origins, start]
+    tables = {method: data.forecasts_from(method, columns) for method in set(data.methods)}
     problems = []
     for row, method in enumerate(data.methods):
-        table = data.forecast_table(method)
-        expected = float(table[row, start]) * WEEK
+        table = tables[method]
+        expected = float(table[row, -1]) * WEEK
         full_weeks = week_known[row, :-1] == WEEK  # past weeks with every day on the shelf
         if expected < MIN_EXPECTED_WEEKLY or full_weeks.sum() < MIN_PAST_WEEKS:
             continue
-        predicted = table[row, origins][full_weeks] * WEEK
+        predicted = table[row, :-1][full_weeks] * WEEK
         extra_spread = spread(predicted, week_sold[row, :-1][full_weeks])
 
         days_known = int(week_known[row, -1])

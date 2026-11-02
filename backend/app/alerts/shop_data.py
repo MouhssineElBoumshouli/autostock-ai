@@ -1,17 +1,32 @@
 """One shop's daily sales and stock, as tables (one row per part in a branch, one column per day)."""
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, timedelta
 from functools import cached_property
 
 import numpy as np
-from sqlalchemy import func, select
+from sqlalchemy import func, literal, select
+from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.orm import Session
 
-from app.forecast.engine import BASELINE, LOCAL_METHODS
-from app.forecast.history import demand_matrix
-from app.models import Forecast, Organization, Part, SaleLine, StockHistory, StockOut
+from app.forecast.engine import BASELINE, LOCAL_METHODS, local_forecasts
+from app.forecast.history import (
+    DAY_ZERO,
+    READ_AT_A_TIME,
+    DaySales,
+    Key,
+    demand_matrix,
+    first_and_last_day,
+    read_daily_sales,
+    sales_table,
+)
+from app.models import Forecast, Organization, Part, StockHistory, StockOut
+
+
+# Whole numbers of pieces (and NaN) fit exactly in 4-byte decimals up to 16 million: half the
+# memory of the usual 8 bytes, for tables a big shop has 150,000 rows x 2 years of.
+WHOLE_PIECES = np.float32
 
 
 @dataclass
@@ -21,11 +36,11 @@ class ShopData:
     sold: np.ndarray  # pieces sold each day (returns taken off, never below 0)
     demand: np.ndarray  # the same, with NaN on days demand is unknown (empty shelf, before the first sale)
     shelf: np.ndarray  # stock at the end of each day, NaN when not known
+    # `sold` and `shelf` are WHOLE_PIECES; `demand` stays 8-byte, as the forecast methods expect.
     price: np.ndarray  # sale price in centimes (0 when unknown)
     cost: np.ndarray  # unit cost in centimes (0 when unknown)
     methods: list[str]  # the forecast method each row uses for 7 days
     currency: str
-    method_tables: dict[str, np.ndarray] = field(default_factory=dict)
 
     def day(self, index: int) -> date:
         return self.first_day + timedelta(days=index)
@@ -41,11 +56,9 @@ class ShopData:
         first, second = (self.price[row], self.cost[row]) if sales else (self.cost[row], self.price[row])
         return int(first or second)
 
-    def forecast_table(self, method: str) -> np.ndarray:
-        """Column t: the daily rate the method expected from day t on, using only days before t."""
-        if method not in self.method_tables:
-            self.method_tables[method] = LOCAL_METHODS[method](self.demand)
-        return self.method_tables[method]
+    def forecasts_from(self, method: str, days: list[int]) -> np.ndarray:
+        """Column j: the daily rate the method expected from day days[j] on, using only days before it."""
+        return local_forecasts(self.demand, days, [method])[method]
 
     @cached_property
     def stock_changed_days(self) -> np.ndarray:
@@ -58,44 +71,32 @@ class ShopData:
 
 def load_shop_data(db: Session, organization_id: uuid.UUID, today: date) -> ShopData | None:
     """Every active part in every branch with sales or stock history up to `today`."""
-    sales = db.execute(
-        select(SaleLine.part_id, SaleLine.branch_id, SaleLine.sold_on, func.sum(SaleLine.quantity))
-        .join(Part, Part.id == SaleLine.part_id)
-        .where(SaleLine.organization_id == organization_id, SaleLine.sold_on <= today, Part.is_active)
-        .group_by(SaleLine.part_id, SaleLine.branch_id, SaleLine.sold_on)
-    ).all()
-    stock = db.execute(
-        select(StockHistory.part_id, StockHistory.branch_id, StockHistory.day, StockHistory.quantity)
-        .join(Part, Part.id == StockHistory.part_id)
-        .where(StockHistory.organization_id == organization_id, StockHistory.day <= today, Part.is_active)
-        .order_by(StockHistory.day)
-    ).all()
+    sales = read_daily_sales(db, organization_id, until=today)
+    stock = _read_stock_changes(db, organization_id, today)
     if not sales and not stock:
         return None
-    keys = sorted({(r[0], r[1]) for r in sales} | {(r[0], r[1]) for r in stock})
+    keys = sorted(set(sales) | set(stock))
     index = {key: i for i, key in enumerate(keys)}
-    first_day = min(r[2] for r in [*sales, *stock])
+    first_day = min(first_and_last_day(table)[0] for table in (sales, stock) if table)
     days = (today - first_day).days + 1
 
-    sold = np.zeros((len(keys), days))
-    for part, branch, day, quantity in sales:
-        sold[index[(part, branch)], (day - first_day).days] += quantity
-    sold = np.clip(sold, 0, None)
+    sold_and_returned = sales_table(sales, keys, first_day, days)
+    sold = np.clip(sold_and_returned, 0, None, out=np.empty((len(keys), days), dtype=WHOLE_PIECES))
     outs = db.execute(
         select(StockOut.part_id, StockOut.branch_id, StockOut.first_day, StockOut.last_day).where(StockOut.organization_id == organization_id)
     ).all()
     demand = demand_matrix(
-        [(index[(part, branch)], day, int(quantity)) for part, branch, day, quantity in sales],
+        sold_and_returned,
         [(index[(part, branch)], first, last) for part, branch, first, last in outs if (part, branch) in index],
-        len(keys),
         first_day,
-        days,
     )
-    shelf = np.full((len(keys), days), np.nan)
-    for part, branch, day, quantity in stock:  # oldest first: each change holds until the next one
-        shelf[index[(part, branch)], (day - first_day).days :] = quantity
-
-    parts = {p.id: p for p in db.scalars(select(Part).where(Part.organization_id == organization_id))}
+    del sold_and_returned  # freed before the shelf table is made: a big shop's tables are ~0.5-0.9 GB each
+    prices = {
+        part_id: (sale_price or 0, unit_cost or 0)
+        for part_id, sale_price, unit_cost in db.execute(
+            select(Part.id, Part.sale_price, Part.unit_cost).where(Part.organization_id == organization_id)
+        )
+    }
     stored = {
         (part, branch): method
         for part, branch, method in db.execute(
@@ -109,12 +110,45 @@ def load_shop_data(db: Session, organization_id: uuid.UUID, today: date) -> Shop
         first_day=first_day,
         sold=sold,
         demand=demand,
-        shelf=shelf,
-        price=np.array([parts[p].sale_price or 0 for p, _ in keys]),
-        cost=np.array([parts[p].unit_cost or 0 for p, _ in keys]),
+        shelf=_shelf_table(stock, keys, first_day, days),
+        price=np.array([prices[p][0] for p, _ in keys]),
+        cost=np.array([prices[p][1] for p, _ in keys]),
         methods=[replayable_method(stored.get(key)) for key in keys],
         currency=db.scalar(select(Organization.currency).where(Organization.id == organization_id)) or "MAD",
     )
+
+
+def _read_stock_changes(db: Session, organization_id: uuid.UUID, today: date) -> dict[Key, DaySales]:
+    """Every saved stock change up to `today` of every active part in every branch, oldest first:
+    (day numbers, quantity from that day on)."""
+    day_number = StockHistory.day - literal(DAY_ZERO) + 1
+    rows = db.execute(
+        select(
+            StockHistory.part_id,
+            StockHistory.branch_id,
+            func.array_agg(aggregate_order_by(day_number, StockHistory.day)),
+            func.array_agg(aggregate_order_by(StockHistory.quantity, StockHistory.day)),
+        )
+        .join(Part, Part.id == StockHistory.part_id)
+        .where(StockHistory.organization_id == organization_id, StockHistory.day <= today, Part.is_active)
+        .group_by(StockHistory.part_id, StockHistory.branch_id)
+        .execution_options(yield_per=READ_AT_A_TIME)
+    )
+    return {(part, branch): (np.array(days, dtype=np.int32), np.array(quantities, dtype=np.int32)) for part, branch, days, quantities in rows}
+
+
+def _shelf_table(stock: dict[Key, DaySales], keys: list[Key], first_day: date, days: int) -> np.ndarray:
+    """Stock at the end of each day: each change holds until the next one; NaN before the first."""
+    shelf = np.full((len(keys), days), np.nan, dtype=WHOLE_PIECES)
+    start = first_day.toordinal()
+    for row, key in enumerate(keys):
+        if key in stock:
+            day_numbers, quantities = stock[key]
+            change = np.full(days, -1)
+            change[day_numbers - start] = np.arange(len(day_numbers))  # oldest first: the newest on a day wins
+            change = np.maximum.accumulate(change)  # the newest change on or before each day
+            shelf[row] = np.where(change >= 0, quantities[change], np.nan)
+    return shelf
 
 
 def replayable_method(method: str | None) -> str:
