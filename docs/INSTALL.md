@@ -19,6 +19,17 @@ Toutes les commandes se tapent dans **PowerShell**, ouvert dans le dossier AutoS
 1. Téléchargez Docker Desktop sur https://www.docker.com/products/docker-desktop et installez-le. Laissez cochée l'option **WSL 2**. Redémarrez le PC si on vous le demande.
 2. Ouvrez Docker Desktop, acceptez les conditions, attendez « Engine running ».
 3. Dans Docker Desktop : **Settings → General → cocher « Start Docker Desktop when you sign in »**. Ainsi AutoStock redémarre tout seul après une coupure de courant, dès que quelqu'un ouvre la session Windows.
+4. **PC de 8 Go seulement : donnez 5 Go de mémoire à Docker.** Sinon Docker n'en prend que la moitié (4 Go), trop peu pour un grand magasin pendant le calcul des prévisions de la nuit. Docker Desktop n'a pas de réglage pour cela avec WSL 2 (Settings → Resources dit que Windows s'en occupe) : on le règle dans un fichier.
+   1. Dans PowerShell : `notepad "$env:USERPROFILE\.wslconfig"` (Bloc-notes propose de créer le fichier : **Oui**).
+   2. Écrivez ces deux lignes, puis enregistrez :
+      ```
+      [wsl2]
+      memory=5GB
+      ```
+   3. Quittez Docker Desktop (icône près de l'horloge → **Quit Docker Desktop**), tapez `wsl --shutdown` dans PowerShell, puis rouvrez Docker Desktop.
+   4. Pour vérifier : `docker info --format "{{.MemTotal}}"` affiche environ 5 milliards (5 Go).
+
+   Avec 16 Go ou plus, rien à faire.
 
 ### 3. Décompresser AutoStock
 Décompressez le zip dans `C:\AutoStock` (par exemple). Ce dossier contient le programme. Vos données sont gardées par Docker, à part : le dossier peut être remplacé à chaque mise à jour.
@@ -109,6 +120,17 @@ Type every command in **PowerShell**, opened in the AutoStock folder (in Explore
 1. Download Docker Desktop from https://www.docker.com/products/docker-desktop and install it. Keep **WSL 2** ticked. Restart the PC if asked.
 2. Open Docker Desktop, accept the terms, wait for "Engine running".
 3. In Docker Desktop: **Settings → General → tick "Start Docker Desktop when you sign in"**. AutoStock then comes back by itself after a power cut, as soon as someone signs in to Windows.
+4. **8 GB PC only: give Docker 5 GB of memory.** Otherwise Docker takes only half (4 GB), too little for a big shop while the nightly forecasts run. Docker Desktop has no setting for this with WSL 2 (Settings → Resources says Windows manages it): it is set in a file.
+   1. In PowerShell: `notepad "$env:USERPROFILE\.wslconfig"` (Notepad offers to create the file: **Yes**).
+   2. Type these two lines, then save:
+      ```
+      [wsl2]
+      memory=5GB
+      ```
+   3. Quit Docker Desktop (icon near the clock → **Quit Docker Desktop**), type `wsl --shutdown` in PowerShell, then open Docker Desktop again.
+   4. To check: `docker info --format "{{.MemTotal}}"` shows about 5 billion (5 GB).
+
+   With 16 GB or more, nothing to do.
 
 ### 3. Unzip AutoStock
 Unzip it into `C:\AutoStock` (for example). This folder is the program. Your data is kept by Docker, separately: the folder can be replaced at every update.
