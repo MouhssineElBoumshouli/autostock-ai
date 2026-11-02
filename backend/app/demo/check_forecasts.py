@@ -12,6 +12,7 @@ import numpy as np
 from sqlalchemy import select
 
 from app.db import SessionLocal
+from app.demo.demo_shop import DEMO_SHOP_NAME
 from app.demo.production_guard import refuse_demo_in_production
 from app.forecast.engine import BASELINE, HORIZONS, SeriesForecast, forecast_all
 from app.forecast.run import ShopDemand, load_demand, run_forecasts
@@ -21,7 +22,7 @@ from app.models import DemoTrueDemand, Organization
 def main() -> None:
     refuse_demo_in_production()
     with SessionLocal() as db:
-        shop_id = db.scalar(select(Organization.id).where(Organization.is_demo))
+        shop_id = db.scalar(select(Organization.id).where(Organization.is_demo, Organization.name == DEMO_SHOP_NAME))
         if shop_id is None:
             raise SystemExit("No demo shop. Run: python -m app.demo.demo_shop")
         started = perf_counter()

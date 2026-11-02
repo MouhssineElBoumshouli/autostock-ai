@@ -177,6 +177,9 @@ export const ar: typeof en = {
     noSupplier: "لا يوجد مورد. أضف واحدًا في الإعدادات للموافقة على هذا السطر.",
     noSupplierGroup: "بدون مورد",
     supplierTotal: (cost: string) => `مجموع المورد ${cost}`,
+    allSuppliers: "كل الموردين",
+    groupLines: (count: number, shown: string, pending: string) =>
+      `${counted(count, shown, "سطر واحد", "سطران", "أسطر", "سطرًا")}، ${pending} بانتظار القرار`,
     grandTotal: "المجموع للطلب",
     didntFitBudget: "خارج الميزانية",
     quantityError: "أدخل عددًا صحيحًا لا يقل عن 1",

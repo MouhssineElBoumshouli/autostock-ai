@@ -1,5 +1,6 @@
 """Ask your shop: checking what the model returns, the keyword rule, words and periods. No database."""
 
+import time
 from datetime import date
 
 import pytest
@@ -72,6 +73,16 @@ def test_llm_is_off_when_ollama_does_not_answer(monkeypatch):
     monkeypatch.setattr(llm, "OLLAMA_URL", "http://127.0.0.1:9")  # nothing listens there
     assert llm.is_on() is False
     assert llm.ask_json("x", "y", {}) is None
+
+
+def test_llm_check_gives_up_on_a_slow_address_lookup_and_is_remembered(monkeypatch):
+    # Without Ollama started, Docker took ~4 s to say "no such name" — on every question.
+    monkeypatch.setattr(llm, "OLLAMA_URL", "http://ollama:11434")
+    monkeypatch.setattr(llm, "_checked", {})
+    monkeypatch.setattr(llm.socket, "getaddrinfo", lambda *args: time.sleep(3))
+    started = time.monotonic()
+    assert llm.is_on() is False and llm.is_on() is False
+    assert time.monotonic() - started < 2  # cut short after CHECK_SECONDS, then remembered
 
 
 # The keyword rule

@@ -4,7 +4,7 @@ sales. Runs with the stock-out check: every hour and after each parts/stock impo
 import uuid
 from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.models import Part, StockHistory, StockLevel
@@ -18,10 +18,11 @@ def record_stock_history(db: Session, organization_id: uuid.UUID, today: date) -
         .group_by(StockHistory.part_id, StockHistory.branch_id)
         .subquery()
     )
+    # Plain rows, not full objects: a big shop has 150,000 part-branches to compare every hour.
     saved = {
         (row.part_id, row.branch_id): row
-        for row in db.scalars(
-            select(StockHistory)
+        for row in db.execute(
+            select(StockHistory.id, StockHistory.part_id, StockHistory.branch_id, StockHistory.day, StockHistory.quantity)
             .join(
                 newest,
                 (StockHistory.part_id == newest.c.part_id)
@@ -42,8 +43,8 @@ def record_stock_history(db: Session, organization_id: uuid.UUID, today: date) -
         if last is not None and last.quantity == quantity:
             continue
         changed += 1
-        if last is not None and last.day == today:
-            last.quantity = quantity  # changed again later the same day: keep the end-of-day number
+        if last is not None and last.day == today:  # changed again later the same day: keep the end-of-day number
+            db.execute(update(StockHistory).where(StockHistory.id == last.id).values(quantity=quantity))
         else:
             db.add(StockHistory(organization_id=organization_id, part_id=part_id, branch_id=branch_id, day=today, quantity=quantity))
     db.flush()

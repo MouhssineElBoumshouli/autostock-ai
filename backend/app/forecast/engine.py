@@ -5,7 +5,7 @@
 3. forecast every part in every branch, keeping its own score against the baseline.
 Pure numpy: no database."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -23,7 +23,7 @@ from app.forecast.backtest import (
     score,
     widen_factor,
 )
-from app.forecast.boosting import boosting_forecast, prepare
+from app.forecast.boosting import Prepared, boosting_forecasts, prepare
 from app.forecast.demand_types import demand_type
 from app.forecast.methods import croston, exponential_smoothing, four_week_average, last_week, sba, tsb
 
@@ -45,6 +45,7 @@ CANDIDATES = {
     "lumpy": ["exponential_smoothing", "croston", "sba", "tsb", "boosting"],
     "no_sales": [],
 }
+ROWS_AT_A_TIME = 5000  # the simple methods work on this many part-branch rows at a time
 
 
 @dataclass
@@ -80,32 +81,53 @@ class Past:
 
 
 def forecast_all(demand: np.ndarray, first_day: date) -> list[SeriesForecast]:
+    """`demand` may be handed over (run_forecasts does): it is let go of once read, which frees a
+    big shop's ~0.75 GB before the slow part (learning the boosting models)."""
     days = demand.shape[1]
     data = prepare(demand, first_day)
     kinds = [demand_type(row) for row in demand]
     scales = [mase_scale(row) for row in demand]
-    local = {name: method(demand) for name, method in LOCAL_METHODS.items()}
-
+    needed = sorted({day for horizon in HORIZONS for day in [*backtest_origins(days, horizon), days]})
+    local = local_forecasts(demand, needed)
+    del demand
     results = []
     for horizon in HORIZONS:
-        origins = backtest_origins(days, horizon)
-        columns = [*origins, days]  # the past windows, then today
-        tables = {name: table[:, columns] for name, table in local.items()}
-        tables["boosting"] = np.column_stack([boosting_forecast(data, o, horizon) for o in columns])
-        rates, known, usable = actuals(data, origins, horizon)
-
-        pasts = []
-        for row, kind in enumerate(kinds):
-            use = usable[row]
-            names = [BASELINE, *CANDIDATES[kind]]
-            predicted = {name: tables[name][row, :-1][use] for name in names}
-            actual = rates[row][use]
-            scores = {name: score(predicted[name], actual, known[row][use], scales[row]) for name in names}
-            pasts.append(Past(kind, predicted, {name: float(table[row, -1]) for name, table in tables.items()}, actual, scores))
-
-        choices = {kind: _choose(kind, pasts, horizon) for kind in CANDIDATES}
-        results += [_forecast_one(row, horizon, past, *choices[past.kind]) for row, past in enumerate(pasts)]
+        local_columns = [needed.index(day) for day in [*backtest_origins(days, horizon), days]]
+        results += _forecast_horizon(horizon, data, kinds, scales, {name: table[:, local_columns] for name, table in local.items()})
     return results
+
+
+def _forecast_horizon(horizon: int, data: Prepared, kinds: list[str], scales: list[float], tables: dict[str, np.ndarray]) -> list[SeriesForecast]:
+    """Every row's forecast for one horizon. `tables`: each simple method's forecast from each past
+    window, then from today. Its own function, so this horizon's working tables and per-part
+    objects are freed before the next horizon's models are learned."""
+    days = data.days
+    origins = backtest_origins(days, horizon)
+    tables["boosting"] = boosting_forecasts(data, [*origins, days], horizon)
+    rates, known, usable = actuals(data, origins, horizon)
+
+    pasts = []
+    for row, kind in enumerate(kinds):
+        use = usable[row]
+        names = [BASELINE, *CANDIDATES[kind]]
+        predicted = {name: tables[name][row, :-1][use] for name in names}
+        actual = rates[row][use]
+        scores = {name: score(predicted[name], actual, known[row][use], scales[row]) for name in names}
+        pasts.append(Past(kind, predicted, {name: float(table[row, -1]) for name, table in tables.items()}, actual, scores))
+
+    choices = {kind: _choose(kind, pasts, horizon) for kind in CANDIDATES}
+    return [_forecast_one(row, horizon, past, *choices[past.kind]) for row, past in enumerate(pasts)]
+
+
+def local_forecasts(demand: np.ndarray, days: list[int], names: Iterable[str] = LOCAL_METHODS) -> dict[str, np.ndarray]:
+    """Each simple method's forecast from each of `days` (columns of the methods' tables), a few
+    thousand rows at a time: each row is worked out on its own, and whole tables for every day
+    of a big shop would not fit in memory."""
+    chunks = range(0, max(len(demand), 1), ROWS_AT_A_TIME)
+    return {
+        name: np.vstack([LOCAL_METHODS[name](demand[start : start + ROWS_AT_A_TIME])[:, days] for start in chunks])
+        for name in names
+    }
 
 
 def _choose(kind: str, pasts: list[Past], horizon: int) -> tuple[str, str, float]:

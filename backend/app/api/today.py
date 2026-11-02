@@ -229,13 +229,18 @@ def weekly_sales(db: Session, organization_id: uuid.UUID) -> WeeklySales | None:
     normal = round(sum(week.quantity for week in previous) / len(previous))
 
     this_week_start = weeks[-1].week_start
-    top_rows = db.execute(
-        select(SaleLine.part_id, Part.sku, Part.name, func.sum(SaleLine.quantity).label("quantity"))
-        .join(Part, Part.id == SaleLine.part_id)
+    # Adds up per part first, then reads the names of the top few only: a big shop sells
+    # 30,000 different parts a week.
+    top = (
+        select(SaleLine.part_id, func.sum(SaleLine.quantity).label("quantity"))
         .where(SaleLine.organization_id == organization_id, SaleLine.sold_on >= this_week_start, SaleLine.sold_on <= last_day)
-        .group_by(SaleLine.part_id, Part.sku, Part.name)
+        .group_by(SaleLine.part_id)
         .order_by(func.sum(SaleLine.quantity).desc())
         .limit(TOP_PARTS_SHOWN)
+        .subquery()
+    )
+    top_rows = db.execute(
+        select(top.c.part_id, Part.sku, Part.name, top.c.quantity).join(Part, Part.id == top.c.part_id).order_by(top.c.quantity.desc())
     )
     top_parts = [TopPart(part_id=part_id, sku=sku, name=name, quantity=int(quantity)) for part_id, sku, name, quantity in top_rows]
 

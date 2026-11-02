@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiRequest } from "@/api/client";
-import { runQueryKey } from "@/api/orders";
+import { refreshOrderRun } from "@/api/orders";
 
 export type PurchaseOrderStatus = "draft" | "sent" | "received";
 
@@ -71,7 +71,7 @@ export function useReceivePurchaseOrder() {
     onSuccess: (po) => {
       queryClient.setQueryData(detailQueryKey(po.id), po);
       queryClient.invalidateQueries({ queryKey: listQueryKey });
-      queryClient.invalidateQueries({ queryKey: runQueryKey });
+      refreshOrderRun(queryClient);
       queryClient.invalidateQueries({ queryKey: ["stock"] });
     },
   });

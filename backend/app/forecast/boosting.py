@@ -18,15 +18,18 @@ FIRST_TRAINING_DAY = 91  # every example has at least 13 weeks of history before
 TRAINING_STEP = 7  # one example per part per week
 MIN_EXAMPLES = 200
 MAX_HORIZON = 60
+ROWS_AT_A_TIME = 5000
 
 
 @dataclass
 class Prepared:
-    """Running sums, so any window's average costs one subtraction."""
+    """Running sums, so any window's average costs one subtraction. Demand is whole pieces, so the
+    sums are whole numbers, kept as small integers (a quarter to half the memory of decimals; any
+    division turns them back into decimals first, so every result is the same)."""
 
-    totals: np.ndarray
-    counts: np.ndarray
-    sale_days: np.ndarray
+    totals: np.ndarray  # pieces
+    counts: np.ndarray  # known days
+    sale_days: np.ndarray  # known days with a sale
     first_day: date
     ramadan: np.ndarray  # cumulative Ramadan days, history + MAX_HORIZON
 
@@ -36,16 +39,21 @@ class Prepared:
 
 
 def prepare(demand: np.ndarray, first_day: date) -> Prepared:
-    known = ~np.isnan(demand)
-
-    def running(values: np.ndarray) -> np.ndarray:
-        return np.concatenate([np.zeros((values.shape[0], 1)), np.cumsum(values, axis=1)], axis=1)
-
-    days = demand.shape[1]
+    """`demand`: whole pieces per row per day, NaN where unknown."""
+    rows, days = demand.shape
+    totals = np.zeros((rows, days + 1), dtype=np.int32)
+    counts = np.zeros((rows, days + 1), dtype=np.int16)
+    sale_days = np.zeros((rows, days + 1), dtype=np.int16)
+    for start in range(0, rows, ROWS_AT_A_TIME):  # a few thousand rows at a time: no full-size temporary tables
+        part = demand[start : start + ROWS_AT_A_TIME]
+        known = ~np.isnan(part)
+        totals[start : start + ROWS_AT_A_TIME, 1:] = np.cumsum(np.where(known, part, 0).astype(np.int64), axis=1)
+        counts[start : start + ROWS_AT_A_TIME, 1:] = np.cumsum(known, axis=1)
+        sale_days[start : start + ROWS_AT_A_TIME, 1:] = np.cumsum(known & (np.nan_to_num(part) > 0), axis=1)
     return Prepared(
-        totals=running(np.where(known, demand, 0.0)),
-        counts=running(known.astype(float)),
-        sale_days=running((known & (np.nan_to_num(demand) > 0)).astype(float)),
+        totals=totals,
+        counts=counts,
+        sale_days=sale_days,
         first_day=first_day,
         ramadan=np.concatenate([[0.0], np.cumsum(ramadan_flags(first_day, days + MAX_HORIZON))]),
     )
@@ -83,16 +91,49 @@ def features(data: Prepared, origin: int, horizon: int) -> np.ndarray:
     return np.column_stack(columns)
 
 
-def boosting_forecast(data: Prepared, origin: int, horizon: int) -> np.ndarray:
-    """Average daily demand expected over [origin, origin + horizon) for every row. NaN when there
-    is too little history to learn from."""
-    examples, targets = [], []
-    for start in range(origin - horizon, FIRST_TRAINING_DAY - 1, -TRAINING_STEP):
-        target = window_average(data, start, start + horizon)
-        keep = ~np.isnan(target)
-        examples.append(features(data, start, horizon)[keep])
-        targets.append(target[keep])
-    if not examples or sum(len(t) for t in targets) < MIN_EXAMPLES:
+FEATURES = 11  # the columns features() returns
+
+
+def boosting_forecasts(data: Prepared, origins: list[int], horizon: int) -> np.ndarray:
+    """Average daily demand expected over [origin, origin + horizon) for every row, one column per
+    origin. NaN when there is too little history to learn from.
+
+    A forecast from `origin` learns from the windows starting at origin - horizon, then every
+    TRAINING_STEP days before that, newest first. Origins a whole number of weeks apart share most
+    of those windows, so each window's examples are built once, and an older origin learns from
+    the tail of a newer one's examples: the same windows in the same order, so the same model."""
+    forecasts: dict[int, np.ndarray] = {}
+    for origin in sorted(origins, reverse=True):
+        if origin in forecasts:
+            continue
+        newest = origin - horizon
+        examples, targets, first_row = _training_examples(data, newest, horizon)
+        for other in origins:
+            start = other - horizon
+            if other not in forecasts and start <= newest and (newest - start) % TRAINING_STEP == 0:
+                begin = first_row.get(start, len(targets))  # no windows at all before an origin this early
+                forecasts[other] = _learn_and_forecast(examples[begin:], targets[begin:], data, other, horizon)
+    return np.column_stack([forecasts[origin] for origin in origins])
+
+
+def _training_examples(data: Prepared, newest: int, horizon: int) -> tuple[np.ndarray, np.ndarray, dict[int, int]]:
+    """Features and real average demand of every window from `newest` back, newest first, and the
+    row where each window's examples begin. Written into one array of the right size (for a big
+    shop it holds millions of examples: no second copy is made)."""
+    starts = list(range(newest, FIRST_TRAINING_DAY - 1, -TRAINING_STEP))
+    targets = [window_average(data, start, start + horizon) for start in starts]
+    keep = [~np.isnan(target) for target in targets]
+    sizes = [int(k.sum()) for k in keep]
+    first_row = dict(zip(starts, np.cumsum([0, *sizes[:-1]]).tolist()))
+    examples = np.empty((sum(sizes), FEATURES))
+    for start, kept, size in zip(starts, keep, sizes):
+        examples[first_row[start] : first_row[start] + size] = features(data, start, horizon)[kept]
+    target_rows = np.concatenate([target[kept] for target, kept in zip(targets, keep)]) if starts else np.empty(0)
+    return examples, target_rows, first_row
+
+
+def _learn_and_forecast(examples: np.ndarray, targets: np.ndarray, data: Prepared, origin: int, horizon: int) -> np.ndarray:
+    if len(targets) < MIN_EXAMPLES:
         return np.full(data.totals.shape[0], np.nan)
     model = HistGradientBoostingRegressor(
         loss="poisson",  # demand is a count: never negative, often small
@@ -103,5 +144,5 @@ def boosting_forecast(data: Prepared, origin: int, horizon: int) -> np.ndarray:
         early_stopping=False,  # early stopping would pick a random (shuffled) validation set
         random_state=0,
     )
-    model.fit(np.vstack(examples), np.concatenate(targets))
+    model.fit(examples, targets)
     return model.predict(features(data, origin, horizon))

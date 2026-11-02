@@ -169,6 +169,9 @@ export const fr: typeof en = {
     noSupplier: "Aucun fournisseur. Ajoutez-en un dans Paramètres pour valider cette ligne.",
     noSupplierGroup: "Sans fournisseur",
     supplierTotal: (cost: string) => `Total fournisseur ${cost}`,
+    allSuppliers: "Tous les fournisseurs",
+    groupLines: (count: number, shown: string, pending: string) =>
+      `${count === 1 ? "1 ligne" : `${shown} lignes`}, ${pending} à décider`,
     grandTotal: "Total à commander",
     didntFitBudget: "Hors budget",
     quantityError: "Saisissez un nombre entier d’au moins 1",

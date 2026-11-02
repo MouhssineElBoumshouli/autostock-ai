@@ -15,13 +15,16 @@ SHOWN_UP_TO_DAYS = 60
 RUNNING_OUT_WITHIN_DAYS = 14
 
 
-def expected_30d_subquery(organization_id: uuid.UUID, branch_id: uuid.UUID | None = None) -> Select:
-    """Pieces expected to sell over the next 30 days, per part (in one branch, or all branches)."""
+def expected_30d_subquery(organization_id: uuid.UUID, branch_id: uuid.UUID | None = None, part_ids: Select | None = None) -> Select:
+    """Pieces expected to sell over the next 30 days, per part (in one branch, or all branches), for
+    every part or only the parts `part_ids` selects (see quantity_on_hand)."""
     query = select(Forecast.part_id, func.sum(Forecast.quantity).label("expected_30d")).where(
         Forecast.organization_id == organization_id, Forecast.horizon_days == HORIZON_DAYS
     )
     if branch_id:
         query = query.where(Forecast.branch_id == branch_id)
+    if part_ids is not None:
+        query = query.where(Forecast.part_id .in_(part_ids))
     return query.group_by(Forecast.part_id).subquery()
 
 

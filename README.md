@@ -101,7 +101,7 @@ They are only for tests; `python tests/fixtures/make_fixtures.py` (inside the ap
 
 ## Demo shop and forecasts
 
-A made-up demo shop (about 200 parts, 3 branches, 18 months of sales) to try forecasts on.
+A made-up demo shop (about 2,000 parts, 3 branches, 24 months of sales) to try forecasts on.
 It is its own organization, marked as demo; running it again replaces it and never touches a real shop.
 
 ```
@@ -112,6 +112,20 @@ docker compose exec api python -m app.demo.check_forecasts
 The first command prints a login for the demo shop (a new password each time).
 The second command remakes the demo shop's forecasts and scores them against the true demand the demo was made from.
 Forecasts are remade by themselves after every sales import, or with `POST /api/forecasts/run` (owners and managers).
+
+### Big test shop (speed checks only)
+
+A second made-up shop, never shown in the presentation: 50,000 parts, 3 branches, 2 years of sales
+with the same mix as the demo (about 21 million sales lines). It replaces only itself, never the demo
+or a real shop. Making it takes about 15 minutes; then time every page (20 tries each):
+
+```
+docker compose exec api python -m app.demo.big_shop
+docker compose run --rm -e CHECK_PASSWORD=<printed password> api python -m app.demo.check_speed --url http://api:8000 --email big@autostock.local
+```
+
+Add `--actions` to also time the order buttons (adds suggestions and a purchase order to that shop),
+or `--while-forecasting` to start a forecast run and time a few pages while it works.
 
 ## Ask your shop (optional local AI)
 

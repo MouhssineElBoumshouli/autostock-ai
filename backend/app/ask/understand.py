@@ -14,6 +14,7 @@ READER says how, chosen by measuring every way on both labeled question sets
 
 import uuid
 from dataclasses import dataclass, replace
+from functools import lru_cache
 from typing import Literal
 
 from sqlalchemy import func, select
@@ -40,9 +41,19 @@ def shop_words(db: Session, organization_id: uuid.UUID) -> ShopWords:
     in_shop = Part.organization_id == organization_id
     categories = db.scalars(select(Part.category).where(in_shop, Part.category.is_not(None)).distinct())
     branches = db.scalars(select(Branch.name).where(Branch.organization_id == organization_id))
-    names = db.scalars(select(func.concat_ws(" ", Part.name, Part.brand)).where(in_shop))
+    # A part's words are its name's and its brand's: each name and brand once (not every part's
+    # "name brand") gives the same words from far fewer phrases.
+    names = db.scalars(select(Part.name).where(in_shop).distinct())
+    brands = db.scalars(select(Part.brand).where(in_shop, Part.brand.is_not(None)).distinct())
     synonyms = db.scalars(select(func.unnest(SynonymGroup.words)).where(SynonymGroup.organization_id == organization_id))
-    return ShopWords(tuple(sorted(categories)), tuple(sorted(branches)), vocabulary([*names, *synonyms]))
+    return ShopWords(tuple(sorted(categories)), tuple(sorted(branches)), _vocabulary_of(tuple(sorted({*names, *brands, *synonyms}))))
+
+
+@lru_cache(maxsize=16)
+def _vocabulary_of(phrases: tuple[str, ...]) -> frozenset[str]:
+    """Remembered while the shop's names stay the same: cleaning every word of a big shop's part
+    names takes about a second, for every question."""
+    return vocabulary(phrases)
 
 
 def understand(db: Session, organization_id: uuid.UUID, text: str) -> Understood:

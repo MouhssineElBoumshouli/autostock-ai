@@ -76,3 +76,18 @@ def create_other_shop() -> User:
 def audit_rows(action: str) -> list[AuditLog]:
     with SessionLocal() as db:
         return list(db.scalars(select(AuditLog).where(AuditLog.action == action).order_by(AuditLog.created_at)))
+
+
+def run_lines(browser: TestClient, run: dict) -> list[dict]:
+    """Every line of an order run, group after group, the way the What to order screen reads them."""
+    lines = []
+    for group in run["groups"]:
+        page = 1
+        while True:
+            response = browser.get(f"/api/orders/runs/{run['id']}/lines", params={"group": group["key"], "page": page})
+            assert response.status_code == 200, response.text
+            lines += response.json()["items"]
+            if page * response.json()["page_size"] >= response.json()["total"]:
+                break
+            page += 1
+    return lines

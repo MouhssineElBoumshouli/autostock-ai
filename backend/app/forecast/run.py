@@ -1,45 +1,51 @@
 """Reads one shop's sales from the database, runs the engine and stores the forecasts."""
 
 import logging
+import os
+import subprocess
+import sys
 import uuid
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 from time import perf_counter
 
 import numpy as np
-from sqlalchemy import delete, func, insert, select, text
+from sqlalchemy import delete, insert, select, text
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.forecast.engine import forecast_all
-from app.forecast.history import demand_matrix
-from app.models import Forecast, ForecastRun, Part, SaleLine, StockOut
+from app.forecast.history import demand_matrix, first_and_last_day, read_daily_sales, sales_table
+from app.models import Forecast, ForecastRun, StockOut
 
 log = logging.getLogger(__name__)
+APP_FOLDER = Path(__file__).resolve().parents[2]  # where `python -m app...` works
+LOWER_PRIORITY = 10  # pages, at normal priority, get the processor first while a run works
+SAVE_AT_A_TIME = 10_000
 
 
 @dataclass
 class ShopDemand:
     keys: list[tuple[uuid.UUID, uuid.UUID]]  # (part_id, branch_id) for each row of `demand`
-    demand: np.ndarray
+    demand: np.ndarray | None
     first_day: date
     last_day: date
+
+    def hand_over_demand(self) -> np.ndarray:
+        """The demand table, let go of here, so whoever takes it can free it when done."""
+        demand, self.demand = self.demand, None
+        return demand
 
 
 def load_demand(db: Session, organization_id: uuid.UUID) -> ShopDemand | None:
     """Daily demand of every active part in every branch where it ever sold. None without sales.
     The history ends on the last day with a sale in the shop (later days are not imported yet)."""
-    sold = db.execute(
-        select(SaleLine.part_id, SaleLine.branch_id, SaleLine.sold_on, func.sum(SaleLine.quantity))
-        .join(Part, Part.id == SaleLine.part_id)
-        .where(SaleLine.organization_id == organization_id, Part.is_active)
-        .group_by(SaleLine.part_id, SaleLine.branch_id, SaleLine.sold_on)
-    ).all()
-    if not sold:
+    sales = read_daily_sales(db, organization_id)
+    if not sales:
         return None
-    first_day = min(row[2] for row in sold)
-    last_day = max(row[2] for row in sold)
-    keys = sorted({(row[0], row[1]) for row in sold})
+    first_day, last_day = first_and_last_day(sales)
+    keys = sorted(sales)
     index = {key: i for i, key in enumerate(keys)}
     outs = db.execute(
         select(StockOut.part_id, StockOut.branch_id, StockOut.first_day, StockOut.last_day).where(
@@ -47,11 +53,9 @@ def load_demand(db: Session, organization_id: uuid.UUID) -> ShopDemand | None:
         )
     ).all()
     demand = demand_matrix(
-        [(index[(part, branch)], day, int(quantity)) for part, branch, day, quantity in sold],
+        sales_table(sales, keys, first_day, (last_day - first_day).days + 1),
         [(index[(part, branch)], first, last) for part, branch, first, last in outs if (part, branch) in index],
-        len(keys),
         first_day,
-        (last_day - first_day).days + 1,
     )
     sells = ~np.isnan(demand).all(axis=1)  # rows with only returns never really sold
     return ShopDemand([key for key, keep in zip(keys, sells) if keep], demand[sells], first_day, last_day)
@@ -61,9 +65,9 @@ def run_forecasts(db: Session, organization_id: uuid.UUID, trigger: str) -> Fore
     """Replaces the shop's forecasts. The caller commits."""
     started = perf_counter()
     shop = load_demand(db, organization_id)
-    results = forecast_all(shop.demand, shop.first_day) if shop else []
+    results = forecast_all(shop.hand_over_demand(), shop.first_day) if shop else []
     db.execute(delete(Forecast).where(Forecast.organization_id == organization_id))
-    if results:
+    for start in range(0, len(results), SAVE_AT_A_TIME):  # a big shop has hundreds of thousands
         db.execute(
             insert(Forecast),
             [
@@ -85,7 +89,7 @@ def run_forecasts(db: Session, organization_id: uuid.UUID, trigger: str) -> Fore
                     "backtest_windows": r.windows,
                     "reason": r.reason,
                 }
-                for r in results
+                for r in results[start : start + SAVE_AT_A_TIME]
             ],
         )
     run = ForecastRun(
@@ -100,8 +104,18 @@ def run_forecasts(db: Session, organization_id: uuid.UUID, trigger: str) -> Fore
     return run
 
 
+def run_forecasts_apart(organization_id: uuid.UUID, trigger: str) -> None:
+    """What the website starts (a click, a sales import): the run in its own process at a lower
+    priority, so pages stay fast while it works and all its memory is given back when it ends.
+    Waits for it to finish."""
+    finished = subprocess.run([sys.executable, "-m", "app.forecast.run", str(organization_id), trigger], cwd=APP_FOLDER)
+    if finished.returncode != 0:  # stopped from outside (out of memory, ...): it could not record that itself
+        log.error("Forecast run for %s stopped with code %s", organization_id, finished.returncode)
+        _record_failed_run(organization_id, trigger)
+
+
 def run_forecasts_in_background(organization_id: uuid.UUID, trigger: str) -> None:
-    """Runs after the response is sent. One run at a time per shop: a second one waits its turn."""
+    """One run at a time per shop: a second one waits its turn."""
     with SessionLocal() as db:
         try:
             db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": f"forecast:{organization_id}"})
@@ -110,5 +124,15 @@ def run_forecasts_in_background(organization_id: uuid.UUID, trigger: str) -> Non
         except Exception:
             log.exception("Forecast run failed for %s", organization_id)
             db.rollback()
-            db.add(ForecastRun(organization_id=organization_id, trigger=trigger, status="failed", seconds=0, series_count=0))
-            db.commit()
+            _record_failed_run(organization_id, trigger)
+
+
+def _record_failed_run(organization_id: uuid.UUID, trigger: str) -> None:
+    with SessionLocal() as db:
+        db.add(ForecastRun(organization_id=organization_id, trigger=trigger, status="failed", seconds=0, series_count=0))
+        db.commit()
+
+
+if __name__ == "__main__":  # started by run_forecasts_apart
+    os.nice(LOWER_PRIORITY)
+    run_forecasts_in_background(uuid.UUID(sys.argv[1]), sys.argv[2])

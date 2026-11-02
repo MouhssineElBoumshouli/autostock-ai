@@ -87,11 +87,22 @@ def range_gaps(quantity: float, predicted: np.ndarray, actual: np.ndarray, horiz
 
     Never narrower than chance alone allows for counted sales (Poisson: 1.28 x square root).
     """
+    below, above = range_gaps_of_rows(np.array([quantity]), predicted[None, :], actual[None, :], horizon)
+    return float(below[0]), float(above[0])
+
+
+def range_gaps_of_rows(quantities: np.ndarray, predicted: np.ndarray, actual: np.ndarray, horizon: int) -> tuple[np.ndarray, np.ndarray]:
+    """range_gaps for many forecasts at once: one row of past windows per forecast."""
+    nothing_to_learn = (quantities, np.where(1.0 > quantities, 1.0, quantities))  # a wide range (0 to double)
     misses = (actual - predicted) * horizon
-    if len(misses) < MIN_WINDOWS or np.isnan(misses).any():
-        return quantity, max(quantity, 1.0)  # nothing to learn from: a wide range (0 to double)
-    chance = 1.28 * np.sqrt(quantity)
-    return max(-float(np.quantile(misses, 0.1)), chance), max(float(np.quantile(misses, 0.9)), chance)
+    if misses.shape[1] < MIN_WINDOWS:
+        return nothing_to_learn
+    unknown = np.isnan(misses).any(axis=1)
+    chance = 1.28 * np.sqrt(quantities)
+    low, high = -np.quantile(misses, 0.1, axis=1), np.quantile(misses, 0.9, axis=1)
+    below = np.where(chance > low, chance, low)  # the bigger one, the past misses' unless chance is bigger
+    above = np.where(chance > high, chance, high)
+    return np.where(unknown, nothing_to_learn[0], below), np.where(unknown, nothing_to_learn[1], above)
 
 
 def forecast_range(quantity: float, below: float, above: float, widen: float = 1.0) -> tuple[float, float]:
@@ -103,19 +114,20 @@ def widen_factor(cases: list[tuple[np.ndarray, np.ndarray]], horizon: int) -> fl
     of the time. Tested honestly in time order: ranges built from older windows, checked on the
     newest CHECK_WINDOWS. `cases` = each part's (predicted, actual) daily rates per past window."""
     forecasts, reals, belows, aboves = [], [], [], []
-    for predicted, actual in cases:
-        if len(actual) < MIN_WINDOWS + CHECK_WINDOWS:
-            continue
+    long_enough = [case for case in cases if len(case[1]) >= MIN_WINDOWS + CHECK_WINDOWS]
+    for windows in sorted({len(actual) for _, actual in long_enough}):  # cases with as many windows, all at once
+        predicted = np.array([p for p, a in long_enough if len(a) == windows])
+        actual = np.array([a for _, a in long_enough if len(a) == windows])
         learn = slice(None, -CHECK_WINDOWS)
-        for p, a in zip(predicted[-CHECK_WINDOWS:], actual[-CHECK_WINDOWS:]):
-            below, above = range_gaps(p * horizon, predicted[learn], actual[learn], horizon)
-            forecasts.append(p * horizon)
-            reals.append(a * horizon)
+        for window in range(windows - CHECK_WINDOWS, windows):
+            below, above = range_gaps_of_rows(predicted[:, window] * horizon, predicted[:, learn], actual[:, learn], horizon)
+            forecasts.append(predicted[:, window] * horizon)
+            reals.append(actual[:, window] * horizon)
             belows.append(below)
             aboves.append(above)
     if not forecasts:
         return 1.0
-    forecasts, reals, belows, aboves = map(np.array, (forecasts, reals, belows, aboves))
+    forecasts, reals, belows, aboves = map(np.concatenate, (forecasts, reals, belows, aboves))
     for widen in WIDEN_STEPS:
         caught = (reals >= forecasts - widen * belows) & (reals <= forecasts + widen * aboves)
         if caught.mean() >= TARGET_COVERAGE:

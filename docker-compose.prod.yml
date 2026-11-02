@@ -27,6 +27,8 @@ services:
     <<: *shop
     build: ./backend/scripts
     image: autostock-shop-postgres
+    # Room for big queries done in parallel (Docker's default 64 MB makes them fail on a big shop).
+    shm_size: 512mb
     # Refuses a weak password before the database is ever created with it.
     entrypoint: ["sh", "-c", "check-password.sh && exec docker-entrypoint.sh postgres"]
     environment:

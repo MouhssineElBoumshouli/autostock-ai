@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import BigInteger, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -16,9 +16,10 @@ class OrderRun(Base):
     organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     history_last_day: Mapped[date | None]  # the forecasts used were made from sales up to this day
-    budget: Mapped[int | None]  # centimes; None = no limit
-    suggested_cost: Mapped[int]  # every line with something to order, before the budget
-    kept_cost: Mapped[int]
+    # Totals in centimes can pass 21.5 million MAD (the most a plain integer holds) in a big shop.
+    budget: Mapped[int | None] = mapped_column(BigInteger)  # centimes; None = no limit
+    suggested_cost: Mapped[int] = mapped_column(BigInteger)  # every line with something to order, before the budget
+    kept_cost: Mapped[int] = mapped_column(BigInteger)
     kept_lines: Mapped[int]
     cut_lines: Mapped[int]
 

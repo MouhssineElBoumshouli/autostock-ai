@@ -7,7 +7,7 @@ from sqlalchemy import select, update
 
 from app.db import SessionLocal
 from app.models import Alert, Branch, Part, PurchaseOrder, SaleLine
-from tests.helpers import add_member, create_other_shop, member_with_own_password, set_up_shop
+from tests.helpers import add_member, create_other_shop, member_with_own_password, run_lines, set_up_shop
 from tests.test_orders import add_part, shop_id
 from tests.test_purchase_orders import one_suggestion
 
@@ -70,7 +70,7 @@ def test_to_order_counts_only_pending_lines(browser):
     add_part(shop, sku="OIL-1", per_week=9, on_hand=6)
     add_part(shop, sku="OIL-2", per_week=5, on_hand=1)
     run = browser.post("/api/orders/suggestions", json={}).json()
-    line_a, line_b = run["lines"]
+    line_a, line_b = run_lines(browser, run)
     browser.post(f"/api/orders/suggestions/{line_a['id']}/decide", json={"decision": "approve"})
 
     to_order = browser.get("/api/today").json()["to_order"]

@@ -5,15 +5,24 @@ to their non-AI way when the answer is None (Ollama off, model missing, slow or 
 """
 
 import json
+import socket
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlsplit
 
 from app.config import OLLAMA_MODEL, OLLAMA_URL
 
 CHECK_SECONDS = 1
+REMEMBER_SECONDS = 60
 ANSWER_SECONDS = 90  # the first question after a restart also loads the model onto the graphics card
 CHAT_SECONDS = 120
+
+
+_lookups = ThreadPoolExecutor(max_workers=1)  # finds Ollama's address, so the wait can be cut short
+_checked: dict[tuple[str, str], tuple[float, bool]] = {}  # (address, model) -> (when, on)
 
 
 class ModelFailed(Exception):
@@ -21,13 +30,28 @@ class ModelFailed(Exception):
 
 
 def is_on(model: str = OLLAMA_MODEL) -> bool:
-    """True when Ollama answers and has the model downloaded."""
+    """True when Ollama answers and has the model downloaded. Remembered for REMEMBER_SECONDS, so
+    a question doesn't wait for this check each time (starting Ollama shows within a minute)."""
     if not OLLAMA_URL:
         return False
+    key = (OLLAMA_URL, model)
+    checked_at, on = _checked.get(key, (float("-inf"), False))
+    if time.monotonic() - checked_at < REMEMBER_SECONDS:
+        return on
+    on = _has_model(model)
+    _checked[key] = (time.monotonic(), on)
+    return on
+
+
+def _has_model(model: str) -> bool:
+    address = urlsplit(OLLAMA_URL)
     try:
+        # urlopen's timeout doesn't cover finding the address, and when Ollama isn't started Docker
+        # takes ~4 s to say there is no such name: the lookup gets CHECK_SECONDS too.
+        _lookups.submit(socket.getaddrinfo, address.hostname, address.port).result(timeout=CHECK_SECONDS)
         with urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=CHECK_SECONDS) as response:
             models = json.load(response).get("models", [])
-    except (OSError, ValueError):
+    except (OSError, ValueError):  # TimeoutError is an OSError
         return False
     return any(found.get("name") in (model, f"{model}:latest") for found in models)
 
