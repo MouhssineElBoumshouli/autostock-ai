@@ -63,6 +63,17 @@ def test_manager_gets_one_line_per_part_to_order_with_its_reason(browser):
     assert run["suggested_cost"] == run["kept_cost"] == line["line_cost"]
 
 
+def test_a_run_costing_more_than_21_million_dirhams_is_saved(browser):
+    set_up_shop(browser)
+    shop = shop_id()
+    for n in range(3):  # each line about 9 million MAD: 3 x 18,000 pieces at 500 MAD
+        add_part(shop, f"BIG-{n}", per_week=6000, on_hand=0, unit_cost=50000)
+
+    response = browser.post("/api/orders/suggestions", json={})
+    assert response.status_code == 201, response.text
+    assert response.json()["suggested_cost"] > 2**31  # more than a plain integer of centimes holds
+
+
 def test_every_run_is_stored_and_the_latest_one_is_read_back(browser):
     set_up_shop(browser)
     add_part(shop_id(), "OIL-1", per_week=9, on_hand=6)

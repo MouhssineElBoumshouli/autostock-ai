@@ -146,7 +146,8 @@ def approve_all(
         raise HTTPException(404, "Nothing to approve for this supplier.")
     approve_all_for_supplier(db, user, suggestions)
     db.commit()
-    return [_line_out(db, suggestion) for suggestion in suggestions]
+    names = _names(db, user.organization_id)  # once, not once per line: a big shop has 50,000 parts
+    return [_line_out(db, suggestion, names) for suggestion in suggestions]
 
 
 def _find_suggestion(db: Session, user: User, suggestion_id: uuid.UUID) -> OrderSuggestion:
