@@ -16,7 +16,7 @@ from app.db import get_session
 from app.forecast.backtest import MIN_WINDOWS
 from app.forecast.engine import HORIZONS
 from app.forecast.explain import beat_baseline_pct
-from app.forecast.run import run_forecasts_in_background
+from app.forecast.run import run_forecasts_apart
 from app.models import Forecast, ForecastRun, Part, SaleLine, User
 
 router = APIRouter(prefix="/api/forecasts")
@@ -41,7 +41,7 @@ def run_now(background: BackgroundTasks, user: User = Depends(managers), db: Ses
     """Starts a new forecast run. It takes up to a minute; the answer comes back at once."""
     record_change(db, user, "forecast.requested", "forecast_run", uuid.uuid4())
     db.commit()
-    background.add_task(run_forecasts_in_background, user.organization_id, "manual")
+    background.add_task(run_forecasts_apart, user.organization_id, "manual")
     return {"status": "started"}
 
 

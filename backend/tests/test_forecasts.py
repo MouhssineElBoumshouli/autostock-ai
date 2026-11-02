@@ -92,6 +92,18 @@ def test_stock_out_days_are_read_as_unknown(browser):
     assert np.isnan(demand[-10:-5]).all() and not np.isnan(demand[:-10]).any() and not np.isnan(demand[-5:]).any()
 
 
+def test_sales_lines_of_one_day_are_added_up_and_a_day_of_returns_sold_nothing(browser):
+    set_up_shop(browser)
+    shop = shop_id()
+    part_id, branch_id = add_sales(shop, "OIL-1", per_day=2)
+    with SessionLocal() as db:
+        db.add(SaleLine(organization_id=shop, sold_on=LAST_DAY, part_id=part_id, branch_id=branch_id, quantity=3))
+        db.add(SaleLine(organization_id=shop, sold_on=LAST_DAY - timedelta(days=1), part_id=part_id, branch_id=branch_id, quantity=-5))
+        db.commit()
+        demand = load_demand(db, shop).demand[0]
+    assert demand[-1] == 5 and demand[-2] == 0 and demand[-3] == 2
+
+
 def test_a_shop_without_sales_gets_an_empty_run(browser):
     set_up_shop(browser)
     run = run_now(shop_id())

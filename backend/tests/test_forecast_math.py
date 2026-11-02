@@ -15,10 +15,10 @@ from app.forecast.backtest import (
     mase_scale,
     score,
 )
-from app.forecast.boosting import FIRST_TRAINING_DAY, boosting_forecast, prepare, window_average
+from app.forecast.boosting import FIRST_TRAINING_DAY, boosting_forecasts, prepare, window_average
 from app.forecast.demand_types import adi_and_cv2, demand_type, weekly_totals
 from app.forecast.engine import CANDIDATES, HORIZONS, forecast_all
-from app.forecast.history import demand_matrix
+from app.forecast.history import demand_matrix, sales_table
 from app.forecast.methods import (
     croston,
     exponential_smoothing,
@@ -40,27 +40,32 @@ def row(values) -> np.ndarray:
 # --- cleaning -----------------------------------------------------------------------------------
 
 
-def test_cleaning_adds_up_sales_per_day_and_counts_returns_as_nothing_sold():
-    sales = [(0, DAY0, 2), (0, DAY0, 3), (0, DAY0 + timedelta(days=2), 1), (0, DAY0 + timedelta(days=3), -4)]
-    demand = demand_matrix(sales, [], 1, DAY0, 5)
+def test_cleaning_counts_returns_as_nothing_sold():
+    demand = demand_matrix(row([5, 0, 1, -4, 0]), [], DAY0)
     assert demand[0].tolist() == [5, 0, 1, 0, 0]
 
 
 def test_days_before_the_first_sale_are_unknown_not_zero():
-    demand = demand_matrix([(0, DAY0 + timedelta(days=2), 1)], [], 1, DAY0, 4)
+    demand = demand_matrix(row([0, 0, 1, 0]), [], DAY0)
     assert np.isnan(demand[0, :2]).all() and demand[0, 2:].tolist() == [1, 0]
 
 
 def test_stock_out_days_are_unknown_not_zero_sales():
-    sales = [(0, DAY0, 1)]
     outs = [(0, DAY0 + timedelta(days=2), DAY0 + timedelta(days=3)), (0, DAY0 + timedelta(days=5), DAY0 + timedelta(days=99))]
-    demand = demand_matrix(sales, outs, 1, DAY0, 7)
+    demand = demand_matrix(row([1, 0, 0, 0, 0, 0, 0]), outs, DAY0)
     assert demand[0, :2].tolist() == [1, 0]
     assert np.isnan(demand[0, [2, 3, 5, 6]]).all() and demand[0, 4] == 0
 
 
 def test_a_part_with_no_sales_is_all_unknown():
-    assert np.isnan(demand_matrix([], [], 1, DAY0, 3)).all()
+    assert np.isnan(demand_matrix(row([0, 0, 0]), [], DAY0)).all()
+
+
+def test_sales_table_adds_up_each_day_and_leaves_out_days_outside():
+    key, other = ("part", "branch"), ("other", "branch")
+    days = np.array([(DAY0 + timedelta(days=d)).toordinal() for d in (-1, 0, 2, 0, 9, 3)])
+    table = sales_table({key: (days, np.array([7.0, 5.0, 1.0, 2.0, 3.0, -4.0]))}, [other, key], DAY0, 4)
+    assert table.tolist() == [[0, 0, 0, 0], [7, 0, 1, -4]]
 
 
 # --- sorting by how a part sells ----------------------------------------------------------------
@@ -155,16 +160,16 @@ def seasonal_panel(rows: int = 40, days: int = 500) -> np.ndarray:
 def test_boosting_learns_across_parts_and_never_uses_days_after_the_forecast_day():
     demand = seasonal_panel()
     origin = 400
-    forecast = boosting_forecast(prepare(demand, DAY0), origin, 30)
+    forecast = boosting_forecasts(prepare(demand, DAY0), [origin], 30)[:, 0]
     assert forecast.shape == (40,) and np.isfinite(forecast).all() and (forecast >= 0).all()
     changed = demand.copy()
     changed[:, origin:] = 1000  # the future changes; the forecast made before it must not
-    assert np.allclose(boosting_forecast(prepare(changed, DAY0), origin, 30), forecast)
+    assert np.allclose(boosting_forecasts(prepare(changed, DAY0), [origin], 30)[:, 0], forecast)
 
 
 def test_boosting_gives_nothing_without_enough_history():
     demand = seasonal_panel(rows=2, days=150)
-    assert np.isnan(boosting_forecast(prepare(demand, DAY0), 120, 30)).all()
+    assert np.isnan(boosting_forecasts(prepare(demand, DAY0), [120], 30)).all()
 
 
 def test_window_average_ignores_unknown_days():
