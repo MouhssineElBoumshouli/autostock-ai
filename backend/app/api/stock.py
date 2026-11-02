@@ -141,17 +141,21 @@ def list_parts(
     user: User = Depends(anyone),
     db: Session = Depends(get_session),
 ) -> PartsPage:
-    on_hand = quantity_on_hand(user.organization_id, branch)
+    found = find_parts(db, user.organization_id, search) if search and search.strip() else None
+    matches = as_table(found.matches) if found else None
+    # While searching, stock and forecasts are added up for the matches only, not the whole shop.
+    only = select(matches.c.part_id) if found else None
+    on_hand = quantity_on_hand(user.organization_id, branch, only)
     quantity = func.coalesce(on_hand.c.quantity, 0)
     part_status = status_of(quantity)
-    expected = expected_30d_subquery(user.organization_id, branch)
+    expected = expected_30d_subquery(user.organization_id, branch, only)
     expected_30d = func.coalesce(expected.c.expected_30d, 0)
     runs_out = case((expected_30d > 0, runs_out_days_expr(quantity, expected_30d)), else_=null())
     final_status = running_out_status_expr(part_status, runs_out)
 
     filters = [Part.organization_id == user.organization_id]
-    found = find_parts(db, user.organization_id, search) if search and search.strip() else None
-    matches = as_table(found.matches) if found else None
+    if found:
+        filters.append(Part.id.in_(only))
     if status == "dead":
         filters.append(is_dead(quantity, branch))
     elif status:
