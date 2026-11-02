@@ -9,6 +9,7 @@ organization marked is_demo and never touches a real shop.
 Run inside Docker:  docker compose exec api python -m app.demo.demo_shop
 """
 
+import random
 import secrets
 import uuid
 from collections import Counter
@@ -257,8 +258,11 @@ def create_demo_shop(
     db.add_all(branches)
     suppliers = make_suppliers(shop.id)
     db.add_all(suppliers)
+    ids = random.Random(seed)  # apart from rng, so the made-up sales don't change
+    give_seeded_ids([*branches, *suppliers], ids)
     db.flush()
     parts = _make_parts(shop.id, parts_count, rng, suppliers)
+    give_seeded_ids([item.part for item in parts], ids)
     db.add_all(item.part for item in parts)
     db.flush()
     buckets = stock_buckets(rng, len(parts))
@@ -399,6 +403,15 @@ def _copy(db: Session, table: str, columns: list[str], organization_id: uuid.UUI
     with cursor.copy(f"COPY {table} ({names}) FROM STDIN") as copy:
         for row_id, row in zip(increasing_ids(len(rows)), rows):
             copy.write_row((row_id, now, organization_id, *row))
+
+
+def give_seeded_ids(rows: list, ids: random.Random) -> None:
+    """Ids drawn from the seed instead of at random, so the same seed and last day rebuild the very
+    same demo shop. The forecast lists parts in id order and the boosting model's sums depend a
+    little on that order: with random ids, two rebuilds differed in the third decimal of
+    check_forecasts, and check_orders and check_alerts sampled a different third of the parts."""
+    for row in rows:
+        row.id = uuid.UUID(int=ids.getrandbits(128), version=4)
 
 
 def increasing_ids(count: int) -> list[uuid.UUID]:
