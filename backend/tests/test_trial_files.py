@@ -42,7 +42,7 @@ def test_seed_part_numbers_lose_their_name():
 
 def test_trial_files_import_cleanly_into_an_empty_shop(browser, tmp_path):
     with SessionLocal() as db:
-        seed, _ = create_demo_shop(db, LAST_DAY, parts_count=25, history_days=90, seed=7)
+        seed, _ = create_demo_shop(db, LAST_DAY, parts_count=800, history_days=90, seed=7)
         db.commit()
         seed_id = seed.id
         counts = write_files(db, seed_id, tmp_path)
@@ -55,7 +55,7 @@ def test_trial_files_import_cleanly_into_an_empty_shop(browser, tmp_path):
                  content=(tmp_path / "Ventes.xlsx").read_bytes()).json()
     equivalents = bring_in(browser, "equivalents", tmp_path / "Équivalences.xlsx")
 
-    assert parts["counts"]["new_parts"] == number_of(Part, seed_id) == 25
+    assert parts["counts"]["new_parts"] == number_of(Part, seed_id) == 800
     assert sales["counts"]["new_sales"] == counts["Ventes"] == number_of(SaleLine, seed_id)
     assert again["counts"]["already_imported"] == counts["Ventes"]  # the CSV and the Excel file say the same
     assert equivalents["counts"]["new_equivalents"] == counts["Équivalences.xlsx"]
@@ -67,7 +67,7 @@ def test_trial_files_import_cleanly_into_an_empty_shop(browser, tmp_path):
 
 def test_no_file_says_it_is_made_up(tmp_path):
     with SessionLocal() as db:
-        seed, _ = create_demo_shop(db, LAST_DAY, parts_count=25, history_days=30, seed=7)
+        seed, _ = create_demo_shop(db, LAST_DAY, parts_count=25, history_days=90, seed=7)
         db.commit()
         write_files(db, seed.id, tmp_path)
 
