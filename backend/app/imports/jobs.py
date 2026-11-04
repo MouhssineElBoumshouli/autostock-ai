@@ -5,7 +5,6 @@ transaction. Progress goes through a second connection, so the screen sees it wh
 
 import logging
 import os
-import resource
 import shutil
 import subprocess
 import sys
@@ -93,8 +92,7 @@ def run_step(job_id: uuid.UUID, step: str) -> None:
         _finish(job_id, finished_status, summary, table.rows_read)
         if finished_status == "saved":
             path.unlink(missing_ok=True)
-        memory_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
-        log.info("Import %s %s: %s rows in %.1f s, %.0f MB at most", job.file_name, finished_status, table.rows_read, perf_counter() - started, memory_mb)
+        log.info("Import %s %s: %s rows in %.1f s, %.0f MB at most", job.file_name, finished_status, table.rows_read, perf_counter() - started, _peak_memory_mb())
     except HTTPException as refused:  # what the reader tells the person about the file
         path.unlink(missing_ok=True)
         _record_failure(job_id, refused.detail)
@@ -104,6 +102,12 @@ def run_step(job_id: uuid.UUID, step: str) -> None:
         _record_failure(job_id, NOTHING_SAVED)
     finally:
         alive.set()
+
+
+def _peak_memory_mb() -> float:
+    """This process's own peak (VmHWM). Not getrusage: a new process inherits the web server's peak there."""
+    status = Path("/proc/self/status").read_text()
+    return int(next(line.split()[1] for line in status.splitlines() if line.startswith("VmHWM"))) / 1024
 
 
 def _go_through_file(db: Session, job: ImportJob, table: Table, keep: bool) -> dict[str, Any]:
