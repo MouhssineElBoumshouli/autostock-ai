@@ -656,7 +656,7 @@ export const en = {
       added: (name: string) => `${name} was added.`,
       detailsSaved: "Saved.",
       noDeliveryTime: "No delivery time set",
-      deliveryDaysShown: (days: string) => `${days} days`,
+      deliveryDaysShown: (days: string) => (days === "1" ? "1 day" : `${days} days`),
     },
     export: {
       title: "Download all my data",

@@ -670,7 +670,7 @@ export const fr: typeof en = {
       added: (name: string) => `${name} a été ajouté.`,
       detailsSaved: "Enregistré.",
       noDeliveryTime: "Délai non renseigné",
-      deliveryDaysShown: (days: string) => `${days} jours`,
+      deliveryDaysShown: (days: string) => (days === "1" ? "1 jour" : `${days} jours`),
     },
     export: {
       title: "Télécharger toutes mes données",
