@@ -1,38 +1,38 @@
-"""Excel/CSV import in steps: preview (columns), check (what would happen), save (all or nothing).
+"""Excel/CSV import in steps: upload (columns), check (what would happen), save (all or nothing).
 
-The browser sends the file again at each step, so nothing half-done is kept on the server.
+The file stays on the server from upload to save, and the shop's import is a row in import_jobs:
+checking and saving run in the background, and the screen follows them, also after a page reload.
 """
 
-import json
 import uuid
+from datetime import timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Response, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import select, text
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.audit import record_change
-from app.auth.permissions import require_role
-from app.db import get_session
 from app.alerts.run import run_alerts_now
+from app.auth.permissions import require_role
+from app.db import SessionLocal, get_session, utc_now
 from app.forecast.run import run_forecasts_apart
-from app.stock_outs import record_stock_outs_now
-from app.imports.equivalents_import import plan_equivalents, save_equivalents
+from app.imports import jobs
 from app.imports.fields import FIELDS, ImportKind, check_mapping
 from app.imports.matching import suggest_field
-from app.imports.parts_import import plan_parts, save_parts
-from app.imports.plan import Summary
-from app.imports.reading import MAX_FILE_BYTES, Table, read_table
-from app.imports.sales_import import plan_sales, save_sales
+from app.imports.reading import Table, open_table
 from app.imports.sample_files import build_sample_file
 from app.imports.values import normalize_header, show_cell
-from app.models import ImportMapping, Organization, User
+from app.models import ImportJob, ImportMapping, Organization, User
+from app.stock_outs import record_stock_outs_now
 
 router = APIRouter(prefix="/api/imports")
 can_import = require_role("owner", "manager")
 
 SAMPLE_ROWS = 5
-PROBLEMS_SHOWN = 200
+ALREADY_RUNNING = "Another import is still running. Wait for it to finish."
+GONE = "This import is no longer here. Upload the file again."
+SHOW_FINISHED_FOR = timedelta(hours=1)  # then the Import screen is ready for the next file
+KEEP_UNFINISHED_FOR = timedelta(hours=24)
 
 
 class FieldOut(BaseModel):
@@ -56,6 +56,7 @@ class PreviewOut(BaseModel):
 
 class ProblemOut(BaseModel):
     row: int
+    sheet: str | None
     messages: list[str]
 
 
@@ -66,6 +67,23 @@ class SummaryOut(BaseModel):
     new_branches: list[str]
     problems: list[ProblemOut]  # the first 200
     problem_count: int
+
+
+class JobOut(BaseModel):
+    id: uuid.UUID
+    kind: ImportKind
+    status: str
+    rows_done: int
+    rows_total: int
+    finishing: bool  # every row read: the database is finishing the work
+    preview: PreviewOut
+    mapping: dict[int, str] | None
+    summary: SummaryOut | None
+    error: str | None
+
+
+class CheckIn(BaseModel):
+    mapping: dict[int, str]
 
 
 @router.get("/sample")
@@ -83,24 +101,139 @@ def sample_file(
     )
 
 
-@router.post("/preview")
-async def preview(
+@router.get("/current")
+def current(user: User = Depends(can_import), db: Session = Depends(get_session)) -> JobOut | None:
+    """The shop's import in progress, or the one that just ended, to pick up where the screen left."""
+    job = _current_job(db, user.organization_id)
+    return _job_out(job) if job else None
+
+
+@router.post("/upload")
+def upload(
     file: UploadFile,
     kind: ImportKind = Form(),
     user: User = Depends(can_import),
     db: Session = Depends(get_session),
-) -> PreviewOut:
-    table, file_name = await _read(file)
+) -> JobOut:
+    """Keeps the file on the server and reads the top of it: no need to send it again at each step."""
+    job = _current_job(db, user.organization_id)
+    if job and job.status in jobs.RUNNING:
+        raise HTTPException(409, ALREADY_RUNNING)
+    _forget_jobs(db, user.organization_id)
+
+    job_id = uuid.uuid4()
+    file_name = file.filename or "file"
+    path = jobs.save_upload(file.file, job_id, file_name)
+    try:
+        table = open_table(path, file_name)
+    except HTTPException:
+        path.unlink(missing_ok=True)
+        raise
     remembered = db.scalar(
         select(ImportMapping.mapping).where(
             ImportMapping.organization_id == user.organization_id, ImportMapping.kind == kind
         )
     ) or {}
+    job = ImportJob(
+        id=job_id,
+        organization_id=user.organization_id,
+        user_id=user.id,
+        kind=kind,
+        file_name=file_name[:300],
+        rows_total=table.row_count,
+        preview=_preview(table, kind, remembered).model_dump(mode="json"),
+    )
+    db.add(job)
+    db.commit()
+    return _job_out(job)
+
+
+@router.post("/{job_id}/check", status_code=202)
+def check(job_id: uuid.UUID, body: CheckIn, background: BackgroundTasks, user: User = Depends(can_import), db: Session = Depends(get_session)) -> JobOut:
+    job = _job_of_shop(db, job_id, user.organization_id)
+    if job.status not in ("uploaded", "checked"):  # "checked": the person went back to change the columns
+        raise HTTPException(409, GONE)
+    check_mapping(job.kind, body.mapping, len(job.preview["columns"]))
+    job.mapping = {str(column): field for column, field in body.mapping.items()}
+    job.status, job.rows_done, job.finishing, job.updated_at = "checking", 0, False, utc_now()
+    db.commit()
+    background.add_task(jobs.run_apart, job.id, "check")
+    return _job_out(job)
+
+
+@router.post("/{job_id}/save", status_code=202)
+def save(job_id: uuid.UUID, background: BackgroundTasks, user: User = Depends(can_import), db: Session = Depends(get_session)) -> JobOut:
+    """Saves every good row in one transaction: if anything fails, nothing is saved.
+    New sales remake the forecasts in the background afterwards; new stock levels save today's
+    stock-outs. Both then check for alerts."""
+    job = _job_of_shop(db, job_id, user.organization_id)
+    if job.status != "checked":
+        raise HTTPException(409, GONE)
+    job.status, job.rows_done, job.finishing, job.updated_at = "saving", 0, False, utc_now()
+    db.commit()
+    background.add_task(_save_then_refresh, job.id, job.kind, user.organization_id)
+    return _job_out(job)
+
+
+@router.delete("/{job_id}", status_code=204)
+def forget(job_id: uuid.UUID, user: User = Depends(can_import), db: Session = Depends(get_session)) -> None:
+    """Leaves an import that isn't running: back to choosing a file."""
+    job = _job_of_shop(db, job_id, user.organization_id)
+    if job.status in jobs.RUNNING:
+        raise HTTPException(409, ALREADY_RUNNING)
+    jobs.delete_file(job)
+    db.delete(job)
+    db.commit()
+
+
+def _save_then_refresh(job_id: uuid.UUID, kind: str, organization_id: uuid.UUID) -> None:
+    jobs.run_apart(job_id, "save")
+    with SessionLocal() as db:
+        saved = db.scalar(select(ImportJob.status).where(ImportJob.id == job_id)) == "saved"
+    if not saved:
+        return
+    if kind == "sales":
+        run_forecasts_apart(organization_id, "sales_import")
+    elif kind == "parts":  # the file may change stock (and set it to 0)
+        record_stock_outs_now(organization_id)
+    if kind in ("sales", "parts"):  # after the tasks above, so alerts see fresh forecasts and stock
+        run_alerts_now(organization_id)
+
+
+def _current_job(db: Session, organization_id: uuid.UUID) -> ImportJob | None:
+    job = db.scalar(
+        select(ImportJob).where(ImportJob.organization_id == organization_id).order_by(ImportJob.created_at.desc()).limit(1)
+    )
+    if job is None:
+        return None
+    jobs.mark_if_cut_off(db, job)
+    age = utc_now() - job.updated_at
+    if job.status in jobs.RUNNING:
+        return job
+    finished = job.status in ("saved", "failed")
+    return job if age < (SHOW_FINISHED_FOR if finished else KEEP_UNFINISHED_FOR) else None
+
+
+def _forget_jobs(db: Session, organization_id: uuid.UUID) -> None:
+    for job in db.scalars(select(ImportJob).where(ImportJob.organization_id == organization_id)):
+        jobs.delete_file(job)
+    db.execute(delete(ImportJob).where(ImportJob.organization_id == organization_id))
+    db.commit()
+
+
+def _job_of_shop(db: Session, job_id: uuid.UUID, organization_id: uuid.UUID) -> ImportJob:
+    job = db.scalar(select(ImportJob).where(ImportJob.id == job_id, ImportJob.organization_id == organization_id))
+    if job is None:
+        raise HTTPException(404, GONE)
+    return job
+
+
+def _preview(table: Table, kind: ImportKind, remembered: dict[str, str]) -> PreviewOut:
     return PreviewOut(
-        file_name=file_name,
-        row_count=len(table.rows),
+        file_name=table.file_name,
+        row_count=table.row_count,
         columns=[
-            ColumnOut(index=i, header=header, samples=[show_cell(cells[i]) for _, cells in table.rows[:SAMPLE_ROWS]])
+            ColumnOut(index=i, header=header, samples=[show_cell(cells[i]) for cells in table.first_rows[:SAMPLE_ROWS]])
             for i, header in enumerate(table.headers)
         ],
         fields=[FieldOut(key=field.key, required=field.required) for field in FIELDS[kind]],
@@ -130,113 +263,16 @@ def _suggest_mapping(kind: ImportKind, headers: list[str], remembered: dict[str,
     return mapping
 
 
-@router.post("/check")
-async def check(
-    file: UploadFile,
-    kind: ImportKind = Form(),
-    mapping: str = Form(),
-    user: User = Depends(can_import),
-    db: Session = Depends(get_session),
-) -> SummaryOut:
-    table, file_name = await _read(file)
-    columns = check_mapping(kind, _parse_mapping(mapping), len(table.headers))
-    plan = _plan(db, kind, user, table, columns)
-    return _summary_out(file_name, plan.summary)
-
-
-@router.post("/save")
-async def save(
-    file: UploadFile,
-    background: BackgroundTasks,
-    kind: ImportKind = Form(),
-    mapping: str = Form(),
-    user: User = Depends(can_import),
-    db: Session = Depends(get_session),
-) -> SummaryOut:
-    """Saves every good row in one transaction: if anything fails, nothing is saved.
-    New sales remake the forecasts in the background, after the answer is sent; new stock
-    levels save today's stock-outs. Both then check for alerts."""
-    table, file_name = await _read(file)
-    by_column = _parse_mapping(mapping)
-    columns = check_mapping(kind, by_column, len(table.headers))
-
-    # One import at a time per shop, so two people can't import the same parts at once.
-    db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:shop, 0))"), {"shop": str(user.organization_id)})
-    plan = _plan(db, kind, user, table, columns)
-    if kind == "parts":
-        save_parts(db, user.organization_id, plan)
-    elif kind == "sales":
-        save_sales(db, user.organization_id, plan)
-    else:
-        save_equivalents(db, user.organization_id, user.id, plan)
-
-    _remember_mapping(db, user, kind, table, by_column)
-    record_change(
-        db,
-        user,
-        "import.saved",
-        "import",
-        uuid.uuid4(),
-        after={
-            "kind": kind,
-            "file_name": file_name,
-            **plan.summary.counts,
-            "new_suppliers": len(plan.summary.new_suppliers),
-            "new_branches": len(plan.summary.new_branches),
-        },
-    )
-    db.commit()
-    if kind == "sales":
-        background.add_task(run_forecasts_apart, user.organization_id, "sales_import")
-    elif kind == "parts":  # the file may change stock (and set it to 0)
-        background.add_task(record_stock_outs_now, user.organization_id)
-    if kind in ("sales", "parts"):  # after the tasks above, so alerts see fresh forecasts and stock
-        background.add_task(run_alerts_now, user.organization_id)
-    return _summary_out(file_name, plan.summary)
-
-
-async def _read(file: UploadFile) -> tuple[Table, str]:
-    content = await file.read(MAX_FILE_BYTES + 1)
-    file_name = file.filename or "file"
-    return read_table(content, file_name), file_name
-
-
-def _parse_mapping(raw: str) -> dict[int, str]:
-    try:
-        data = json.loads(raw)
-        return {int(column): str(field) for column, field in data.items() if field}
-    except (ValueError, AttributeError, TypeError):
-        raise HTTPException(422, "The column matching doesn't fit this file. Upload it again.") from None
-
-
-def _plan(db: Session, kind: ImportKind, user: User, table: Table, columns: dict[str, int]):
-    if kind == "parts":
-        return plan_parts(db, user.organization_id, table, columns)
-    if kind == "sales":
-        return plan_sales(db, user.organization_id, table, columns)
-    return plan_equivalents(db, user.organization_id, table, columns)
-
-
-def _remember_mapping(db: Session, user: User, kind: ImportKind, table: Table, by_column: dict[int, str]) -> None:
-    """Adds this import's column matching to what is remembered, without losing headers from past imports
-    that aren't in this file (e.g. a supplier's file has different columns than the shop's own export).
-    """
-    this_import = {normalize_header(table.headers[column]): field for column, field in by_column.items()}
-    row = db.scalar(
-        select(ImportMapping).where(ImportMapping.organization_id == user.organization_id, ImportMapping.kind == kind)
-    )
-    if row is None:
-        db.add(ImportMapping(organization_id=user.organization_id, kind=kind, mapping=this_import))
-    else:
-        row.mapping = {**row.mapping, **this_import}
-
-
-def _summary_out(file_name: str, summary: Summary) -> SummaryOut:
-    return SummaryOut(
-        file_name=file_name,
-        counts=summary.counts,
-        new_suppliers=summary.new_suppliers,
-        new_branches=summary.new_branches,
-        problems=[ProblemOut(row=p.row, messages=p.messages) for p in summary.problems[:PROBLEMS_SHOWN]],
-        problem_count=len(summary.problems),
+def _job_out(job: ImportJob) -> JobOut:
+    return JobOut(
+        id=job.id,
+        kind=job.kind,
+        status=job.status,
+        rows_done=job.rows_done,
+        rows_total=job.rows_total,
+        finishing=job.finishing,
+        preview=job.preview,
+        mapping={int(column): field for column, field in job.mapping.items()} if job.mapping else None,
+        summary=SummaryOut(file_name=job.file_name, **job.summary) if job.summary else None,
+        error=job.error,
     )

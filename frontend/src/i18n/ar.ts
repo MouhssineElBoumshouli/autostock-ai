@@ -333,8 +333,8 @@ export const ar: typeof en = {
       },
     },
     fileLabel: "الملف",
-    fileHelp: "Excel (.xlsx) أو CSV، حتى 10 ميغابايت.",
-    fileSize: (kilobytes: string) => `${kilobytes} كيلوبايت`,
+    fileHelp: "Excel (.xlsx) أو CSV، حتى 500 ميغابايت (نحو مليوني سطر).",
+    fileSize: (megabytes: string) => `${megabytes} ميغابايت`,
     chooseFile: "اختيار ملف",
     changeFile: "اختيار ملف آخر",
     sample: {
@@ -342,7 +342,7 @@ export const ar: typeof en = {
       parts: "تنزيل نموذج ملف القطع",
       sales: "تنزيل نموذج ملف المبيعات",
     },
-    fileTooBig: "الملف أكبر من 10 ميغابايت. قسّمه إلى ملفات أصغر.",
+    fileTooBig: "الملف أكبر من 500 ميغابايت. قسّمه إلى ملفات أصغر.",
     wrongType: "استخدم ملف Excel (.xlsx) أو ملف CSV (.csv).",
     noFile: "اختر ملفًا أولًا.",
     readFile: "قراءة الملف",
@@ -404,6 +404,15 @@ export const ar: typeof en = {
     nothingToSave: "لا يوجد شيء جديد للحفظ في هذا الملف.",
     doneTitle: "تم حفظ الاستيراد",
     goToStock: "الذهاب إلى المخزون",
+    progress: {
+      checking: "جارٍ فحص كل سطر. لم يُحفظ شيء بعد.",
+      saving: "جارٍ حفظ بياناتك.",
+      rows: (done: string, total: string) => `${done} / ${total} سطر`,
+      finishing: "تمت قراءة كل الأسطر. جارٍ الإنهاء...",
+      canLeave: "يمكنك مغادرة هذه الصفحة أو إعادة تحميلها: العمل مستمر.",
+    },
+    failedTitle: "توقف الاستيراد",
+    startAgain: "البدء من جديد",
     importAnother: "استيراد ملف آخر",
   },
   roles: {
@@ -972,7 +981,10 @@ export const ar: typeof en = {
       "Only a draft order can be sent.": "لا يمكن إرسال إلا أمر في حالة مسودة.",
       "Only a sent order can be received.": "لا يمكن استلام إلا أمر مُرسَل.",
       "One of these lines is not on this order.": "أحد هذه الأسطر ليس في هذا الأمر.",
-      "The file is larger than 10 MB. Split it into smaller files.": "الملف أكبر من 10 ميغابايت. قسّمه إلى ملفات أصغر.",
+      "The file is larger than 500 MB. Split it into smaller files.": "الملف أكبر من 500 ميغابايت. قسّمه إلى ملفات أصغر.",
+      "Another import is still running. Wait for it to finish.": "استيراد آخر قيد التنفيذ. انتظر حتى ينتهي.",
+      "This import is no longer here. Upload the file again.": "لم يعد هذا الاستيراد موجودًا. ارفع الملف مرة أخرى.",
+      "The import stopped before it finished. Nothing was saved. Start again.": "توقف الاستيراد قبل أن ينتهي. لم يُحفظ شيء. ابدأ من جديد.",
       "This is an old Excel file (.xls). Open it in Excel and save it as .xlsx.":
         "هذا ملف Excel قديم (.xls). افتحه في Excel واحفظه بصيغة .xlsx.",
       "Use an Excel file (.xlsx) or a CSV file (.csv).": "استخدم ملف Excel (.xlsx) أو ملف CSV (.csv).",
@@ -1007,6 +1019,9 @@ export const ar: typeof en = {
       "^(.+) is not valid \\(use day/month/year, e\\.g\\. 15/03/2026\\)$": (label: string) =>
         `${field(label)} غير صحيح (استخدم يوم/شهر/سنة، مثال: 15/03/2026)`,
       "^Same SKU twice in the file \\(rows (.+)\\)$": (rows: string) => `نفس المرجع مرتين في الملف (الأسطر ${rows})`,
+      "^This file has more than (.+) rows\\. Split it into smaller files\\.$": (rows: string) =>
+        `يحتوي هذا الملف على أكثر من ${rows} سطر. قسّمه إلى ملفات أصغر.`,
+      "^Same SKU with different details \\(rows (.+)\\)$": (rows: string) => `نفس المرجع بمعلومات مختلفة (الأسطر ${rows})`,
       "^SKU (.+) is not in your parts\\. Import it with “Parts and stock” first$": (sku: string) =>
         `المرجع ${sku} ليس من قطعك. استورده أولًا عبر «القطع والمخزون»`,
       "^(.+) “(.+)” is not one of your parts$": (label: string, text: string) => `${field(label)} «${text}» ليس من قطعك`,

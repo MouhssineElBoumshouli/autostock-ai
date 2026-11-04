@@ -7,6 +7,7 @@ from app.models.branch import Branch
 from app.models.demo_planted_problem import DemoPlantedProblem
 from app.models.demo_true_demand import DemoTrueDemand
 from app.models.forecast import Forecast, ForecastRun
+from app.models.import_job import ImportJob
 from app.models.import_mapping import ImportMapping
 from app.models.login_failure import LoginFailure
 from app.models.order_suggestion import OrderRun, OrderSuggestion
@@ -35,6 +36,7 @@ __all__ = [
     "Forecast",
     "ForecastRun",
     "EquivalentSource",
+    "ImportJob",
     "ImportMapping",
     "LoginFailure",
     "OrderRun",
