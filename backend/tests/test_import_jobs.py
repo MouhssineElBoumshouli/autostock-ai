@@ -148,6 +148,17 @@ def test_a_part_with_two_different_names_is_a_problem(browser):
     assert answer.json()["new_branches"] == []
 
 
+def test_negative_stock_comes_in_as_it_is(browser):
+    set_up_shop(browser)
+    content = "SKU;Name;Branch;Qty\nA-1;Filter;Rabat;-3\n".encode()
+
+    answer = send(browser, "save", "parts", "parts.csv", STOCK_COLUMNS, content=content)
+
+    assert answer.json()["counts"]["problem_rows"] == 0
+    with SessionLocal() as db:
+        assert db.scalar(select(StockLevel.quantity)) == -3
+
+
 def test_a_workbook_can_carry_its_rows_on_several_sheets(browser):
     set_up_shop(browser)
     send(browser, "save", "parts", "parts.csv", PART_COLUMNS, content=parts_file())

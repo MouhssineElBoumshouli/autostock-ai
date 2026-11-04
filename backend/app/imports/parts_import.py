@@ -271,5 +271,6 @@ def _clean_row(cells: dict, messages: list[str]) -> tuple[str, dict[str, Any], s
             messages.append("Pack size must be at least 1")
         elif pack is not None:
             values["pack_size"] = pack
-    quantity = attempt(parse_whole_number, cells.get("quantity"), "Quantity") if "quantity" in cells else None
+    # Negative stock is kept: a shop's till really shows it, and it is what the "recount this" alert looks for.
+    quantity = attempt(parse_whole_number, cells.get("quantity"), "Quantity", True) if "quantity" in cells else None
     return sku or "", values, clean_text(cells.get("supplier")), clean_text(cells.get("branch")), quantity
