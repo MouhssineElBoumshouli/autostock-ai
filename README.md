@@ -113,6 +113,12 @@ The first command prints a login for the demo shop (a new password each time).
 The second command remakes the demo shop's forecasts and scores them against the true demand the demo was made from.
 Forecasts are remade by themselves after every sales import, or with `POST /api/forecasts/run` (owners and managers).
 
+To try the app like a new shop, this writes the same data as the files a real shop would have, into `trial/` (git-ignored, nothing is added to the database):
+
+```
+docker compose exec api python -m app.demo.trial_files
+```
+
 ### Big test shop (speed checks only)
 
 A second made-up shop, never shown in the presentation: 50,000 parts, 3 branches, 2 years of sales

@@ -9,3 +9,5 @@ dist/
 *.log
 .playwright-mcp/
 backups/
+# Files for trying the app like a new shop: python -m app.demo.trial_files
+trial/

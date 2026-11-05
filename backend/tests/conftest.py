@@ -29,6 +29,7 @@ from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 
 from app.db import Base, engine  # noqa: E402
+from app.imports import jobs  # noqa: E402
 from tests.helpers import new_browser  # noqa: E402
 
 command.upgrade(Config("alembic.ini"), "head")
@@ -40,6 +41,13 @@ def empty_tables():
     names = ", ".join(table.name for table in Base.metadata.sorted_tables)
     with engine.begin() as connection:
         connection.execute(text(f"TRUNCATE {names} CASCADE"))
+
+
+@pytest.fixture(autouse=True)
+def imports_run_in_the_test(monkeypatch):
+    """Import steps run here instead of in their own process, so a test sees them finished (and a
+    small limit set by a test applies). test_import_jobs.py tests the real separate process."""
+    monkeypatch.setattr(jobs, "run_apart", jobs.run_step)
 
 
 @pytest.fixture

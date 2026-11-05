@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.imports.plan import Problem, Summary, cells_by_field
+from app.imports.plan import ProblemReport, Summary, cells_by_field
 from app.imports.reading import Table
 from app.imports.values import clean_text
 from app.models import Part, PartEquivalent
@@ -38,7 +38,7 @@ def plan_equivalents(db: Session, organization_id: uuid.UUID, table: Table, colu
 
     codes_seen: dict[str, str] = {}
     pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
-    problems: list[Problem] = []
+    report = ProblemReport()
     for number, cells in cells_by_field(table, columns):
         messages: list[str] = []
         our_part = _one_match(db, by_code, codes_seen, cells.get("our_code"), "Our code", messages)
@@ -46,7 +46,7 @@ def plan_equivalents(db: Session, organization_id: uuid.UUID, table: Table, colu
         if our_part and other_part and our_part == other_part:
             messages.append("Our code and the equivalent code are the same part")
         if messages:
-            problems.append(Problem(row=number, messages=messages))
+            report.add(number, messages, table.sheet)
         elif our_part and other_part:
             pairs.add(_ordered(our_part, other_part))
 
@@ -55,9 +55,10 @@ def plan_equivalents(db: Session, organization_id: uuid.UUID, table: Table, colu
         counts={
             "new_equivalents": len(new_pairs),
             "already_linked": len(pairs) - len(new_pairs),
-            "problem_rows": len(problems),
+            "problem_rows": report.count,
         },
-        problems=problems,
+        problems=report.first,
+        problem_count=report.count,
     )
     return EquivalentsPlan(summary=summary, pairs=sorted(new_pairs))
 

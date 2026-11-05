@@ -1,7 +1,7 @@
-import pytest
 from sqlalchemy import func, select
 
 from app.db import SessionLocal
+from app.imports.jobs import NOTHING_SAVED
 from app.models import Branch, Part, SaleLine, StockLevel, Supplier
 from tests.helpers import add_member, audit_rows, create_other_shop, logged_in_browser, member_with_own_password, set_up_shop, OWNER_PASSWORD
 from tests.import_helpers import PARTS_MAPPING, SALES_MAPPING, import_parts, import_sales, send
@@ -70,8 +70,8 @@ def test_check_counts_and_lists_every_problem_without_saving(browser):
         28: ["SKU is missing"],
         29: ["Quantity is not a number"],
         30: ["Quantity must be a whole number"],
-        31: ["Same SKU twice in the file (rows 31, 32)"],
-        32: ["Same SKU twice in the file (rows 31, 32)"],
+        31: ["Same SKU with different details (rows 31, 32)"],
+        32: ["Same SKU with different details (rows 31, 32)"],
         33: ["Sale price can't be negative"],
         34: ["Name is missing (needed for a new part)"],
     }
@@ -137,10 +137,12 @@ def test_a_field_can_be_chosen_once(browser):
 # Files that can't be used
 
 
-def test_file_problems(browser):
+def test_file_problems(browser, monkeypatch):
     set_up_shop(browser)
 
-    big = send(browser, "preview", "parts", "big.csv", content=b"SKU;Name\n" + b"A;" + b"x" * (10 * 1024 * 1024))
+    with monkeypatch.context() as small_limit:
+        small_limit.setattr("app.imports.reading.MAX_FILE_BYTES", 1000)
+        big = send(browser, "preview", "parts", "big.csv", content=b"SKU;Name\n" + b"A;" + b"x" * 1000)
     old_excel = send(browser, "preview", "parts", "stock.xls", content=b"whatever")
     pdf = send(browser, "preview", "parts", "stock.pdf", content=b"%PDF")
     broken = send(browser, "preview", "parts", "stock.xlsx", content=b"not really excel")
@@ -155,14 +157,15 @@ def test_file_problems(browser):
     assert header_only.json()["detail"] == "The file has a header row but no data under it."
 
 
-def test_file_with_too_many_rows_is_refused(browser):
+def test_file_with_too_many_rows_is_refused(browser, monkeypatch):
     set_up_shop(browser)
-    content = b"SKU;Name\n" + b"A;B\n" * 20_001
+    monkeypatch.setattr("app.imports.reading.MAX_ROWS", 20)
+    content = b"SKU;Name\n" + b"A;B\n" * 21
 
     response = send(browser, "preview", "parts", "huge.csv", content=content)
 
     assert response.status_code == 413
-    assert response.json()["detail"] == "This file has more than 20,000 rows. Split it into smaller files."
+    assert response.json()["detail"] == "This file has more than 20 rows. Split it into smaller files."
 
 
 # Step 4: save
@@ -259,10 +262,10 @@ def test_save_is_all_or_nothing(browser, monkeypatch):
     def fail(*args, **kwargs):
         raise RuntimeError("database went away")
 
-    monkeypatch.setattr("app.api.imports.record_change", fail)
-    with pytest.raises(RuntimeError):
-        import_parts(browser)
+    monkeypatch.setattr("app.imports.jobs.record_change", fail)
+    answer = send(browser, "save", "parts", "parts_fr_messy.xlsx", PARTS_MAPPING)
 
+    assert answer.json()["detail"] == NOTHING_SAVED
     assert count(Part) == 0
     assert count(Supplier) == 0
     assert count(StockLevel) == 0

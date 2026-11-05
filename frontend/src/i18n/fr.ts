@@ -326,8 +326,8 @@ export const fr: typeof en = {
       },
     },
     fileLabel: "Fichier",
-    fileHelp: "Excel (.xlsx) ou CSV, 10 Mo maximum.",
-    fileSize: (kilobytes: string) => `${kilobytes} Ko`,
+    fileHelp: "Excel (.xlsx) ou CSV, 500 Mo maximum (environ 2 millions de lignes).",
+    fileSize: (megabytes: string) => `${megabytes} Mo`,
     chooseFile: "Choisir un fichier",
     changeFile: "Choisir un autre fichier",
     sample: {
@@ -335,7 +335,7 @@ export const fr: typeof en = {
       parts: "Télécharger un exemple de fichier pièces",
       sales: "Télécharger un exemple de fichier ventes",
     },
-    fileTooBig: "Le fichier dépasse 10 Mo. Découpez-le en plusieurs fichiers.",
+    fileTooBig: "Le fichier dépasse 500 Mo. Découpez-le en plusieurs fichiers.",
     wrongType: "Utilisez un fichier Excel (.xlsx) ou CSV (.csv).",
     noFile: "Choisissez d’abord un fichier.",
     readFile: "Lire le fichier",
@@ -397,6 +397,15 @@ export const fr: typeof en = {
     nothingToSave: "Rien de nouveau à enregistrer dans ce fichier.",
     doneTitle: "Import enregistré",
     goToStock: "Voir le stock",
+    progress: {
+      checking: "Vérification de chaque ligne. Rien n'est encore enregistré.",
+      saving: "Enregistrement de vos données.",
+      rows: (done: string, total: string) => `${done} / ${total} lignes`,
+      finishing: "Toutes les lignes sont lues. Finalisation...",
+      canLeave: "Vous pouvez quitter cette page ou la recharger : le travail continue.",
+    },
+    failedTitle: "L'import s'est arrêté",
+    startAgain: "Recommencer",
     importAnother: "Importer un autre fichier",
   },
   roles: {
@@ -661,7 +670,7 @@ export const fr: typeof en = {
       added: (name: string) => `${name} a été ajouté.`,
       detailsSaved: "Enregistré.",
       noDeliveryTime: "Délai non renseigné",
-      deliveryDaysShown: (days: string) => `${days} jours`,
+      deliveryDaysShown: (days: string) => (days === "1" ? "1 jour" : `${days} jours`),
     },
     export: {
       title: "Télécharger toutes mes données",
@@ -967,7 +976,10 @@ export const fr: typeof en = {
       "Only a draft order can be sent.": "Seul un bon en brouillon peut être envoyé.",
       "Only a sent order can be received.": "Seul un bon envoyé peut être réceptionné.",
       "One of these lines is not on this order.": "Une de ces lignes n’est pas sur ce bon.",
-      "The file is larger than 10 MB. Split it into smaller files.": "Le fichier dépasse 10 Mo. Découpez-le en plusieurs fichiers.",
+      "The file is larger than 500 MB. Split it into smaller files.": "Le fichier dépasse 500 Mo. Découpez-le en plusieurs fichiers.",
+      "Another import is still running. Wait for it to finish.": "Un autre import est en cours. Attendez qu'il se termine.",
+      "This import is no longer here. Upload the file again.": "Cet import n'existe plus. Envoyez à nouveau le fichier.",
+      "The import stopped before it finished. Nothing was saved. Start again.": "L'import s'est arrêté avant la fin. Rien n'a été enregistré. Recommencez.",
       "This is an old Excel file (.xls). Open it in Excel and save it as .xlsx.":
         "C’est un ancien fichier Excel (.xls). Ouvrez-le dans Excel et enregistrez-le en .xlsx.",
       "Use an Excel file (.xlsx) or a CSV file (.csv).": "Utilisez un fichier Excel (.xlsx) ou CSV (.csv).",
@@ -1006,6 +1018,9 @@ export const fr: typeof en = {
       "^(.+) is not valid \\(use day/month/year, e\\.g\\. 15/03/2026\\)$": (label: string) =>
         `${field(label)} n’est pas valide (utilisez jour/mois/année, par ex. 15/03/2026)`,
       "^Same SKU twice in the file \\(rows (.+)\\)$": (rows: string) => `Même référence deux fois dans le fichier (lignes ${rows})`,
+      "^This file has more than (.+) rows\\. Split it into smaller files\\.$": (rows: string) =>
+        `Ce fichier a plus de ${rows} lignes. Découpez-le en plusieurs fichiers.`,
+      "^Same SKU with different details \\(rows (.+)\\)$": (rows: string) => `Même référence avec des informations différentes (lignes ${rows})`,
       "^SKU (.+) is not in your parts\\. Import it with “Parts and stock” first$": (sku: string) =>
         `La référence ${sku} n’est pas dans vos pièces. Importez-la d’abord avec « Pièces et stock »`,
       "^(.+) “(.+)” is not one of your parts$": (label: string, text: string) =>

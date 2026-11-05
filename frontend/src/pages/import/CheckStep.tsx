@@ -59,8 +59,10 @@ export function CheckStep({
             </TableHeader>
             <TableBody>
               {summary.problems.map((problem) => (
-                <TableRow key={problem.row}>
-                  <TableCell className="text-end tabular-nums">{problem.row}</TableCell>
+                <TableRow key={`${problem.sheet}-${problem.row}`}>
+                  <TableCell className="text-end tabular-nums">
+                    {problem.sheet ? `${problem.sheet} · ${problem.row}` : problem.row}
+                  </TableCell>
                   <TableCell className="whitespace-normal">{problem.messages.map(translateServerMessage).join(" · ")}</TableCell>
                 </TableRow>
               ))}
