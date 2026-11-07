@@ -12,12 +12,12 @@ from app.imports.fields import ImportKind, field_labels
 
 BOLD = Font(bold=True)
 
-# sku, name, brand, category, oem_reference, unit_cost, sale_price, min_stock, pack_size, supplier, quantity
+# sku, name, brand, category, oem_reference, unit_cost, sale_price, min_stock, pack_size, supplier, delivery_days, quantity
 _SAMPLE_PARTS = [
-    ("BP-001", "Front brake pads", "Bosch", "Brakes", "0986494525", 180, 320, 10, 1, "Auto Hall Pieces", 6),
-    ("FL-200", "Oil filter", "Mann-Filter", "Filtration", "W 712/95", 35.5, 65, 20, 5, "Distri Filtres", 48),
-    ("BT-912", "Battery 12V 70Ah", "Varta", "Electrical", "E13", 1250, 1650, 3, 1, "Varta Morocco", 5),
-    ("HL-900", "Engine oil 5W30 5L", "Total", "Lubricants", "QUARTZ 9000", 290, 420, 12, 4, "Total Morocco", 35),
+    ("BP-001", "Front brake pads", "Bosch", "Brakes", "0986494525", 180, 320, 10, 1, "Auto Hall Pieces", 3, 6),
+    ("FL-200", "Oil filter", "Mann-Filter", "Filtration", "W 712/95", 35.5, 65, 20, 5, "Distri Filtres", 2, 48),
+    ("BT-912", "Battery 12V 70Ah", "Varta", "Electrical", "E13", 1250, 1650, 3, 1, "Varta Morocco", 15, 5),
+    ("HL-900", "Engine oil 5W30 5L", "Total", "Lubricants", "QUARTZ 9000", 290, 420, 12, 4, "Total Morocco", 5, 35),
 ]
 
 # date, sku, quantity, unit_price, branch
@@ -35,7 +35,8 @@ def build_sample_file(kind: ImportKind, language: str) -> bytes:
     if kind == "parts":
         words = field_labels(language, "parts")
         _header(sheet, [words[k] for k in ("sku", "name", "brand", "category", "oem_reference", "unit_cost",
-                                            "sale_price", "min_stock", "pack_size", "supplier", "quantity")])
+                                            "sale_price", "min_stock", "pack_size", "supplier", "delivery_days",
+                                            "quantity")])
         for row in _SAMPLE_PARTS:
             sheet.append(row)
     elif kind == "sales":

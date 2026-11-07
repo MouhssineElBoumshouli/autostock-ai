@@ -29,7 +29,7 @@ def normalize_for_matching(header: str) -> str:
 # fields (an OEM reference, a minimum stock level) are checked before the generic ones they could
 # be mistaken for (a SKU, a quantity).
 _PARTS_ORDER = [
-    "oem_reference", "min_stock", "unit_cost", "sale_price", "pack_size", "sku", "quantity", "branch", "supplier",
+    "delivery_days", "oem_reference", "min_stock", "unit_cost", "sale_price", "pack_size", "sku", "quantity", "branch", "supplier",
     "brand", "category", "name",
 ]
 _SALES_ORDER = ["date", "sku", "unit_price", "quantity", "branch"]
@@ -37,6 +37,12 @@ _EQUIVALENTS_ORDER = ["equivalent_code", "our_code"]
 
 _KEYWORDS: dict[ImportKind, dict[str, list[str]]] = {
     "parts": {
+        # "Délai de livraison (jours)", "Délai (jours)", "Lead time", "Livraison (j)", "مدة التوصيل".
+        # Checked first: its headers often hold a word of another field ("jours", "stock").
+        "delivery_days": [
+            "délai", "delai", "lead time", "leadtime", "delivery", "livraison", "مدة التوصيل", "مدة التسليم",
+            "أجل التسليم", "التوصيل", "التسليم",
+        ],
         "oem_reference": [
             "oem", "constructeur", "original reference", "mfr reference", "manufacturer reference", "صانع",
             "المرجع الأصلي",
@@ -97,6 +103,14 @@ _KEYWORDS: dict[ImportKind, dict[str, list[str]]] = {
         ],
     },
 }
+# Words that mean the header is about something else: "Délai de paiement" is payment terms,
+# "Date de livraison" a date, "Adresse de livraison" an address.
+_NOT_THIS_FIELD: dict[str, list[str]] = {
+    "delivery_days": [
+        "paiement", "payment", "garantie", "warranty", "date", "dernière", "derniere", "last", "adresse", "address",
+        "mode", "frais", "cost", "prix", "price", "الدفع", "تاريخ", "عنوان",
+    ],
+}
 _ORDERS: dict[ImportKind, list[str]] = {"parts": _PARTS_ORDER, "sales": _SALES_ORDER, "equivalents": _EQUIVALENTS_ORDER}
 
 # "code" on its own is the only sane way to write "SKU" in some shops, but as soon as it's part
@@ -132,6 +146,8 @@ def keyword_match(header: str, kind: ImportKind) -> str | None:
     tokens = set(text.split())
     keywords = _KEYWORDS[kind]
     for field in _ORDERS[kind]:
+        if any(_matches(word, text, tokens) for word in _NOT_THIS_FIELD.get(field, ())):
+            continue
         if any(_matches(word, text, tokens) for word in keywords[field]):
             return field
     return None

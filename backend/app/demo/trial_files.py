@@ -3,7 +3,8 @@ the app the way a new customer does: an empty app, first setup, then these files
 
 Run inside Docker:  docker compose exec api python -m app.demo.trial_files
 Writes into the trial/ folder next to this project (git-ignored):
-  Pièces.xlsx        one row per part and branch: stock, supplier, prices, pack size, minimum, OEM
+  Pièces.xlsx        one row per part and branch: stock, supplier and its delivery time, prices,
+                     pack size, minimum, OEM
   Ventes.csv         24 months of sales, the way Excel in French saves a CSV
   Ventes.xlsx        the same sales as an Excel file
   Équivalences.xlsx  which parts are the same part under another brand
@@ -31,7 +32,7 @@ from app.models import Branch, Part, SaleLine, StockLevel, Supplier
 
 SKU_START = "AL-"  # the seed's part numbers carry its own name: a real shop's don't
 PARTS_HEADERS = [
-    "Référence", "Désignation", "Marque", "Famille", "Référence OEM", "Fournisseur", "Prix d'achat", "Prix de vente",
+    "Référence", "Désignation", "Marque", "Famille", "Référence OEM", "Fournisseur", "Délai de livraison (jours)", "Prix d'achat", "Prix de vente",
     "Conditionnement", "Stock minimum", "Succursale", "Quantité en stock",
 ]
 SALES_HEADERS = ["Date", "Référence", "Quantité vendue", "Prix unitaire", "Succursale"]
@@ -54,20 +55,20 @@ def write_files(db: Session, organization_id, folder: Path) -> dict[str, int]:
     """Reads the shop and writes its files. Returns how many rows each has."""
     parts = db.scalars(select(Part).where(Part.organization_id == organization_id).order_by(Part.sku)).all()
     branch_names = dict(db.execute(select(Branch.id, Branch.name).where(Branch.organization_id == organization_id)).all())
-    supplier_names = dict(db.execute(select(Supplier.id, Supplier.name).where(Supplier.organization_id == organization_id)).all())
+    suppliers = {row.id: row for row in db.scalars(select(Supplier).where(Supplier.organization_id == organization_id))}
     stock: dict = defaultdict(list)
     for part_id, branch_id, quantity in db.execute(
         select(StockLevel.part_id, StockLevel.branch_id, StockLevel.quantity).where(StockLevel.organization_id == organization_id)
     ):
         stock[part_id].append((branch_names[branch_id], quantity))
     return {
-        "Pièces.xlsx": _write_parts(folder / "Pièces.xlsx", parts, supplier_names, stock),
+        "Pièces.xlsx": _write_parts(folder / "Pièces.xlsx", parts, suppliers, stock),
         "Ventes": _write_sales(folder, db, organization_id, parts, branch_names),
         "Équivalences.xlsx": _write_equivalents(folder / "Équivalences.xlsx", parts),
     }
 
 
-def _write_parts(path: Path, parts: list[Part], supplier_names: dict, stock: dict) -> int:
+def _write_parts(path: Path, parts: list[Part], suppliers: dict, stock: dict) -> int:
     rows = 0
     with open(path, "wb") as file:
         book = Workbook(file)
@@ -77,7 +78,7 @@ def _write_parts(path: Path, parts: list[Part], supplier_names: dict, stock: dic
             for branch, quantity in sorted(stock[part.id]):
                 sheet.append([
                     shop_sku(part.sku), part.name, part.brand, part.category, part.oem_reference,
-                    supplier_names[part.supplier_id], dirhams(part.unit_cost), dirhams(part.sale_price),
+                    suppliers[part.supplier_id].name, suppliers[part.supplier_id].delivery_days, dirhams(part.unit_cost), dirhams(part.sale_price),
                     part.pack_size, part.min_stock, branch, quantity,
                 ])
                 rows += 1

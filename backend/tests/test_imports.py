@@ -63,7 +63,7 @@ def test_check_counts_and_lists_every_problem_without_saving(browser):
 
     summary = send(browser, "check", "parts", "parts_fr_messy.xlsx", PARTS_MAPPING).json()
 
-    assert summary["counts"] == {"new_parts": 22, "updated_parts": 0, "unchanged_parts": 0, "problem_rows": 7}
+    assert summary["counts"] == {"new_parts": 22, "updated_parts": 0, "unchanged_parts": 0, "delivery_times": 0, "delivery_only": 0, "unread_delivery_times": 0, "problem_rows": 7}
     assert summary["new_branches"] == ["Casablanca", "Rabat"]
     assert len(summary["new_suppliers"]) == 11
     assert {p["row"]: p["messages"] for p in summary["problems"]} == {
@@ -85,7 +85,7 @@ def test_check_shows_updates_of_existing_parts(browser):
 
     summary = send(browser, "check", "parts", "parts_en_clean.csv", PARTS_MAPPING).json()
 
-    assert summary["counts"] == {"new_parts": 12, "updated_parts": 3, "unchanged_parts": 0, "problem_rows": 0}
+    assert summary["counts"] == {"new_parts": 12, "updated_parts": 3, "unchanged_parts": 0, "delivery_times": 0, "delivery_only": 0, "unread_delivery_times": 0, "problem_rows": 0}
     assert summary["new_branches"] == ["Main"]
 
 
@@ -200,6 +200,9 @@ def test_save_writes_one_audit_row_with_counts_and_file_name(browser):
         "new_parts": 22,
         "updated_parts": 0,
         "unchanged_parts": 0,
+        "delivery_times": 0,
+        "delivery_only": 0,
+        "unread_delivery_times": 0,
         "problem_rows": 7,
         "new_suppliers": 11,
         "new_branches": 2,
