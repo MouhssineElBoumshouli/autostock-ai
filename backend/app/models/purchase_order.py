@@ -21,6 +21,7 @@ class PurchaseOrder(Base):
     status: Mapped[str] = mapped_column(String(20), default="draft")  # draft, sent, received
     sent_at: Mapped[datetime | None]
     received_at: Mapped[datetime | None]  # set once every line is fully received
+    days_taken: Mapped[int | None]  # sent -> received, in the shop's days (at least 1); teaches the delivery time
 
 
 class PurchaseOrderLine(Base):

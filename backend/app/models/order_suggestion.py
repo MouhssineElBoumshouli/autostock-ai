@@ -42,6 +42,9 @@ class OrderSuggestion(Base):
     on_order: Mapped[int]
     pack_size: Mapped[int]
     delivery_days: Mapped[int]
+    # Where that delivery time came from (estimated, file, learned, owner). None on lines made before.
+    delivery_source: Mapped[str | None] = mapped_column(String(10))
+    delivery_learned_from: Mapped[int] = mapped_column(default=0)
     days_covered: Mapped[int]
     expected: Mapped[float]  # pieces expected to sell over days_covered
     cushion: Mapped[float]

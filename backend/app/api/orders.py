@@ -55,6 +55,8 @@ class LineOut(BaseModel):
     on_order: int
     pack_size: int
     delivery_days: int
+    delivery_source: str | None  # estimated, file, learned, owner; None on lines made before this was kept
+    delivery_learned_from: int
     days_covered: int
     expected: float
     cushion: float
@@ -244,6 +246,7 @@ def _line_out(db: Session, line: OrderSuggestion, names: dict[uuid.UUID, tuple[s
         branch_name=branch_name, supplier_id=line.supplier_id, supplier_name=supplier_name, status=line.status,
         rule=line.rule, quantity=line.quantity, approved_quantity=line.approved_quantity, on_hand=line.on_hand,
         on_order=line.on_order, pack_size=line.pack_size, delivery_days=line.delivery_days,
+        delivery_source=line.delivery_source, delivery_learned_from=line.delivery_learned_from,
         days_covered=line.days_covered, expected=line.expected, cushion=line.cushion, need=line.need,
         sold_last_90_days=line.sold_last_90_days,
         unit_cost=line.unit_cost, line_cost=line.line_cost, missed_sales_prevented=line.missed_sales_prevented,

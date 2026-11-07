@@ -1,5 +1,6 @@
-"""Suppliers: the owner can add one, rename, set its delivery time and contact details, merge
-(moving its parts to another supplier) or remove one that no part uses.
+"""Suppliers: the owner can add one, rename, set its contact details, merge (moving its parts to
+another supplier) or remove one that no part uses. Delivery times fill in by themselves (see
+app/ordering/delivery_time.py); the owner may still type one, or empty it to go back to automatic.
 """
 
 import uuid
@@ -14,6 +15,7 @@ from app.audit import record_change
 from app.auth.permissions import require_role
 from app.db import get_session
 from app.models import OrderSuggestion, Part, Supplier, User
+from app.ordering.delivery_time import DeliveryTime, delivery_time, set_by_owner
 
 router = APIRouter(prefix="/api/suppliers")
 owner_only = require_role("owner")
@@ -24,7 +26,8 @@ class SupplierOut(BaseModel):
     name: str
     phone: str | None = None
     email: str | None = None
-    delivery_days: int | None = None
+    delivery_days: int | None = None  # what the owner sees in the edit field (None: automatic, not known yet)
+    delivery: DeliveryTime  # what "what to order" uses, and where it came from
     in_use: bool  # has parts pointing to it; can be merged but not removed
 
 
@@ -52,12 +55,12 @@ class SupplierMerge(BaseModel):
 def _out(supplier: Supplier, used: set[uuid.UUID]) -> SupplierOut:
     return SupplierOut(
         id=supplier.id, name=supplier.name, phone=supplier.phone, email=supplier.email,
-        delivery_days=supplier.delivery_days, in_use=supplier.id in used,
+        delivery_days=supplier.delivery_days, delivery=delivery_time(supplier), in_use=supplier.id in used,
     )
 
 
 def _snapshot(supplier: Supplier) -> dict:
-    return {"phone": supplier.phone, "email": supplier.email, "delivery_days": supplier.delivery_days}
+    return {"phone": supplier.phone, "email": supplier.email}
 
 
 @router.get("")
@@ -76,16 +79,14 @@ def add_supplier(
     db: Session = Depends(get_session),
 ) -> SupplierOut:
     _check_name_free(db, owner, body.name, exclude=None)
-    supplier = Supplier(
-        organization_id=owner.organization_id, name=body.name, phone=body.phone, email=body.email,
-        delivery_days=body.delivery_days,
-    )
+    supplier = Supplier(organization_id=owner.organization_id, name=body.name, phone=body.phone, email=body.email)
     db.add(supplier)
     db.flush()
     record_change(
         db, owner, "supplier.added", "supplier", supplier.id,
         after={"name": supplier.name, **_snapshot(supplier)},
     )
+    set_by_owner(db, owner, supplier, body.delivery_days)
     db.commit()
     return _out(supplier, set())
 
@@ -120,13 +121,13 @@ def update_supplier_details(
     before = _snapshot(supplier)
     supplier.phone = body.phone
     supplier.email = body.email
-    supplier.delivery_days = body.delivery_days
     after = _snapshot(supplier)
     if after != before:
         record_change(
             db, owner, "supplier.details_updated", "supplier", supplier.id,
             before={"name": supplier.name, **before}, after={"name": supplier.name, **after},
         )
+    set_by_owner(db, owner, supplier, body.delivery_days)
     db.commit()
     return _out(supplier, _suppliers_in_use(db, owner.organization_id))
 

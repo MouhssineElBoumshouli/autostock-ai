@@ -341,7 +341,8 @@ def add_demo_owner(db: Session, shop: Organization) -> str:
 
 def make_suppliers(organization_id: uuid.UUID) -> list[Supplier]:
     return [
-        Supplier(organization_id=organization_id, name=name, phone=phone, email=email, delivery_days=days)
+        Supplier(organization_id=organization_id, name=name, phone=phone, email=email, delivery_days=days,
+                 delivery_source="file")  # as if from the shop's parts file, like the rest of the demo
         for name, phone, email, days in SUPPLIERS
     ]
 

@@ -14,5 +14,9 @@ class Supplier(Base):
     name: Mapped[str] = mapped_column(String(200))
     phone: Mapped[str | None] = mapped_column(String(50))
     email: Mapped[str | None] = mapped_column(String(320))
-    # How many days an order takes to arrive. Used later for "what to order".
+    # How many days an order takes to arrive, for "what to order". None: not known yet (7 is used).
     delivery_days: Mapped[int | None]
+    # Where it came from: "file" (the parts import), "learned" (its received orders), "owner" (typed).
+    # See app/ordering/delivery_time.py.
+    delivery_source: Mapped[str | None] = mapped_column(String(10))
+    delivery_learned_from: Mapped[int] = mapped_column(default=0)  # deliveries behind a "learned" value
