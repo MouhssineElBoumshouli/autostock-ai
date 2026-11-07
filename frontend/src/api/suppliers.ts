@@ -1,13 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiRequest } from "@/api/client";
+import type { DeliveryTime } from "@/lib/deliveryTime";
 
 export type Supplier = {
   id: string;
   name: string;
   phone: string | null;
   email: string | null;
-  delivery_days: number | null;
+  delivery_days: number | null; // the edit field: null = automatic, nothing known yet
+  delivery: DeliveryTime; // what "what to order" uses, and where it came from
   in_use: boolean;
 };
 

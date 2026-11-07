@@ -1,5 +1,6 @@
 import type { OrderLine } from "@/api/orders";
 import { t } from "@/i18n";
+import { deliveryTimeText } from "@/lib/deliveryTime";
 import { formatNumber } from "@/lib/format";
 
 const words = t.orders.reasons;
@@ -25,7 +26,7 @@ export function orderReason(line: OrderLine): string {
   } else {
     reason = words.forecast({
       rate: sellingRate(line.expected, line.days_covered),
-      deliveryDays: days(line.delivery_days),
+      deliveryDays: deliveryTimeText(line.delivery_days, line.delivery_source, line.delivery_learned_from),
       onHand: formatNumber(line.on_hand),
       onOrder: line.on_order ? formatNumber(line.on_order) : null,
       quantity,

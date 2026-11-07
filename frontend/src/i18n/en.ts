@@ -24,6 +24,12 @@ export const en = {
     hidePassword: "Hide password",
     pieces: (count: number, shown: string) => (count === 1 ? "1 piece" : `${shown} pieces`),
     days: (count: number, shown: string) => (count === 1 ? "1 day" : `${shown} days`),
+    deliveryTime: {
+      estimated: (days: string) => `about ${days} (estimated)`,
+      learned: (days: string, deliveries: string) => `${days} (learned from ${deliveries})`,
+      fromFile: (days: string) => `${days} (from your file)`,
+      deliveries: (count: number, shown: string) => (count === 1 ? "1 delivery" : `${shown} deliveries`),
+    },
     onlyOwner: "Only the owner can do this.",
     onlyOwnerOrManager: "Only the owner or a manager can do this.",
   },
@@ -347,6 +353,7 @@ export const en = {
         quantity: "Quantity in stock",
         branch: "Branch",
         supplier: "Supplier",
+        delivery_days: "Delivery time (days)",
       },
       sales: {
         date: "Date",
@@ -365,6 +372,10 @@ export const en = {
       new_parts: (n: string) => `${n} new parts`,
       updated_parts: (n: string) => `${n} parts updated`,
       unchanged_parts: (n: string) => `${n} parts unchanged`,
+      delivery_times: (n: string) => `Suppliers given a delivery time from the file: ${n}`,
+      delivery_only: () =>
+        "Your parts are already in the app: only the delivery times are saved, stock and prices stay as they are. Import the file a second time to update those too.",
+      unread_delivery_times: (n: string) => `Delivery times that couldn't be read (left empty): ${n}`,
       new_sales: (n: string) => `${n} new sales lines`,
       already_imported: (n: string) => `${n} sales lines already imported (skipped)`,
       problem_rows: (n: string) => `${n} rows with problems (skipped)`,
@@ -520,8 +531,8 @@ export const en = {
         text: "At least 3 months, ideally 12, for good forecasts.",
       },
       suppliers: {
-        title: "Add suppliers and delivery times",
-        text: "So “what to order” knows how long each one takes.",
+        title: "Add your suppliers",
+        text: "Their delivery times fill in by themselves, from your parts file and then your deliveries.",
       },
       team: { title: "Invite your team", text: "Give each person their own login." },
     },
@@ -575,6 +586,12 @@ export const en = {
       branchRemoved: (actor: string, name: string) => `${actor} removed branch ${name}.`,
       supplierAdded: (actor: string, name: string) => `${actor} added supplier ${name}.`,
       supplierDetailsUpdated: (actor: string, name: string) => `${actor} updated ${name}'s contact details.`,
+      deliveryTimeSetByOwner: (actor: string, name: string, days: string) => `${actor} set ${name}'s delivery time to ${days}.`,
+      deliveryTimeAutomatic: (actor: string, name: string) => `${actor} let the app work out ${name}'s delivery time.`,
+      deliveryTimeFromFile: (actor: string, name: string, days: string) =>
+        `${name}'s delivery time is now ${days}, from a file ${actor} imported.`,
+      deliveryTimeLearned: (name: string, days: string, deliveries: string) =>
+        `${name}'s delivery time is now ${days}, learned from ${deliveries}.`,
       supplierMerged: (actor: string, from: string, into: string) => `${actor} merged supplier ${from} into ${into}.`,
       supplierRemoved: (actor: string, name: string) => `${actor} removed supplier ${name}.`,
       dataExported: (actor: string) => `${actor} downloaded all the shop's data.`,
@@ -652,11 +669,10 @@ export const en = {
       phone: "Phone",
       email: "Email",
       deliveryDays: "Delivery time (days)",
-      deliveryDaysHelp: "How many days an order usually takes to arrive. Used to work out what to order.",
+      deliveryDaysHelp:
+        "Fills in by itself, from your parts file and then your real deliveries. Type a number only to choose it yourself. Leave it empty to let the app work it out.",
       added: (name: string) => `${name} was added.`,
       detailsSaved: "Saved.",
-      noDeliveryTime: "No delivery time set",
-      deliveryDaysShown: (days: string) => (days === "1" ? "1 day" : `${days} days`),
     },
     export: {
       title: "Download all my data",

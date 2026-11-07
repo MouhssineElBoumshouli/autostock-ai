@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { t } from "@/i18n";
+import { deliveryTimeText } from "@/lib/deliveryTime";
 import { requiredError } from "@/lib/validation";
 
 type Form = { name: string; phone: string; email: string; deliveryDays: string };
@@ -150,7 +151,7 @@ export function DeliveryTimeButton({
     <Dialog open={open} onOpenChange={changeOpen}>
       <DialogTrigger asChild>
         <Button size="sm" variant="text">
-          {supplier.delivery_days === null ? words.noDeliveryTime : words.deliveryDaysShown(String(supplier.delivery_days))}
+          {deliveryTimeText(supplier.delivery.days, supplier.delivery.source, supplier.delivery.learned_from)}
         </Button>
       </DialogTrigger>
       <DialogContent>
