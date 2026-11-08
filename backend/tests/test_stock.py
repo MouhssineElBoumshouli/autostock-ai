@@ -237,12 +237,14 @@ def test_cannot_use_another_shops_branch_or_supplier(browser):
 
 
 def add_part_with_forecast(
-    organization_id: uuid.UUID, sku: str, quantity: int, expected_30d: float | None, min_stock: int = 0
+    organization_id: uuid.UUID, sku: str, quantity: int, expected_30d: float | None, min_stock: int = 0,
+    sale_price: int | None = None,
 ) -> uuid.UUID:
     """A part with `quantity` on hand and, when `expected_30d` is given, a 30-day forecast for it."""
     with SessionLocal() as db:
         branch = db.scalar(select(Branch).where(Branch.organization_id == organization_id))
-        part = Part(organization_id=organization_id, sku=sku, name=f"Part {sku}", min_stock=min_stock, is_active=True)
+        part = Part(organization_id=organization_id, sku=sku, name=f"Part {sku}", min_stock=min_stock, is_active=True,
+                   sale_price=sale_price)
         db.add(part)
         db.flush()
         db.add(StockLevel(organization_id=organization_id, part_id=part.id, branch_id=branch.id, quantity=quantity))
@@ -339,3 +341,19 @@ def test_sort_by_runs_out_days_puts_the_soonest_first(browser):
     ordered = skus(parts(browser, sort="runs_out_days"))
 
     assert ordered[0] == "SOON-1"  # nulls (no urgent cover date) sort last, either direction
+
+
+def test_urgent_filter_and_sort_for_the_today_page(browser):
+    """Out of stock first, then whichever runs out soonest, then the most money at stake. Healthy
+    and inactive parts are left out, even though one of them would otherwise sort first."""
+    set_up_shop(browser)
+    shop = browser.get("/api/auth/me").json()["organization"]["id"]
+    add_part_with_forecast(shop, "OUT-CHEAP", quantity=0, expected_30d=10, sale_price=100)
+    add_part_with_forecast(shop, "OUT-PRICEY", quantity=0, expected_30d=10, sale_price=9000)
+    add_part_with_forecast(shop, "LOW-SOON", quantity=9, expected_30d=30, min_stock=10)  # low, runs out in 9 days
+    add_part_with_forecast(shop, "LOW-LATER", quantity=9, expected_30d=9, min_stock=10)  # low, runs out in 30 days
+    add_part_with_forecast(shop, "HEALTHY-1", quantity=100, expected_30d=10)  # not urgent
+
+    urgent = parts(browser, urgent=True, sort="urgency")
+    assert skus(urgent) == ["OUT-PRICEY", "OUT-CHEAP", "LOW-SOON", "LOW-LATER"]
+    assert {item["status"] for item in urgent["items"]} == {"out", "low"}

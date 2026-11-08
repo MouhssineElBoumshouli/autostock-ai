@@ -27,8 +27,11 @@ anyone = require_role()
 
 PAGE_SIZE = 50
 StatusFilter = Literal["healthy", "low", "out", "inactive", "dead"]
-SortKey = Literal["name", "sku", "brand", "quantity", "min_stock", "status", "supplier", "expected_30d", "runs_out_days"]
+SortKey = Literal[
+    "name", "sku", "brand", "quantity", "min_stock", "status", "supplier", "expected_30d", "runs_out_days", "urgency"
+]
 STATUS_ORDER = {"out": 0, "low": 1, "running_out": 2, "healthy": 3, "inactive": 4}
+NEEDS_ATTENTION = ("out", "low", "running_out")
 
 
 class StockSummary(BaseModel):
@@ -135,6 +138,7 @@ def list_parts(
     branch: uuid.UUID | None = None,
     supplier: uuid.UUID | None = None,
     running_out: bool = False,
+    urgent: bool = False,  # only out, low and running-out parts (for the Today page's low stock list)
     sort: SortKey | None = None,
     direction: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
@@ -168,6 +172,8 @@ def list_parts(
         # Already healthy, not already flagged low or out: the minimum didn't catch this one.
         filters.append(part_status == "healthy")
         filters.append(runs_out <= RUNNING_OUT_WITHIN_DAYS)
+    if urgent:
+        filters.append(final_status.in_(NEEDS_ATTENTION))
 
     base = (
         select(
@@ -189,7 +195,12 @@ def list_parts(
 
     if sort is None and matches is not None:
         # While searching, the best match comes first unless the person picked a column to sort by.
-        ordered = matches.c.score.desc()
+        ordered = (matches.c.score.desc(),)
+    elif sort == "urgency":
+        # Out of stock first, then whatever runs out soonest, then the most money at stake
+        # (expected sales over the next 30 days, at the sale price): for the Today page's low stock list.
+        money_at_stake = expected_30d * func.coalesce(Part.sale_price, Part.unit_cost, 0)
+        ordered = (_status_rank(final_status).asc(), runs_out.asc().nulls_last(), money_at_stake.desc().nulls_last())
     else:
         order = {
             "name": Part.name,
@@ -202,8 +213,8 @@ def list_parts(
             "expected_30d": expected_30d,
             "runs_out_days": runs_out,
         }[sort or "name"]
-        ordered = order.desc().nulls_last() if direction == "desc" else order.asc().nulls_last()
-    rows = db.execute(base.order_by(ordered, Part.name, Part.sku).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)).all()
+        ordered = (order.desc().nulls_last() if direction == "desc" else order.asc().nulls_last(),)
+    rows = db.execute(base.order_by(*ordered, Part.name, Part.sku).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)).all()
     notes = _equivalent_notes(db, user.organization_id, branch, [row.Part.id for row in rows if row.status == "out"])
 
     return PartsPage(
