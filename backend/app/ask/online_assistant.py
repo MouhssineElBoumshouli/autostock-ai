@@ -91,9 +91,11 @@ def answer(
     asker = Asker(db, organization_id, today, last_sale, currency)
     language = reply_language(question, app_language)
     messages = [{"role": "system", "content": instructions(asker, question, language)}]
-    for turn in earlier[-EARLIER_TURNS:]:
-        messages += [{"role": "user", "content": turn.question},
-                     {"role": "assistant", "content": f"{turn.answer}\n(Data used: {_compact(turn.facts)})"}]
+    turns = earlier[-EARLIER_TURNS:]
+    if turns:  # the facts behind earlier answers, apart from them so the model never copies the format
+        messages.append({"role": "system", "content": f"Tool results behind the earlier answers: {_compact([t.facts for t in turns])}"})
+    for turn in turns:
+        messages += [{"role": "user", "content": turn.question}, {"role": "assistant", "content": turn.answer}]
     messages.append({"role": "user", "content": question})
     tools = tool_specs(asker.sees_money)
     lookups: list[dict] = []

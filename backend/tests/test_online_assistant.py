@@ -139,8 +139,9 @@ def test_a_follow_up_sends_the_conversation_and_its_numbers_stay_allowed(browser
     fake = online([("text", "Yes, the 5 oil filters were all this week.")])
     result = done(chat(browser, "Are you sure?", earlier_turns=1))
     messages = fake.sent[0]["messages"]
-    assert messages[1] == {"role": "user", "content": "How many oil filters this week?"}
-    assert messages[2]["content"].startswith("5 oil filters.") and '"total_pieces":5' in messages[2]["content"]
+    assert '"total_pieces":5' in messages[1]["content"], "the earlier answer's facts"
+    assert messages[2] == {"role": "user", "content": "How many oil filters this week?"}
+    assert messages[3] == {"role": "assistant", "content": "5 oil filters."}
     assert result["text"].startswith("Yes, the 5")
 
 

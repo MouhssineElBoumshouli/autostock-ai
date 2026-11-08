@@ -23,8 +23,9 @@ SECONDS = 25
 USER_AGENT = "AutoStock-AI/1.0"
 LONGEST = 1200  # word pieces (tokens) for one reply, its thinking included
 LONGEST_WAIT = 20  # seconds: a "too many this minute" refusal that clears sooner is waited for, once
-# Groq's published free limit for openai/gpt-oss-120b: tokens a day (requests a day come in each reply).
-TOKENS_PER_DAY = {"openai/gpt-oss-120b": 200_000, "openai/gpt-oss-20b": 200_000}
+# Groq's free limit in tokens a day (requests a day come in each reply). Both measured on 2026-11-08: the
+# allowance ran out after about 200,000 tokens.
+TOKENS_PER_DAY = {"openai/gpt-oss-120b": 200_000, "openai/gpt-oss-20b": 200_000, "qwen/qwen3.8-27b": 200_000}
 
 
 class GroqFailed(Exception):
