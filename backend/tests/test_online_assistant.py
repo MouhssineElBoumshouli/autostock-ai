@@ -382,3 +382,14 @@ def test_the_instructions_give_the_exact_dates_of_common_periods():
     from app.ask.online_assistant import periods
     text = periods(date(2026, 11, 8))
     assert "last week 2026-10-26 to 2026-11-01" in text and "last month 2026-10-01 to 2026-10-31" in text
+
+
+@pytest.mark.parametrize("word", ["Batterie", "batteries", "battery"])
+def test_a_general_word_counts_every_type_starting_with_it(browser, word):
+    set_up_shop(browser)
+    shop_id = shop_named(MAIN)
+    for name, quantity in (("Batterie 60Ah - Dacia Logan", 732), ("Batterie 70Ah - Dacia Logan", 657), ("Filtre à huile - Dacia Logan", 9)):
+        shelve(shop_id, new_part(shop_id, name, "Electrical"), RABAT, quantity)
+    with SessionLocal() as db:
+        data = run_tool(asker(shop_id, db=db), "stock", {"type": word}).data
+    assert data["total_pieces"] == 1389 and data["types"] == ["Batterie 60Ah", "Batterie 70Ah"]

@@ -16,7 +16,8 @@ For each question it records the answer, the lookups, seconds and tokens, and ch
 Results are saved after each answer (resumable: Groq's free tier allows about 8,000 tokens a minute and
 200,000 a day), in check_real_assistant_<model>.json.
 
-Run inside Docker:  docker compose exec api python -m app.ask.check_real_assistant [model] [--owner]
+Run inside Docker:  docker compose exec api python -m app.ask.check_real_assistant [model] [--owner] [--most=N]
+--most=N: ask Groq at most N questions (follow-ups' earlier questions count), so the shop keeps some of the day's allowance.
 """
 
 import json
@@ -177,11 +178,16 @@ def judged(db, organization_id, case: RealCase, result: dict, earlier_facts: lis
 
 # Asking
 
-class Pace:
-    """Waits so the questions stay under Groq's tokens-a-minute limit."""
+class OutOfAnswers(Exception):
+    """--most reached, or Groq's daily allowance used up: stop asking."""
 
-    def __init__(self):
+
+class Pace:
+    """Waits so the questions stay under Groq's tokens-a-minute limit, and counts the questions asked (--most)."""
+
+    def __init__(self, most: int | None = None):
         self.spent: list[tuple[float, int]] = []
+        self.left = most
 
     def wait(self, next_tokens: int = 3500) -> None:
         while True:
@@ -196,6 +202,10 @@ class Pace:
 
 
 def ask(organization_id, question: str, earlier: list[EarlierTurn], model: str, pace: Pace) -> dict:
+    if pace.left is not None:
+        if pace.left <= 0:
+            raise OutOfAnswers
+        pace.left -= 1
     pace.wait()
     started = time.perf_counter()
     with SessionLocal() as db:
@@ -217,13 +227,15 @@ def turn(question: str, result: dict) -> EarlierTurn:
     return EarlierTurn(question, result.get("text", ""), result.get("facts", []))
 
 
-def run_cases(organization_id, model: str, path: Path) -> list[dict]:
+def run_cases(organization_id, model: str, path: Path, pace: Pace) -> list[dict]:
     saved = json.loads(path.read_text()) if path.exists() else {}
-    pace = Pace()
     for index, case in enumerate(REAL_CASES):
         key = str(index)
         if key in saved and saved[key]["result"].get("fell_back") not in ("daily_limit", "busy", "offline"):
             continue
+        if pace.left is not None and pace.left < 1 + len(case.earlier):
+            print(f"\n--most reached: stopped before question {index + 1}.")
+            break
         earlier = []
         for question in case.earlier:
             earlier.append(turn(question, ask(organization_id, question, earlier, model, pace)))
@@ -240,11 +252,18 @@ def run_cases(organization_id, model: str, path: Path) -> list[dict]:
     return [saved[key] for key in sorted(saved, key=int)]
 
 
-def run_owner(organization_id, model: str, path: Path) -> None:
-    pace, earlier, rows = Pace(), [], []
+def run_owner(organization_id, model: str, path: Path, pace: Pace) -> None:
+    earlier, rows = [], []
     for question in OWNER_QUESTIONS:
         follow_up = question.lower().startswith("et ")
-        result = ask(organization_id, question, earlier if follow_up else [], model, pace)
+        try:
+            result = ask(organization_id, question, earlier if follow_up else [], model, pace)
+        except OutOfAnswers:
+            print("\n--most reached.")
+            break
+        if result.get("fell_back") == "daily_limit":
+            print("\nGroq's daily allowance is used up.")
+            break
         earlier = [turn(question, result)]
         rows.append({"question": question, "result": result})
         print(".", end="", flush=True)
@@ -281,12 +300,15 @@ def main() -> None:
         organization_id = db.query(Organization.id).filter(Organization.name == "Pièces Auto Al Amal").scalar()
     if organization_id is None:
         sys.exit("Needs a copy of the owner's trial shop (Pièces Auto Al Amal).")
+    most = next((int(arg.split("=")[1]) for arg in sys.argv if arg.startswith("--most=")), None)
     for model in models:
         name = model.replace("/", "_")
+        pace = Pace(most)
         if "--owner" in sys.argv:
-            run_owner(organization_id, model, RESULTS / f"owner_questions_{name}.json")
+            run_owner(organization_id, model, RESULTS / f"owner_questions_{name}.json", pace)
         else:
-            report(model, run_cases(organization_id, model, RESULTS / f"real_questions_{name}.json"))
+            report(model, run_cases(organization_id, model, RESULTS / f"real_questions_{name}.json", pace))
+        print(f"Groq questions asked: {most - pace.left}" if most is not None else "")
 
 
 if __name__ == "__main__":
