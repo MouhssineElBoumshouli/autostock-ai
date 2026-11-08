@@ -10,10 +10,20 @@ export type ShopSettings = {
   name: string;
   currency: Currency;
   language: Language;
-  cloud_writer_on: boolean;
-  cloud_writer_ready: boolean; // a Groq key is in .env: only then can the cloud writer be turned on
+  online_assistant_on: boolean;
+  groq_ready: boolean; // a Groq key is in .env: only then can the online assistant work
+  groq_allowance: GroqAllowance | null;
 };
-export type SettingsChange = Partial<Omit<ShopSettings, "cloud_writer_ready">>;
+// What is left of Groq's free daily allowance (backend/app/ask/allowance.py). Nulls: not known yet.
+export type GroqAllowance = {
+  tokens_used_today: number;
+  tokens_per_day: number | null;
+  answers_today: number;
+  answers_left_about: number | null;
+  requests_left_today: number | null;
+  requests_per_day: number | null;
+};
+export type SettingsChange = Partial<Pick<ShopSettings, "name" | "currency" | "language" | "online_assistant_on">>;
 
 const settingsQueryKey = ["settings"];
 
