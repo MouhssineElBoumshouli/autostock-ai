@@ -37,6 +37,9 @@ def _collect(value: object, found: set[float]) -> None:
     elif isinstance(value, str):
         for year, month, day in ISO_DATE.findall(value):
             found.update(_date_pieces(date(int(year), int(month), int(day))))
+        for written in numbers_written(ISO_DATE.sub(" ", value)):  # "Sold 29 in 7 days", "Mercedes 190"
+            for reading in readings(written):
+                found.update(reading)
     elif isinstance(value, dict):
         for item in value.values():
             _collect(item, found)

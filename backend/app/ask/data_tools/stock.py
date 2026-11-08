@@ -56,9 +56,9 @@ def stock(asker: Asker, args: dict) -> ToolResult:
     pieces = func.coalesce(func.sum(on_hand), 0)
     value = func.coalesce(func.sum(on_hand * Part.unit_cost), 0)
     total_pieces, total_value = asker.db.execute(base.add_columns(pieces, value).where(*filters)).one()
-    data["pieces"] = int(total_pieces)
+    data["total_pieces"] = int(total_pieces)
     if asker.sees_money:
-        data["value_at_cost"] = asker.money(total_value)
+        data["total_value_at_cost"] = asker.money(total_value)
     group = args.get("group_by") if args.get("group_by") in STOCK_GROUPS else None
     if group:
         key = STOCK_GROUPS[group]
@@ -67,7 +67,7 @@ def stock(asker: Asker, args: dict) -> ToolResult:
             .group_by(key).order_by(pieces.desc(), key).limit(rows_wanted(args))
         ).all()
         data["rows"] = [{"name": str(row.name), "pieces": int(row.pieces)} for row in rows]
-    shown = [Number(key="pieces_in_stock", label="Pieces in stock", value=data["pieces"], unit="pieces")]
+    shown = [Number(key="pieces_in_stock", label="Pieces in stock", value=data["total_pieces"], unit="pieces")]
     if asker.sees_money:
         shown.append(Number(key="value_at_cost", label="Value at cost", value=round(total_value), unit="money"))
     shown += [Number(key="stock_about", label=row["name"], about=row["name"], value=row["pieces"], unit="pieces")
@@ -100,12 +100,12 @@ def _only(asker: Asker, args: dict, only: str, parts, branch_id, branch: str | N
     query = select(Part.name, Part.brand, pieces.label("pieces"), (pieces * func.coalesce(Part.unit_cost, 0)).label("value")) \
         .outerjoin(levels, levels.c.part_id == Part.id).where(*filters)
     rows = asker.db.execute(query.order_by(pieces.desc(), Part.name)).all()
-    data.update({"only": only, "parts": len(rows), "pieces": sum(int(row.pieces) for row in rows)})
+    data.update({"only": only, "total_parts": len(rows), "total_pieces": sum(int(row.pieces) for row in rows)})
     if asker.sees_money:
-        data["value_at_cost"] = asker.money(sum(int(row.value) for row in rows))
+        data["total_value_at_cost"] = asker.money(sum(int(row.value) for row in rows))
     data["rows"] = [{"name": f"{row.name} ({row.brand or ''})", "pieces": int(row.pieces)} for row in rows[:rows_wanted(args)]]
-    shown = [Number(key=f"{only}_parts", label=f"Parts {only}", value=data["parts"], unit="count"),
-             Number(key="pieces_in_stock", label="Pieces in stock", value=data["pieces"], unit="pieces")]
+    shown = [Number(key=f"{only}_parts", label=f"Parts {only}", value=data["total_parts"], unit="count"),
+             Number(key="pieces_in_stock", label="Pieces in stock", value=data["total_pieces"], unit="pieces")]
     shown += [Number(key="stock_about", label=row["name"], about=row["name"], value=row["pieces"], unit="pieces")
               for row in data["rows"][:8]]
     return ToolResult(data, shown, {**asked_heading(parts, branch), "only": only})

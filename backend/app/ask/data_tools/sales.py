@@ -78,16 +78,22 @@ def sales(asker: Asker, args: dict) -> ToolResult:
 
 def _compared(asker: Asker, now: dict, before: dict, first: date, last: date) -> dict:
     compared = {"period": [first.isoformat(), last.isoformat()], **before,
-                "change_pieces": now["pieces"] - before["pieces"], "change_percent": percent_change(now["pieces"], before["pieces"])}
-    if asker.sees_money and now.get("value") and before.get("value"):
-        compared["average_price"] = round(before["value"] / before["pieces"], 2)
-        now["average_price"] = round(now["value"] / now["pieces"], 2)
+                "change_pieces": now["total_pieces"] - before["total_pieces"],
+                "change_percent": percent_change(now["total_pieces"], before["total_pieces"])}
+    if asker.sees_money and now.get("total_value") and before.get("total_value"):
+        compared["average_price"] = round(before["total_value"] / before["total_pieces"], 2)
+        now["average_price"] = round(now["total_value"] / now["total_pieces"], 2)
     return compared
 
 
 def _before(first: date, last: date, compare: str) -> tuple[date, date]:
     if compare == "last_year":
         return _year_earlier(first), _year_earlier(last)
+    if first.day == 1 and (last + timedelta(days=1)).day == 1:  # whole months: the same number of months before
+        months = (last.year - first.year) * 12 + last.month - first.month + 1
+        start_month = first.month - months
+        start = date(first.year + (start_month - 1) // 12, (start_month - 1) % 12 + 1, 1)
+        return start, first - timedelta(days=1)
     length = (last - first).days + 1
     return first - timedelta(days=length), first - timedelta(days=1)
 
@@ -105,7 +111,8 @@ def _totals(asker: Asker, part_condition, branch_id, first: date, last: date, gr
         filters.append(SaleLine.branch_id == branch_id)
     base = select().select_from(SaleLine).join(Part, Part.id == SaleLine.part_id).join(Branch, Branch.id == SaleLine.branch_id)
     total_pieces, total_value, total_cost = asker.db.execute(base.add_columns(pieces, value, cost).where(*filters)).one()
-    result = {"total": _money_fields(asker, {"pieces": int(total_pieces)}, total_value, total_cost), "rows": [], "by_name": {}}
+    result = {"total": _money_fields(asker, {"pieces": int(total_pieces)}, total_value, total_cost, "total_"), "rows": [],
+              "by_name": {}}
     if group:
         key = GROUPS[group]
         query = base.add_columns(key.label("name"), pieces.label("pieces"), value, cost).where(*filters).group_by(key)
@@ -117,22 +124,25 @@ def _totals(asker: Asker, part_condition, branch_id, first: date, last: date, gr
     return result
 
 
-def _money_fields(asker: Asker, fields: dict, value, cost) -> dict:
+def _money_fields(asker: Asker, fields: dict, value, cost, prefix: str = "") -> dict:
+    """Pieces, value and margin; `prefix` "total_" for the whole question's numbers (not one row's)."""
+    if prefix:
+        fields = {f"{prefix}{name}": number for name, number in fields.items()}
     if asker.sees_money and value:
-        fields["value"] = asker.money(value)
-        fields["margin"] = asker.money(value - cost)
-        fields["margin_percent"] = round((value - cost) * 100 / value) if value else None
+        fields[f"{prefix}value"] = asker.money(value)
+        fields[f"{prefix}margin"] = asker.money(value - cost)
+        fields[f"{prefix}margin_percent"] = round((value - cost) * 100 / value) if value else None
     return fields
 
 
 def _shown(data: dict) -> list[Number]:
-    shown = [Number(key="pieces_sold", label="Pieces sold", value=data["pieces"], unit="pieces")]
-    if "value" in data:
-        shown.append(Number(key="sales_value", label="Sales value", value=round(data["value"] * 100), unit="money"))
+    shown = [Number(key="pieces_sold", label="Pieces sold", value=data["total_pieces"], unit="pieces")]
+    if "total_value" in data:
+        shown.append(Number(key="sales_value", label="Sales value", value=round(data["total_value"] * 100), unit="money"))
     if "compared_with" in data:
         before = data["compared_with"]
         shown.append(Number(key="pieces_sold_before", label="Pieces sold, period compared",
-                            value=before["pieces"], unit="pieces", about="/".join(before["period"])))
+                            value=before["total_pieces"], unit="pieces", about="/".join(before["period"])))
     for row in data.get("rows", [])[:8]:
         shown.append(Number(key="sold_about", label=row["name"], about=row["name"], value=row["pieces"], unit="pieces"))
     return shown

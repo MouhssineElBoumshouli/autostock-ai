@@ -16,16 +16,17 @@ import time
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.ai import groq
 from app.ask.data_tools import Asker, run_tool, tool_specs
+from app.ask.data_tools.context import TYPE_NAME
 from app.ask.reply_language import is_darija, reply_language
 from app.ask.tool_numbers import allowed_numbers, unknown_numbers
-from app.models import Branch, Organization, SaleLine
+from app.models import Branch, Organization, Part, SaleLine
 
 MOST_STEPS = 5  # rounds of tool calls before the model must answer
 EARLIER_TURNS = 3  # questions before this one, kept for follow-ups
@@ -35,9 +36,11 @@ DARIJA = "Moroccan Darija, written the way the question is (Latin letters with 3
 
 INSTRUCTIONS = """You are the assistant of the auto parts shop "{shop}" in the AutoStock app; you answer its staff.
 Today is {today}. The newest sale imported is from {last_sale}.
+Periods: {periods}.
 Branches with sales: {branches}. "The shop", "le magasin" or no branch named = all branches (leave branch empty).
-Parts are named "Type - Car" ("Filtre à huile - Dacia Logan"): put the type in "type", the car in "car", the brand
-in "brand", never a sentence. An error gives the closest names: fix the call.
+Parts are named "Type - Car" ("Filtre à huile - Dacia Logan"). "type" takes one of the shop's types: {types}.
+"car" is the make and model ("Peugeot 301"). "brand" is the part maker: {brands}. Never a sentence in a field.
+An error gives the closest names: fix the call. totals (total_pieces...) answer the whole question; rows are details.
 {money}
 Rules:
 1. Every number and every fact comes from the tools; never calculate, guess or add a trend, reason or stock fact
@@ -45,12 +48,14 @@ Rules:
 2. "this month" = the 1st to today; "October"/"last month" = the whole month, this year; "this week" = Monday to
    today; "last week" = the Monday-Sunday before. No period given: leave the dates empty. Dates YYYY-MM-DD.
    If the period goes past {last_sale}, say that sales after {last_sale} are not imported yet.
-3. Answer in {language}, 1 to 3 short sentences, the direct answer first, with its period and branch. Only for
+3. Answer in the question's language ({language} if unsure), 1 to 3 short sentences, the direct answer first, with its period and branch. Only for
    "why" questions: call sales with compare (it adds last year, stock-out days and price) and give only the reasons
    it shows; if it shows none, say so. Plain text, no markdown, no list unless asked.
-4. You only read. For actions say where: orders -> Orders page; alerts -> Alerts page; parts, prices, stock,
-   sales -> Import page; suppliers -> Settings.
-5. If the shop's data can't answer (customers, staff, salaries, rent, weather...), say so in one sentence, no number."""
+4. You only read. For actions say where, with the page's name in the answer's language: Orders (fr "À commander",
+   ar "ما يجب طلبه"); Alerts (fr "Alertes", ar "التنبيهات"); parts, prices, stock, sales: Import (fr "Importer",
+   ar "استيراد"); suppliers: Settings (fr "Paramètres", ar "الإعدادات"). No order suggestion yet: say so.
+5. Follow-ups ("and in September?", "et à Rabat ?"): keep the earlier question's part and branch, look it up again.
+6. If the shop's data can't answer (customers, staff, salaries, rent, weather...), say so in one sentence, no number."""
 MONEY_SEEN = "Money is in {currency}."
 MONEY_HIDDEN = "This person must not see money: never mention prices, costs, values or margins."
 FIX_NUMBERS = """These numbers are not in the tool results: {numbers}. Write the answer again using only numbers
@@ -136,8 +141,26 @@ def instructions(asker: Asker, question: str, language: str) -> str:
         last_sale=asker.last_sale_day.isoformat() if asker.last_sale_day else "never (no sales imported yet)",
         branches=", ".join(name for name, has_sales in branches if has_sales) or "none yet",
         money=MONEY_SEEN.format(currency=asker.currency) if asker.sees_money else MONEY_HIDDEN,
+        periods=periods(asker.today), types=_names(db, organization_id, TYPE_NAME),
+        brands=_names(db, organization_id, Part.brand),
         language=DARIJA if is_darija(question) else LANGUAGES[language],
     )
+
+
+def periods(today: date) -> str:
+    """The common periods with their exact dates, worked out by the app (models get dates wrong)."""
+    monday = today - timedelta(days=today.weekday())
+    month = today.replace(day=1)
+    last_month_end = month - timedelta(days=1)
+    return "; ".join(f"{name} {first.isoformat()} to {last.isoformat()}" for name, first, last in (
+        ("this week", monday, today), ("last week", monday - timedelta(days=7), monday - timedelta(days=1)),
+        ("this month", month, today), ("last month", last_month_end.replace(day=1), last_month_end),
+        ("this year", today.replace(month=1, day=1), today), ("yesterday", today - timedelta(days=1), today - timedelta(days=1))))
+
+
+def _names(db: Session, organization_id: uuid.UUID, column, most: int = 80) -> str:
+    names = sorted({name for name in db.scalars(select(column).where(Part.organization_id == organization_id).distinct()) if name})
+    return ", ".join(names[:most]) + (", ..." if len(names) > most else "") or "(none)"
 
 
 def _looked_up(asker: Asker, call: dict) -> dict:

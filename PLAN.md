@@ -39,6 +39,7 @@ Each step ends with something the owner can open and click. The owner approves b
 - Questions in plain language, answered from the shop's real data, with the numbers shown. Runs on a free local model (Ollama); optional.
 - [x] 7a. Engine: 10 read-only question types; the rule says "not sure" instead of guessing; rule + local model (qwen2.5:3b) only when unsure, measured on two labeled sets (150 questions, 4 languages); "I understood: ..." before every answer; staff get no money. No screens.
 - [ ] 7d. Answers written by the app (en/fr/ar sentences, "why" by rules), the local model only reads; optional Groq cloud writer (owner's switch); each person's last 20 questions kept; sidebar fits the screen. Measured on the 60 questions; side-by-side in `docs/ask-readability.md`.
+- [ ] 7e. Ask becomes a real assistant (owner-approved after his trial): Groq (gpt-oss-120b, free) thinks and calls 10 read-only tools over the shop's data, every number checked against the tool results; on by default with a key, the app's own answers when offline or out of allowance; Settings shows the allowance left. Measured on 50 new questions and the owner's 10; side-by-side in `docs/ask-real-assistant.md`.
 
 ## Step 8 — Polish and launch
 - French and Arabic (right-to-left). Realistic Moroccan demo shop. Backups. Speed check. Presentation.

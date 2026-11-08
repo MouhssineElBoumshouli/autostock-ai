@@ -86,7 +86,7 @@ def test_the_model_calls_tools_and_its_checked_answer_is_shown(browser, shop, on
     assert result["lookups"][0]["numbers"][0] == {"label": "Pieces sold", "value": 5, "unit": "pieces",
                                                   "key": "pieces_sold", "about": None}
     tool_reply = fake.sent[1]["messages"][-1]
-    assert tool_reply["role"] == "tool" and json.loads(tool_reply["content"])["pieces"] == 5
+    assert tool_reply["role"] == "tool" and json.loads(tool_reply["content"])["total_pieces"] == 5
     assert result["tokens"] == 1500
 
 
@@ -140,7 +140,7 @@ def test_a_follow_up_sends_the_conversation_and_its_numbers_stay_allowed(browser
     result = done(chat(browser, "Are you sure?", earlier_turns=1))
     messages = fake.sent[0]["messages"]
     assert messages[1] == {"role": "user", "content": "How many oil filters this week?"}
-    assert messages[2]["content"].startswith("5 oil filters.") and '"pieces":5' in messages[2]["content"]
+    assert messages[2]["content"].startswith("5 oil filters.") and '"total_pieces":5' in messages[2]["content"]
     assert result["text"].startswith("Yes, the 5")
 
 
@@ -175,7 +175,7 @@ def test_asking_changes_no_business_data_and_is_kept_in_history(browser, shop, o
         assert db.scalar(select(func.count()).select_from(AuditLog)) == audit
         assert db.scalar(select(func.count()).select_from(SaleLine)) == sales
         saved = db.scalar(select(AskedQuestion))
-        assert saved.kind == "assistant" and saved.answer["tokens"] == 1500 and saved.answer["facts"][0]["pieces"] == 5
+        assert saved.kind == "assistant" and saved.answer["tokens"] == 1500 and saved.answer["facts"][0]["total_pieces"] == 5
 
 
 def test_the_tools_run_in_a_read_only_transaction(shop):
@@ -225,12 +225,12 @@ def cars_shop(browser):
 ])
 def test_a_part_must_match_every_field_given(cars_shop, args, pieces):
     with SessionLocal() as db:
-        assert run_tool(asker(cars_shop, db=db), "stock", {**args, "branch": "Rabat"}).data["pieces"] == pieces
+        assert run_tool(asker(cars_shop, db=db), "stock", {**args, "branch": "Rabat"}).data["total_pieces"] == pieces
 
 
 def test_a_wrong_field_or_branch_gets_an_error_the_model_can_fix(cars_shop):
     with SessionLocal() as db:
-        assert run_tool(asker(cars_shop, db=db), "stock", {"type": "pneu"}).data["error"] == "No part has the type 'pneu'."
+        assert run_tool(asker(cars_shop, db=db), "stock", {"type": "pneu"}).data["error"] == "No part has exactly the type 'pneu'."
         assert run_tool(asker(cars_shop, db=db), "stock", {"branch": "Fes"}).data["branches"] == [MAIN, RABAT] \
             or set(run_tool(asker(cars_shop, db=db), "stock", {"branch": "Fes"}).data["branches"]) == {MAIN, RABAT}
         assert run_tool(asker(cars_shop, db=db), "drop_table", {}).data == {"error": "Unknown tool 'drop_table'."}
@@ -244,8 +244,8 @@ def test_sales_compare_gives_changes_stock_outs_and_last_year(shop):
                         first_day=LAST_DAY - timedelta(days=3), last_day=LAST_DAY))
         db.commit()
         data = run_tool(asker(shop, db=db), "sales", {**OIL_THIS_WEEK, "compare": "previous_period"}).data
-    assert data["pieces"] == 5 and data["compared_with"]["pieces"] == 0 and data["compared_with"]["change_pieces"] == 5
-    assert data["stock_out_days"] == 4 and data["same_dates_last_year"]["pieces"] == 8
+    assert data["total_pieces"] == 5 and data["compared_with"]["total_pieces"] == 0 and data["compared_with"]["change_pieces"] == 5
+    assert data["stock_out_days"] == 4 and data["same_dates_last_year"]["total_pieces"] == 8
 
 
 def test_a_period_past_the_last_sale_is_counted_up_to_it(shop):
@@ -364,3 +364,20 @@ def test_the_online_assistant_cant_be_turned_on_without_a_key(browser, shop):
     browser.patch("/api/settings", json={"online_assistant_on": False})
     response = browser.patch("/api/settings", json={"online_assistant_on": True})
     assert response.status_code == 422 and "GROQ_API_KEY" in response.text
+
+
+def test_a_whole_month_is_compared_with_the_whole_month_before(shop):
+    with SessionLocal() as db:
+        data = run_tool(asker(shop, db=db), "sales", {"date_from": "2026-09-01", "date_to": "2026-09-30", "compare": "previous_period"}).data
+    assert data["compared_with"]["period"] == ["2026-08-01", "2026-08-31"]
+
+
+def test_numbers_inside_tool_text_count_as_tool_numbers():
+    allowed = allowed_numbers([{"what": "Sold 29 in the 7 days to 3 Nov, usually 4 to 15.", "part": "Pompe à eau - Mercedes 190"}], [], [])
+    assert unknown_numbers("Sold 29 in 7 days (usually 4 to 15); Mercedes 190.", allowed) == []
+
+
+def test_the_instructions_give_the_exact_dates_of_common_periods():
+    from app.ask.online_assistant import periods
+    text = periods(date(2026, 11, 8))
+    assert "last week 2026-10-26 to 2026-11-01" in text and "last month 2026-10-01 to 2026-10-31" in text

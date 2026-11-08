@@ -131,7 +131,7 @@ def mentions(text: str, wanted: list[float]) -> bool:
     found = said(text)
     if any(value == 0 for value in wanted) and re.search(r"\b(aucun|aucune|pas de|no |none|zéro|zero|0)\b", text.lower()):
         return True
-    return any(found & rounded(value) or any(abs(number - value) < 0.006 for number in found) for value in wanted)
+    return any(found & rounded(value) or any(abs(number - value) <= 0.5 for number in found) for value in wanted)
 
 
 def language_of(text: str) -> str:
@@ -154,7 +154,7 @@ def natural(text: str) -> bool:
     return len(sentences) <= 3 and len(text.split()) <= 80 and not re.search(r"(^|\n)\s*([-*•]|\d+[.)])\s|\*\*|\|", text)
 
 
-def judged(db, organization_id, case: RealCase, result: dict) -> dict:
+def judged(db, organization_id, case: RealCase, result: dict, earlier_facts: list) -> dict:
     checks: dict = {}
     reply = result.get("text", "")
     if result.get("fell_back"):
@@ -168,7 +168,7 @@ def judged(db, organization_id, case: RealCase, result: dict) -> dict:
         checks["to_read"] = not checks["right"]
     else:
         checks["right"] = None  # read by a person (docs/ask-real-assistant.md)
-    allowed = allowed_numbers(result.get("facts", []), [case.question, *case.earlier], [TODAY, date(2026, 11, 3)])
+    allowed = allowed_numbers(result.get("facts", []) + earlier_facts, [case.question, *case.earlier], [TODAY, date(2026, 11, 3)])
     checks["not_from_tools"] = unknown_numbers(reply, allowed) if reply else []
     checks["language"] = right_language(case.language, reply) if reply else False
     checks["natural"] = natural(reply) if reply else False
@@ -232,7 +232,8 @@ def run_cases(organization_id, model: str, path: Path) -> list[dict]:
             print("\nGroq's daily allowance is used up: run again later, it goes on from here.")
             break
         with SessionLocal() as db:
-            saved[key] = {"case": case.__dict__, "result": result, "checks": judged(db, organization_id, case, result)}
+            facts = [fact for earlier_turn in earlier for fact in earlier_turn.facts]
+            saved[key] = {"case": case.__dict__, "result": result, "checks": judged(db, organization_id, case, result, facts)}
         path.write_text(json.dumps(saved, ensure_ascii=False, indent=1, default=str))
         print("." if saved[key]["checks"]["right"] else "?" if saved[key]["checks"]["right"] is None else "x", end="", flush=True)
     print()

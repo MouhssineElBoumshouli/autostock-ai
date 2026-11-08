@@ -127,10 +127,12 @@ def _has_word(words: list[str], typed: str) -> bool:
 
 def _searched(asker: Asker, name: str, words: str) -> set[uuid.UUID]:
     result = find_parts(asker.db, asker.organization_id, words, every_word=True)
-    if result.closest or not result.matches:
-        closest = asker.db.scalars(select(Part.name).where(Part.id.in_([i for i, _ in result.matches[:5]]))).all()
-        raise ToolError(f"No part has the {name} '{words}'.", closest=sorted(set(closest)))
-    return {part_id for part_id, _ in result.matches}
+    full = [part_id for part_id, score in result.matches if score >= 1]
+    if not result.closest and full:
+        return set(full)
+    closest = asker.db.scalars(select(TYPE_NAME if name == "type" else CAR_NAME)
+                               .where(Part.id.in_([part_id for part_id, _ in result.matches[:20]]))).all()
+    raise ToolError(f"No part has exactly the {name} '{words}'.", closest=sorted(set(closest))[:8])
 
 
 def _intersect(ids: set[uuid.UUID] | None, more: set[uuid.UUID]) -> set[uuid.UUID]:
