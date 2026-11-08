@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.branches import branches_in_use
 from app.api.schemas import NameText
 from app.audit import record_change
 from app.auth.permissions import require_role
@@ -238,11 +239,18 @@ def find_in_shop(db: Session, model, row_id: uuid.UUID, user: User, message: str
 
 
 def stock_by_branch(db: Session, part: Part) -> list[BranchStock]:
-    """Every branch of the shop, with 0 where the part has no stock."""
+    """Every branch that has stock or sales somewhere in the shop, with 0 where this part has none
+    there. A branch nobody ever used (for instance, the one made at setup before the shop's real
+    branches came in from its files) is left out instead of showing up as 0 for every part -- unless
+    no branch has been used yet, so a brand-new shop can still see (and set stock on) its own."""
+    used = branches_in_use(db, part.organization_id)
+    filters = [Branch.organization_id == part.organization_id]
+    if used:
+        filters.append(Branch.id.in_(used))
     rows = db.execute(
         select(Branch.id, Branch.name, StockLevel.quantity)
         .outerjoin(StockLevel, (StockLevel.branch_id == Branch.id) & (StockLevel.part_id == part.id))
-        .where(Branch.organization_id == part.organization_id)
+        .where(*filters)
         .order_by(Branch.created_at)
     ).all()
     return [BranchStock(branch_id=row.id, branch=row.name, quantity=row.quantity or 0) for row in rows]

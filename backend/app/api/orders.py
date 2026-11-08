@@ -133,7 +133,7 @@ def change_order_settings(
 
 @router.post("/suggestions", status_code=201)
 def new_suggestions(body: SuggestionsRequest, user: User = Depends(managers), db: Session = Depends(get_session)) -> RunOut:
-    run = make_order_run(db, user, body.budget)
+    run = make_order_run(db, user.organization_id, body.budget, user)
     db.commit()
     return _run_out(db, run)
 

@@ -481,15 +481,18 @@ export const fr: typeof en = {
     greeting: (partOfDay: "morning" | "afternoon" | "evening", name: string) =>
       `${partOfDay === "evening" ? "Bonsoir" : partOfDay === "afternoon" ? "Bon après-midi" : "Bonjour"}, ${name}`,
     needsYouToday: ({
+      outOfStock,
       stockProblems,
       partsToOrder,
       lateDeliveries,
     }: {
+      outOfStock: number;
       stockProblems: number;
       partsToOrder: number;
       lateDeliveries: number;
     }) => {
       const segments = [
+        outOfStock > 0 && plural(outOfStock, "1 en rupture", `${outOfStock} en rupture`),
         stockProblems > 0 && plural(stockProblems, "1 problème de stock à vérifier", `${stockProblems} problèmes de stock à vérifier`),
         partsToOrder > 0 && plural(partsToOrder, "1 pièce à commander", `${partsToOrder} pièces à commander`),
         lateDeliveries > 0 && plural(lateDeliveries, "1 livraison en retard", `${lateDeliveries} livraisons en retard`),
@@ -674,6 +677,7 @@ export const fr: typeof en = {
       description:
         "Là où le stock est rangé. Renommez-en une, fusionnez deux qui sont le même lieu, ou supprimez-en une ajoutée par erreur.",
       usedNote: "A du stock ou des ventes, fusionnez-la plutôt",
+      emptyNote: "Cette succursale est vide et n’est utilisée nulle part : la supprimer ?",
     },
     suppliers: {
       title: "Fournisseurs",

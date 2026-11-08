@@ -489,15 +489,18 @@ export const ar: typeof en = {
     greeting: (partOfDay: "morning" | "afternoon" | "evening", name: string) =>
       `${partOfDay === "morning" ? "صباح الخير" : "مساء الخير"}، ${name}`,
     needsYouToday: ({
+      outOfStock,
       stockProblems,
       partsToOrder,
       lateDeliveries,
     }: {
+      outOfStock: number;
       stockProblems: number;
       partsToOrder: number;
       lateDeliveries: number;
     }) => {
       const segments = [
+        outOfStock > 0 && `${parts(outOfStock, String(outOfStock))} نفدت`,
         stockProblems > 0 &&
           `${counted(stockProblems, String(stockProblems), "مشكلة مخزون واحدة", "مشكلتا مخزون", "مشاكل مخزون", "مشكلة مخزون")} للمراجعة`,
         partsToOrder > 0 && `${parts(partsToOrder, String(partsToOrder))} للطلب`,
@@ -680,6 +683,7 @@ export const ar: typeof en = {
       title: "الفروع",
       description: "أماكن تخزين السلع. غيّر اسم فرع، أو ادمج فرعين هما نفس المكان، أو احذف فرعًا أُضيف خطأً.",
       usedNote: "به مخزون أو مبيعات، ادمجه بدلًا من ذلك",
+      emptyNote: "هذا الفرع فارغ وغير مستعمل في أي مكان: هل تريد حذفه؟",
     },
     suppliers: {
       title: "الموردون",

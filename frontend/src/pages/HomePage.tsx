@@ -44,6 +44,7 @@ export function HomePage() {
 function Today({ canReview }: { canReview: boolean }) {
   const me = useSignedIn();
   const today = useToday();
+  const summary = useStockSummary();
   const startHere = useStartHere(canReview && !me.organization.is_demo);
 
   if (today.isError) {
@@ -75,6 +76,7 @@ function Today({ canReview }: { canReview: boolean }) {
     // (e.g. a truncated part name) can force this whole column wider than the viewport.
     <div className="grid grid-cols-1 gap-6">
       <TodayHeadline
+        outOfStock={summary.data?.out ?? 0}
         stockProblems={data.needs_action_total}
         partsToOrder={data.to_order?.lines ?? 0}
         lateDeliveries={data.late_deliveries.length}

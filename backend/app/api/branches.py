@@ -40,7 +40,7 @@ def list_branches(owner: User = Depends(owner_only), db: Session = Depends(get_s
     branches = db.scalars(
         select(Branch).where(Branch.organization_id == owner.organization_id).order_by(Branch.created_at)
     ).all()
-    used = _branches_in_use(db, owner.organization_id)
+    used = branches_in_use(db, owner.organization_id)
     return [BranchOut(id=branch.id, name=branch.name, in_use=branch.id in used) for branch in branches]
 
 
@@ -58,7 +58,7 @@ def rename_branch(
     if branch.name != before:
         record_change(db, owner, "branch.renamed", "branch", branch.id, before={"name": before}, after={"name": branch.name})
     db.commit()
-    return BranchOut(id=branch.id, name=branch.name, in_use=branch.id in _branches_in_use(db, owner.organization_id))
+    return BranchOut(id=branch.id, name=branch.name, in_use=branch.id in branches_in_use(db, owner.organization_id))
 
 
 @router.post("/{branch_id}/merge", status_code=204)
@@ -104,7 +104,7 @@ def merge_branch(
 @router.delete("/{branch_id}", status_code=204)
 def remove_branch(branch_id: uuid.UUID, owner: User = Depends(owner_only), db: Session = Depends(get_session)) -> None:
     branch = _find(db, owner, branch_id, lock=True)
-    if branch.id in _branches_in_use(db, owner.organization_id):
+    if branch.id in branches_in_use(db, owner.organization_id):
         raise HTTPException(409, "This branch has stock or sales history. Merge it into another branch first.")
     if _count(db, owner.organization_id) <= 1:
         raise HTTPException(409, NEEDS_ONE_BRANCH)
@@ -132,7 +132,7 @@ def _check_name_free(db: Session, owner: User, name: str, exclude: uuid.UUID) ->
         raise HTTPException(409, "A branch with this name already exists.")
 
 
-def _branches_in_use(db: Session, organization_id: uuid.UUID) -> set[uuid.UUID]:
+def branches_in_use(db: Session, organization_id: uuid.UUID) -> set[uuid.UUID]:
     with_stock = db.scalars(
         select(StockLevel.branch_id).distinct().join(Branch).where(Branch.organization_id == organization_id)
     ).all()

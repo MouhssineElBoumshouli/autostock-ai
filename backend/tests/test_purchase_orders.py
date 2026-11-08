@@ -123,6 +123,20 @@ def test_sending_locks_the_line_and_counts_as_already_ordered_next_run(browser):
     assert next_line["quantity"] > 0
 
 
+def test_a_sent_order_that_still_covers_everything_is_never_suggested_again(browser):
+    """Once sent, a line is no longer carried over as "approved" (the usual math already counts
+    it as on order); with nothing more needed, the part is simply left out of the next run."""
+    set_up_shop(browser)
+    part, line = one_suggestion(browser, sku="OIL-1", per_week=9, on_hand=6)
+    browser.post(f"/api/orders/suggestions/{line['id']}/decide", json={"decision": "approve"})
+    [po] = browser.get("/api/orders/purchase-orders").json()
+    browser.post(f"/api/orders/purchase-orders/{po['id']}/send")
+
+    next_run = browser.post("/api/orders/suggestions", json={}).json()
+
+    assert not [row for row in run_lines(browser, next_run) if row["part_id"] == str(part)]
+
+
 def test_receiving_in_full_adds_stock_and_marks_received(browser):
     set_up_shop(browser)
     part, line = one_suggestion(browser, sku="OIL-1", per_week=9, on_hand=6)
