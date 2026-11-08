@@ -83,6 +83,27 @@ def test_no_file_says_it_is_made_up(tmp_path):
                 assert b"demo" not in archive.read(name).lower(), (path.name, name)
 
 
+def test_the_parts_file_writes_family_names_in_french(tmp_path):
+    """The seed's families are English internal category names; the trial file a Moroccan shop
+    would bring is in French, the way its own counter names them."""
+    with SessionLocal() as db:
+        seed, _ = create_demo_shop(db, LAST_DAY, parts_count=200, history_days=90, seed=7)
+        db.commit()
+        write_files(db, seed.id, tmp_path)
+
+    book = load_workbook(tmp_path / "Pièces.xlsx")
+    sheet = book.active
+    header = [cell.value for cell in sheet[1]]
+    family_column = header.index("Famille")
+    families = {row[family_column] for row in sheet.iter_rows(min_row=2, values_only=True)}
+
+    assert families  # the file has rows
+    english_leftovers = {"Filters", "Oils", "Ignition", "Brakes", "Lighting", "Engine", "Transmission",
+                         "Electrical", "Cooling", "Air conditioning", "Visibility"}
+    assert not families & english_leftovers
+    assert "Freinage" in families  # Brakes
+
+
 def suppliers_delivery(shop_id) -> dict[str, tuple[int | None, str | None]]:
     with SessionLocal() as db:
         rows = db.execute(select(Supplier.name, Supplier.delivery_days, Supplier.delivery_source)

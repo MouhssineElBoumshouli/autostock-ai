@@ -222,6 +222,19 @@ def test_update_keeps_values_the_file_leaves_empty(browser):
         assert part.sale_price == 32000
 
 
+def test_reimporting_parts_updates_the_family_of_existing_parts(browser):
+    """The family (category) column can change between two imports of the same shop, for example
+    when the trial file's families are retranslated: a normal re-import must pick up the new name."""
+    set_up_shop(browser)
+    import_parts(browser)
+    content = "SKU;Family\nBP-001;Freinage\n".encode()
+
+    send(browser, "save", "parts", "family.csv", {0: "sku", 1: "category"}, content=content)
+
+    with SessionLocal() as db:
+        assert db.scalar(select(Part).where(Part.sku == "BP-001")).category == "Freinage"
+
+
 def test_column_memory_adds_to_what_is_remembered_instead_of_replacing_it(browser):
     set_up_shop(browser)
     import_parts(browser)  # remembers all 11 headers of parts_fr_messy.xlsx

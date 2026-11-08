@@ -31,6 +31,22 @@ from app.exports.xlsx import Workbook
 from app.models import Branch, Part, SaleLine, StockLevel, Supplier
 
 SKU_START = "AL-"  # the seed's part numbers carry its own name: a real shop's don't
+# The seed's families are named in English for its own internal use (Ask's rules, tests); the
+# trial file is what a Moroccan shop brings in French, so it gets the name its counter would use.
+FRENCH_FAMILY = {
+    "Filters": "Filtres",
+    "Oils": "Huiles et liquides",
+    "Ignition": "Allumage",
+    "Brakes": "Freinage",
+    "Lighting": "Éclairage",
+    "Suspension": "Suspension",
+    "Engine": "Moteur",
+    "Transmission": "Embrayage",
+    "Electrical": "Électricité",
+    "Cooling": "Refroidissement",
+    "Air conditioning": "Climatisation",
+    "Visibility": "Visibilité",
+}
 PARTS_HEADERS = [
     "Référence", "Désignation", "Marque", "Famille", "Référence OEM", "Fournisseur", "Délai de livraison (jours)", "Prix d'achat", "Prix de vente",
     "Conditionnement", "Stock minimum", "Succursale", "Quantité en stock",
@@ -75,9 +91,10 @@ def _write_parts(path: Path, parts: list[Part], suppliers: dict, stock: dict) ->
         sheet = book.add_sheet("Pièces")
         sheet.header(PARTS_HEADERS)
         for part in parts:
+            family = FRENCH_FAMILY.get(part.category, part.category)
             for branch, quantity in sorted(stock[part.id]):
                 sheet.append([
-                    shop_sku(part.sku), part.name, part.brand, part.category, part.oem_reference,
+                    shop_sku(part.sku), part.name, part.brand, family, part.oem_reference,
                     suppliers[part.supplier_id].name, suppliers[part.supplier_id].delivery_days, dirhams(part.unit_cost), dirhams(part.sale_price),
                     part.pack_size, part.min_stock, branch, quantity,
                 ])
