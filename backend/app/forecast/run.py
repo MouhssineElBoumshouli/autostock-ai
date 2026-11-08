@@ -19,7 +19,7 @@ from app.db import SessionLocal
 from app.forecast.engine import forecast_all
 from app.forecast.history import demand_matrix, first_and_last_day, read_daily_sales, sales_table
 from app.models import Forecast, ForecastRun, Organization, StockOut
-from app.ordering.run import make_order_run
+from app.ordering.run import last_budget, make_order_run
 from app.shop_day import shop_today
 
 log = logging.getLogger(__name__)
@@ -125,7 +125,7 @@ def run_forecasts_in_background(organization_id: uuid.UUID, trigger: str) -> Non
         try:
             db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": f"forecast:{organization_id}"})
             run_forecasts(db, organization_id, trigger)
-            make_order_run(db, organization_id, None)
+            make_order_run(db, organization_id, last_budget(db, organization_id))
             db.commit()
         except Exception:
             log.exception("Forecast run failed for %s", organization_id)

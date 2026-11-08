@@ -7,6 +7,7 @@ from sqlalchemy import select, update
 
 from app.db import SessionLocal
 from app.models import Branch, Forecast, OrderRun, OrderSuggestion, Organization, Part, SaleLine, StockLevel, Supplier
+from app.ordering.run import last_budget, make_order_run
 from tests.helpers import OWNER_PASSWORD, add_member, audit_rows, create_other_shop, logged_in_browser, member_with_own_password, run_lines, set_up_shop
 
 LAST_DAY = date(2026, 9, 30)
@@ -243,3 +244,101 @@ def test_merging_a_supplier_keeps_its_past_suggestions(browser):
     assert browser.post(f"/api/suppliers/{source.id}/merge", json={"into": str(target.id)}).status_code == 204
     with SessionLocal() as db:
         assert {line.supplier_id for line in db.scalars(select(OrderSuggestion))} == {target.id}
+
+
+# A new run (made automatically after every forecast run, or by a manager clicking again) must
+# keep what a person already decided on the latest run, instead of starting over from scratch.
+
+
+def test_an_approved_line_still_in_a_draft_order_carries_over_unchanged(browser):
+    set_up_shop(browser)
+    add_part(shop_id(), "OIL-1", per_week=9, on_hand=6)
+    [line] = run_lines(browser, browser.post("/api/orders/suggestions", json={}).json())
+    approved = browser.post(f"/api/orders/suggestions/{line['id']}/decide", json={"decision": "approve"}).json()
+
+    second = browser.post("/api/orders/suggestions", json={}).json()
+
+    [carried] = run_lines(browser, second)
+    assert carried["status"] == "approved"
+    assert carried["quantity"] == line["quantity"]
+    assert carried["approved_quantity"] == approved["approved_quantity"]
+    [po] = browser.get("/api/orders/purchase-orders").json()
+    assert po["line_count"] == 1  # not a second, duplicate line on the same draft order
+
+
+def test_an_edited_approved_line_keeps_its_edited_quantity(browser):
+    set_up_shop(browser)
+    add_part(shop_id(), "OIL-1", per_week=9, on_hand=6)
+    [line] = run_lines(browser, browser.post("/api/orders/suggestions", json={}).json())
+    custom = line["quantity"] + 10
+    browser.post(f"/api/orders/suggestions/{line['id']}/decide", json={"decision": "approve", "quantity": custom})
+
+    second = browser.post("/api/orders/suggestions", json={}).json()
+
+    [carried] = run_lines(browser, second)
+    assert carried["approved_quantity"] == custom
+    [po] = browser.get("/api/orders/purchase-orders").json()
+    assert po["total_cost"] == custom * line["unit_cost"]
+
+
+def test_an_approved_draft_line_is_never_cut_by_a_later_tighter_budget(browser):
+    set_up_shop(browser)
+    shop = shop_id()
+    add_part(shop, "OIL-1", per_week=9, on_hand=0, unit_cost=9500, sale_price=10000)
+    add_part(shop, "OIL-2", per_week=9, on_hand=0, unit_cost=9500, sale_price=10000)
+    first = browser.post("/api/orders/suggestions", json={}).json()
+    approved_first = run_lines(browser, first)[0]
+    browser.post(f"/api/orders/suggestions/{approved_first['id']}/decide", json={"decision": "approve"})
+
+    second = browser.post("/api/orders/suggestions", json={"budget": 1}).json()  # far too small for a new line
+
+    by_part = {line["part_id"]: line for line in run_lines(browser, second)}
+    assert by_part[approved_first["part_id"]]["status"] == "approved"
+    other = next(part_id for part_id in by_part if part_id != approved_first["part_id"])
+    assert by_part[other]["status"] == "cut_by_budget"
+    assert second["kept_lines"] == 1 and second["cut_lines"] == 1
+
+
+def test_a_rejected_line_stays_rejected_when_nothing_changed(browser):
+    set_up_shop(browser)
+    add_part(shop_id(), "OIL-1", per_week=9, on_hand=6)
+    [line] = run_lines(browser, browser.post("/api/orders/suggestions", json={}).json())
+    browser.post(f"/api/orders/suggestions/{line['id']}/decide", json={"decision": "reject"})
+
+    second = browser.post("/api/orders/suggestions", json={}).json()
+
+    [carried] = run_lines(browser, second)
+    assert carried["status"] == "rejected"
+    assert browser.get("/api/orders/purchase-orders").json() == []
+
+
+def test_a_rejected_line_is_suggested_again_once_the_part_runs_out(browser):
+    set_up_shop(browser)
+    part = add_part(shop_id(), "OIL-1", per_week=9, on_hand=6)
+    [line] = run_lines(browser, browser.post("/api/orders/suggestions", json={}).json())
+    browser.post(f"/api/orders/suggestions/{line['id']}/decide", json={"decision": "reject"})
+    with SessionLocal() as db:
+        db.execute(update(StockLevel).where(StockLevel.part_id == part).values(quantity=0))
+        db.commit()
+
+    second = browser.post("/api/orders/suggestions", json={}).json()
+
+    [carried] = run_lines(browser, second)
+    assert carried["status"] == "suggested"
+
+
+def test_automatic_runs_keep_the_owners_last_budget(browser):
+    set_up_shop(browser)
+    shop = shop_id()
+    add_part(shop, "OIL-1", per_week=9, on_hand=0, unit_cost=9500, sale_price=10000)
+    add_part(shop, "OIL-2", per_week=9, on_hand=0, unit_cost=9500, sale_price=10000)
+    first = browser.post("/api/orders/suggestions", json={}).json()
+    one_line_cost = max(line["line_cost"] for line in run_lines(browser, first))
+    browser.post("/api/orders/suggestions", json={"budget": one_line_cost})
+
+    with SessionLocal() as db:
+        automatic = make_order_run(db, shop, last_budget(db, shop))
+        db.commit()
+
+    assert automatic.budget == one_line_cost
+    assert automatic.cut_lines == 1  # the budget is still enforced, not just remembered
