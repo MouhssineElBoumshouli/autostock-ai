@@ -39,7 +39,7 @@ Ask before adding any new library. Every dependency must earn its place.
 - Passwords hashed with Argon2. Sessions in secure HTTP-only cookies.
 - Money stored as integers in centimes. Default currency MAD, configurable. Quantities shown as whole numbers.
 - All user-facing text lives in one place per language (`frontend/src/i18n/`), so French and Arabic can be added later. Start in English.
-  One exception: Ask answers are written by the server in the question's own language (`backend/app/ask/sentences/`, one file per language).
+  One exception: Ask answers are written on the server in the question's own language (by the online assistant, or by `backend/app/ask/sentences/`, one file per language, when it is off).
 - Tests: every backend endpoint and every calculation gets a pytest test. Run tests before saying a task is done.
 - Keep docs short: `README.md` (how to run), `PLAN.md` (what's next), `docs/journey.md` (the project story). No QA report files, no screenshot folders in git.
 
@@ -50,10 +50,10 @@ AI must be useful and measurable, never decoration.
 - The AI never places orders or changes data by itself. A person approves.
 - Every AI answer about the shop shows the real numbers it used.
 - The model may write answers, but every number must be checked against real data before it's shown.
-- **Everything must be free, forever.** No paid APIs, no cloud AI services (one optional exception below). All AI runs on the shop's own computer with free, open-source tools (scikit-learn, small local models).
-- The one exception: the optional **cloud writer** for Ask answers (Groq free tier, `backend/app/ai/cloud_writer.py`, key `GROQ_API_KEY` in `.env`). Off by default; only the owner turns it on in Settings, which says plainly what is sent. It only receives the labeled facts of one answer, never the database, and passes the same checks (labels, branch/part/period, language, one retry). Any failure, no internet or limit reached -> the app's own sentences. Nothing else may use it.
+- **Everything must be free, forever.** No paid APIs. All AI runs on the shop's own computer with free, open-source tools (scikit-learn, small local models), with one exception below.
+- The one exception (owner-approved, 2026-11-08): **Groq is the brain for Ask** (free tier, `backend/app/ai/groq.py`, key `GROQ_API_KEY` in `.env`). On by default when the key is set; the owner can turn it off in Settings, which says plainly what is sent and shows the daily allowance left. Groq thinks and calls the app's READ-ONLY tools (`backend/app/ask/data_tools/`, scoped to the asker's shop and role, staff never get money); it only receives the question, the conversation and the tool results, never the database. Every number in its answer must come from a tool result (`backend/app/ask/tool_numbers.py`, one retry). Offline, limit reached or a number that fails the check -> one line says so, then the app's own answers. Nothing else may use Groq.
 - Prefer classic machine learning we train and measure ourselves over large language models.
-- If a feature truly needs a language model, it uses an optional local model through Ollama (free), in one module: `backend/app/ai/llm.py`. If Ollama isn't installed, the feature says "AI is off" and the rest of the app works.
+- Apart from Ask's online assistant, a feature that truly needs a language model uses an optional local model through Ollama (free), in one module: `backend/app/ai/llm.py`. If Ollama isn't installed, the feature says "AI is off" and the rest of the app works.
 - Pure math problems (reorder quantities, budget limits) use math/optimization, not an LLM.
 
 The old forecasting code (random forest + baselines + Croston for slow-moving parts) is on the `archive/odoo-v0` branch in `ml/forecast.py`. Reuse its ideas when we reach forecasting.
