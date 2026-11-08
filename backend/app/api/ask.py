@@ -1,8 +1,9 @@
 """Ask your shop: a question in plain words, answered from the shop's real data. Read-only.
 
-With the local model on, POST /api/ask/chat: the model reads the question, the app looks things up and
-writes the answer (or the optional cloud writer, checked against the data; app/ask/assistant.py).
-With AI off, POST /api/ask: the keyword rule reads the question and the app writes the answer.
+POST /api/ask/chat: with the online assistant on (GROQ_API_KEY set, owner's switch on), Groq thinks and calls
+the app's read-only tools, every number checked (app/ask/online_assistant.py). If Groq is off, offline or out of
+its daily allowance, one {"type": "online_off"} line says so, then the local model reads the question and the app
+writes the answer (app/ask/assistant.py). With no AI at all, POST /api/ask: the keyword rule reads it.
 Both are written in the question's language and saved in the person's history (GET /api/ask/history).
 """
 
@@ -15,7 +16,8 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai import cloud_writer, llm
+from app.ai import groq, llm
+from app.ask import online_assistant
 from app.ask.answer_parts import Number
 from app.ask.answers import answer
 from app.ask.assistant import as_line, converse
@@ -28,6 +30,7 @@ from app.ask.understood_line import heading, shown_period, understood_line
 from app.auth.permissions import require_role
 from app.db import SessionLocal, get_session
 from app.models import Organization, User
+from app.shop_day import shop_today
 
 router = APIRouter(prefix="/api/ask")
 anyone = require_role()
@@ -88,6 +91,8 @@ class AskedBefore(BaseModel):
 class ChatIn(BaseModel):
     question: str = Field(min_length=1, max_length=300)
     previous: AskedBefore | None = None  # so "and in Rabat?" or "why?" can change it
+    # How many of the person's last answers belong to this conversation (the online assistant reads them).
+    earlier_turns: int = Field(default=0, ge=0, le=online_assistant.EARLIER_TURNS)
 
 
 class AskedOut(BaseModel):
@@ -105,10 +110,20 @@ def app_language(db: Session, user: User) -> str:
     return user.language or db.scalar(select(Organization.language).where(Organization.id == user.organization_id))
 
 
-def cloud_on(db: Session, user: User) -> bool:
-    """The owner turned the cloud writer on, and a Groq key is set."""
-    turned_on = db.scalar(select(Organization.cloud_writer_on).where(Organization.id == user.organization_id))
-    return bool(turned_on) and cloud_writer.is_ready()
+def online_on(db: Session, user: User) -> bool:
+    """A Groq key is set and the owner hasn't turned the online assistant off."""
+    turned_on = db.scalar(select(Organization.online_assistant_on).where(Organization.id == user.organization_id))
+    return bool(turned_on) and groq.is_ready()
+
+
+def earlier_turns(db: Session, user: User, count: int) -> list[online_assistant.EarlierTurn]:
+    """The person's last `count` answers from the assistant, oldest first, with the facts each one used."""
+    if not count:
+        return []
+    answers = [asked for asked in recent(db, user) if asked.kind == "assistant"][-count:]
+    return [online_assistant.EarlierTurn(asked.question, asked.answer.get("text", ""), asked.answer.get("facts")
+                                         or [lookup.get("values") for lookup in asked.answer.get("lookups", [])])
+            for asked in answers]
 
 
 def currency_seen(db: Session, user: User) -> str | None:
@@ -131,14 +146,16 @@ def clear_history(user: User = Depends(anyone), db: Session = Depends(get_sessio
 
 
 @router.get("/ai")
-def ai(user: User = Depends(anyone)) -> dict[str, bool]:
-    """Whether the local AI is running, so the page can say up front when it isn't."""
-    return {"ai_on": llm.is_on()}
+def ai(user: User = Depends(anyone), db: Session = Depends(get_session)) -> dict[str, bool]:
+    """Whether an assistant can answer (online, or the local model), so the page can say up front when none can."""
+    online = online_on(db, user)
+    return {"ai_on": online or llm.is_on(), "online": online}
 
 
 @router.post("/chat")
 def chat(body: ChatIn, user: User = Depends(anyone), db: Session = Depends(get_session)) -> StreamingResponse:
-    """Newline-delimited JSON events (see converse). {"type": "ai_off"} alone: use POST /api/ask instead."""
+    """Newline-delimited JSON events (see online_assistant.answer and converse). {"type": "online_off", "reason"}:
+    the online assistant couldn't answer, the app's own answer follows. {"type": "ai_off"}: use POST /api/ask instead."""
     currency = currency_seen(db, user)
     organization_id = user.organization_id
     earlier = None
@@ -147,14 +164,29 @@ def chat(body: ChatIn, user: User = Depends(anyone), db: Session = Depends(get_s
         if earlier is None or earlier.type == "cannot_answer":
             raise HTTPException(422, "That isn't a filter this question type takes.")
 
-    language, cloud = app_language(db, user), cloud_on(db, user)
+    language, online = app_language(db, user), online_on(db, user)
+    turns = earlier_turns(db, user, body.earlier_turns) if online else []
 
     def events():
+        if online:
+            try:
+                with SessionLocal() as read_only:  # its own read-only transaction for the tools
+                    for event in online_assistant.answer(read_only, organization_id, currency, body.question, turns,
+                                                         language, shop_today()):
+                        if event["type"] == "done":
+                            with SessionLocal() as own_db:
+                                remember(own_db, user, body.question, "assistant", json.loads(as_line(event)))
+                        yield as_line(event)
+                return
+            except groq.GroqFailed as failure:
+                yield as_line({"type": "online_off", "reason": failure.reason})
+            except online_assistant.AnswerRejected:
+                yield as_line({"type": "online_off", "reason": "unchecked"})
         if not llm.is_on():
             yield as_line({"type": "ai_off"})
             return
         with SessionLocal() as own_db:  # its own session: the answer is still being written after this function returns
-            for event in converse(own_db, organization_id, currency, body.question, earlier, language, cloud):
+            for event in converse(own_db, organization_id, currency, body.question, earlier, language):
                 if event["type"] == "done":
                     remember(own_db, user, body.question, "assistant", json.loads(as_line(event)))
                 yield as_line(event)

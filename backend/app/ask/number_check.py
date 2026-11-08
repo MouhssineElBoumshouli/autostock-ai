@@ -1,6 +1,6 @@
 """Finding the numbers in a text, however they are written: digits (1,234 · 1 234 · 1.234,5),
-Arabic digits, or words ("twenty-five", "vingt", "عشرون"). Used to block any number the writer types
-itself (app/ask/fact_check.py) and to score answers (app/ask/check_assistant.py).
+Arabic digits, or words ("twenty-five", "vingt", "عشرون"). Used to check the online assistant's
+answers (app/ask/tool_numbers.py) and to score answers (app/ask/check_assistant.py).
 """
 
 import re
