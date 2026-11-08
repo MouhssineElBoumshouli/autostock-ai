@@ -673,6 +673,8 @@ export const en = {
         "Fills in by itself, from your parts file and then your real deliveries. Type a number only to choose it yourself. Leave it empty to let the app work it out.",
       added: (name: string) => `${name} was added.`,
       detailsSaved: "Saved.",
+      deliveriesSay: (days: string) => `Your last deliveries: about ${days}`,
+      useDeliveries: "Use it",
     },
     export: {
       title: "Download all my data",

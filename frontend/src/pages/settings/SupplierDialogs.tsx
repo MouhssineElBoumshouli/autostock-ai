@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { t } from "@/i18n";
 import { deliveryTimeText } from "@/lib/deliveryTime";
+import { formatNumber } from "@/lib/format";
 import { requiredError } from "@/lib/validation";
 
 type Form = { name: string; phone: string; email: string; deliveryDays: string };
@@ -113,6 +114,36 @@ export function AddSupplierDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// The owner typed a delivery time and 3+ real deliveries say otherwise: say what they say, and
+// one click goes back to automatic, which then follows those deliveries.
+export function DeliveriesSayNote({
+  supplier,
+  save,
+}: {
+  supplier: Supplier;
+  save: UseMutationResult<Supplier, Error, { id: string } & SupplierDetails>;
+}) {
+  const words = t.settings.suppliers;
+  if (!supplier.deliveries_say) return null;
+  const days = supplier.deliveries_say.days;
+
+  function followDeliveries() {
+    save.mutate(
+      { id: supplier.id, phone: supplier.phone, email: supplier.email, delivery_days: null },
+      { onSuccess: () => toast.success(words.detailsSaved) },
+    );
+  }
+
+  return (
+    <div className="flex w-full flex-wrap items-center gap-x-2 text-body-medium text-on-surface-variant">
+      <span>{words.deliveriesSay(t.common.days(days, formatNumber(days)))}</span>
+      <Button size="sm" variant="text" loading={save.isPending} onClick={followDeliveries}>
+        {words.useDeliveries}
+      </Button>
+    </div>
   );
 }
 

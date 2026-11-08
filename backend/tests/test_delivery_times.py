@@ -292,3 +292,42 @@ def test_the_activity_page_gets_what_it_needs_to_say_what_changed(browser):
 
     [changed] = [item for item in items if item["action"] == "supplier.delivery_time_changed"]
     assert changed["after"] == {"name": "Supplier OIL-1", "delivery_days": 6, "source": "owner", "learned_from": 0}
+
+
+def test_settings_says_when_real_deliveries_disagree_with_a_typed_delivery_time(browser):
+    set_up_shop(browser)
+    part = add_part(shop_id(), "OIL-1", per_week=9, on_hand=6, delivery_days=None)
+    supplier_id = supplier_of(part).id
+    browser.patch(f"/api/suppliers/{supplier_id}/details", json={"delivery_days": 5})
+
+    def shown() -> dict:
+        [found] = [s for s in browser.get("/api/suppliers").json() if s["id"] == str(supplier_id)]
+        return found
+
+    receive_after(browser, supplier_id, 12)
+    receive_after(browser, supplier_id, 11)
+    assert shown()["deliveries_say"] is None  # two deliveries are not enough to say so
+
+    receive_after(browser, supplier_id, 13)
+    found = shown()
+    assert found["deliveries_say"] == {"days": 12, "count": 3}
+    assert found["delivery"] == {"days": 5, "source": "owner", "learned_from": 0}  # it stays what was typed
+
+    # The one click: back to automatic, which follows those deliveries.
+    after = browser.patch(f"/api/suppliers/{supplier_id}/details", json={"delivery_days": None}).json()
+    assert after["delivery"] == {"days": 12, "source": "learned", "learned_from": 3}
+    assert after["deliveries_say"] is None
+
+
+def test_no_hint_when_deliveries_agree_or_nothing_was_typed(browser):
+    set_up_shop(browser)
+    typed = supplier_of(add_part(shop_id(), "OIL-1", per_week=9, on_hand=6, delivery_days=None)).id
+    automatic = supplier_of(add_part(shop_id(), "OIL-2", per_week=9, on_hand=6, delivery_days=None)).id
+    browser.patch(f"/api/suppliers/{typed}/details", json={"delivery_days": 4})
+    for days in (4, 4, 5):
+        receive_after(browser, typed, days)
+        receive_after(browser, automatic, days + 6)
+
+    hints = {s["id"]: s["deliveries_say"] for s in browser.get("/api/suppliers").json()}
+
+    assert hints == {str(typed): None, str(automatic): None}

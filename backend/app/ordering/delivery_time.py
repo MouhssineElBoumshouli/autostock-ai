@@ -61,10 +61,14 @@ def set_from_file(db: Session, user: User, supplier: Supplier, days: int) -> Non
     _change(db, user, supplier, days, "file", 0)
 
 
-def learn_from_deliveries(db: Session, user: User, supplier: Supplier) -> None:
-    """After an order is received: follow the typical days of the supplier's recent deliveries."""
-    if supplier.delivery_source == "owner" and supplier.delivery_days is not None:
-        return
+@dataclass(frozen=True)
+class RecentDeliveries:
+    days: int  # the typical (middle) value
+    count: int  # how many deliveries it comes from
+
+
+def recent_deliveries(db: Session, supplier: Supplier) -> RecentDeliveries | None:
+    """What the supplier's last RECENT_DELIVERIES received orders say, or None before any."""
     recent = db.scalars(
         select(PurchaseOrder.days_taken)
         .where(PurchaseOrder.organization_id == supplier.organization_id, PurchaseOrder.supplier_id == supplier.id,
@@ -72,12 +76,31 @@ def learn_from_deliveries(db: Session, user: User, supplier: Supplier) -> None:
         .order_by(PurchaseOrder.received_at.desc())
         .limit(RECENT_DELIVERIES)
     ).all()
-    if not recent:
-        return
-    if supplier.delivery_source == "file" and len(recent) < DELIVERIES_TO_REPLACE_FILE:
-        return
     # The higher middle value when there are two: always a real delivery, and running short is worse.
-    _change(db, user, supplier, statistics.median_high(recent), "learned", len(recent))
+    return RecentDeliveries(statistics.median_high(recent), len(recent)) if recent else None
+
+
+def deliveries_disagree(db: Session, supplier: Supplier) -> RecentDeliveries | None:
+    """For a delivery time the owner typed: what enough real deliveries say instead, when it differs.
+    Shown next to it in Settings; nothing changes until the owner clicks."""
+    if supplier.delivery_source != "owner" or supplier.delivery_days is None:
+        return None
+    recent = recent_deliveries(db, supplier)
+    if recent is None or recent.count < DELIVERIES_TO_REPLACE_FILE or recent.days == supplier.delivery_days:
+        return None
+    return recent
+
+
+def learn_from_deliveries(db: Session, user: User, supplier: Supplier) -> None:
+    """After an order is received: follow the typical days of the supplier's recent deliveries."""
+    if supplier.delivery_source == "owner" and supplier.delivery_days is not None:
+        return
+    recent = recent_deliveries(db, supplier)
+    if recent is None:
+        return
+    if supplier.delivery_source == "file" and recent.count < DELIVERIES_TO_REPLACE_FILE:
+        return
+    _change(db, user, supplier, recent.days, "learned", recent.count)
 
 
 def set_by_owner(db: Session, user: User, supplier: Supplier, days: int | None) -> None:

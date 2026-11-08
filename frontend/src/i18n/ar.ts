@@ -696,6 +696,8 @@ export const ar: typeof en = {
         "تُملأ تلقائيًا، من ملف القطع ثم من عمليات التوصيل الفعلية. اكتب رقمًا فقط إذا أردت اختياره بنفسك. اتركها فارغة ليحسبها التطبيق.",
       added: (name: string) => `تمت إضافة ${name}.`,
       detailsSaved: "تم الحفظ.",
+      deliveriesSay: (days: string) => `آخر عمليات التوصيل: حوالي ${days}`,
+      useDeliveries: "استعمالها",
     },
     export: {
       title: "تنزيل جميع بياناتي",

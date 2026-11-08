@@ -10,6 +10,7 @@ export type Supplier = {
   email: string | null;
   delivery_days: number | null; // the edit field: null = automatic, nothing known yet
   delivery: DeliveryTime; // what "what to order" uses, and where it came from
+  deliveries_say: { days: number; count: number } | null; // a typed time 3+ real deliveries disagree with
   in_use: boolean;
 };
 

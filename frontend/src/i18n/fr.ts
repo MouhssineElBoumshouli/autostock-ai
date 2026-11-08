@@ -690,6 +690,8 @@ export const fr: typeof en = {
         "Se remplit tout seul, d’après votre fichier de pièces puis vos vraies livraisons. Tapez un nombre seulement pour le choisir vous-même. Laissez vide pour que l’application le calcule.",
       added: (name: string) => `${name} a été ajouté.`,
       detailsSaved: "Enregistré.",
+      deliveriesSay: (days: string) => `Vos dernières livraisons : environ ${days}`,
+      useDeliveries: "L’utiliser",
     },
     export: {
       title: "Télécharger toutes mes données",
