@@ -660,6 +660,7 @@ export const en = {
       title: "Branches",
       description: "Where stock is kept. Rename one, merge two that mean the same place, or remove one you added by mistake.",
       usedNote: "Has stock or sales, merge it instead",
+      emptyNote: "This branch is empty and isn’t used anywhere: remove it?",
     },
     suppliers: {
       title: "Suppliers",

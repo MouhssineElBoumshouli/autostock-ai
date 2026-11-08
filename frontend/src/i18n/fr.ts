@@ -677,6 +677,7 @@ export const fr: typeof en = {
       description:
         "Là où le stock est rangé. Renommez-en une, fusionnez deux qui sont le même lieu, ou supprimez-en une ajoutée par erreur.",
       usedNote: "A du stock ou des ventes, fusionnez-la plutôt",
+      emptyNote: "Cette succursale est vide et n’est utilisée nulle part : la supprimer ?",
     },
     suppliers: {
       title: "Fournisseurs",

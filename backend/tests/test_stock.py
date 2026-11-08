@@ -135,9 +135,26 @@ def test_part_detail(browser):
 
     assert detail["sale_price"] == 32000
     assert detail["status"] == "low"
-    assert {row["branch"]: row["quantity"] for row in detail["stock"]} == {"Atlas Parts": 0, "Casablanca": 6, "Rabat": 0}
+    # "Atlas Parts" (the shop's default branch, never used since the file names real branches) is left out.
+    assert {row["branch"]: row["quantity"] for row in detail["stock"]} == {"Casablanca": 6, "Rabat": 0}
     assert detail["supplier"]["name"] == "Auto Hall Pièces"
     assert [(s["sold_on"], s["quantity"]) for s in detail["last_sales"]] == [("2026-10-14", 1), ("2026-10-03", 2)]
+
+
+def test_part_detail_still_shows_the_only_branch_before_anything_is_in_use(browser):
+    """A brand-new shop, nothing imported yet (so no branch has any stock or sales at all): its one
+    branch must still show, so stock can be set on it -- it isn't filtered away like an unused one
+    normally would be once other branches are in use."""
+    set_up_shop(browser)
+    shop = browser.get("/api/auth/me").json()["organization"]["id"]
+    with SessionLocal() as db:
+        part = Part(organization_id=shop, sku="NEW-1", name="Part NEW-1")
+        db.add(part)
+        db.commit()
+        part_id_ = part.id
+
+    detail = browser.get(f"/api/parts/{part_id_}").json()
+    assert {row["branch"]: row["quantity"] for row in detail["stock"]} == {"Atlas Parts": 0}
 
 
 def test_last_sales_shows_10_newest(browser):
