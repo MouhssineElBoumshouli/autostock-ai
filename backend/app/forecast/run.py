@@ -1,5 +1,6 @@
 """Reads one shop's sales from the database, runs the engine and stores the forecasts."""
 
+import asyncio
 import logging
 import os
 import subprocess
@@ -17,12 +18,15 @@ from sqlalchemy.orm import Session
 from app.db import SessionLocal
 from app.forecast.engine import forecast_all
 from app.forecast.history import demand_matrix, first_and_last_day, read_daily_sales, sales_table
-from app.models import Forecast, ForecastRun, StockOut
+from app.models import Forecast, ForecastRun, Organization, StockOut
+from app.ordering.run import last_budget, make_order_run
+from app.shop_day import shop_today
 
 log = logging.getLogger(__name__)
 APP_FOLDER = Path(__file__).resolve().parents[2]  # where `python -m app...` works
 LOWER_PRIORITY = 10  # pages, at normal priority, get the processor first while a run works
 SAVE_AT_A_TIME = 10_000
+CHECK_EVERY_SECONDS = 3600
 
 
 @dataclass
@@ -115,11 +119,13 @@ def run_forecasts_apart(organization_id: uuid.UUID, trigger: str) -> None:
 
 
 def run_forecasts_in_background(organization_id: uuid.UUID, trigger: str) -> None:
-    """One run at a time per shop: a second one waits its turn."""
+    """One run at a time per shop: a second one waits its turn. Order suggestions are then remade
+    too, so nobody has to click for them after a forecast run (nightly, an import, or a click)."""
     with SessionLocal() as db:
         try:
             db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": f"forecast:{organization_id}"})
             run_forecasts(db, organization_id, trigger)
+            make_order_run(db, organization_id, last_budget(db, organization_id))
             db.commit()
         except Exception:
             log.exception("Forecast run failed for %s", organization_id)
@@ -131,6 +137,37 @@ def _record_failed_run(organization_id: uuid.UUID, trigger: str) -> None:
     with SessionLocal() as db:
         db.add(ForecastRun(organization_id=organization_id, trigger=trigger, status="failed", seconds=0, series_count=0))
         db.commit()
+
+
+async def keep_running_forecasts() -> None:
+    """Runs while the server is up: once a day per real shop, checked hourly so a restart never
+    skips a day. Whether a shop already ran today is checked against the database (any trigger:
+    an import or a click count too), not kept in memory -- a restart must never start a second,
+    long run on a big shop that already ran today. The demo shop's forecasts come from its own
+    replay script, not this loop."""
+    while True:
+        today = shop_today()
+        try:
+            with SessionLocal() as db:
+                shops = db.scalars(select(Organization.id).where(~Organization.is_demo)).all()
+            for shop_id in shops:
+                if not await asyncio.to_thread(ran_today, shop_id, today):
+                    await asyncio.to_thread(run_forecasts_apart, shop_id, "nightly")
+        except Exception:
+            log.exception("Nightly forecasts failed")
+        await asyncio.sleep(CHECK_EVERY_SECONDS)
+
+
+def ran_today(organization_id: uuid.UUID, today: date) -> bool:
+    """Whether a forecast run already finished today, from any trigger."""
+    with SessionLocal() as db:
+        latest = db.scalar(
+            select(ForecastRun.created_at)
+            .where(ForecastRun.organization_id == organization_id, ForecastRun.status == "done")
+            .order_by(ForecastRun.created_at.desc())
+            .limit(1)
+        )
+    return latest is not None and shop_today(latest) == today
 
 
 if __name__ == "__main__":  # started by run_forecasts_apart

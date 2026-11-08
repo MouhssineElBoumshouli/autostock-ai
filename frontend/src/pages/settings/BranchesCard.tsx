@@ -22,6 +22,9 @@ export function BranchesCard() {
       rename={rename}
       merge={merge}
       remove={remove}
+      rowNote={(branch) =>
+        !branch.in_use && <p className="w-full text-body-medium text-on-surface-variant">{t.settings.branches.emptyNote}</p>
+      }
     />
   );
 }

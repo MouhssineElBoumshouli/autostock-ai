@@ -43,6 +43,7 @@ export function EntityManagerCard<T extends ManagedEntity>({
   headerAction,
   rowExtra,
   rowNote,
+  offerRemoveWhenUsed = false,
 }: {
   title: string;
   description: string;
@@ -58,6 +59,9 @@ export function EntityManagerCard<T extends ManagedEntity>({
   headerAction?: ReactNode;
   rowExtra?: (item: T) => ReactNode;
   rowNote?: (item: T) => ReactNode; // a line of its own under the row, when there is something to say
+  // Some entities (suppliers) have almost all of them in use in a real shop: showing the badge on
+  // every row is just noise, so Remove stays offered and the explanation comes from trying it.
+  offerRemoveWhenUsed?: boolean;
 }) {
   return (
     <Card className="max-w-2xl">
@@ -83,7 +87,7 @@ export function EntityManagerCard<T extends ManagedEntity>({
                 <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 px-6 py-3">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <span className="text-body-large">{item.name}</span>
-                    {item.in_use && (
+                    {item.in_use && !offerRemoveWhenUsed && (
                       <Badge variant="neutral" className="h-auto min-h-6 py-0.5 whitespace-normal">
                         {usedNote}
                       </Badge>
@@ -95,7 +99,7 @@ export function EntityManagerCard<T extends ManagedEntity>({
                     {items!.length > 1 && <MergeButton item={item} items={items!} merge={merge} />}
                     {/* Removing something in use would just fail on the server, for a reason the
                         badge above already explains, so the button isn't offered at all. */}
-                    {!item.in_use && <RemoveButton item={item} remove={remove} />}
+                    {(!item.in_use || offerRemoveWhenUsed) && <RemoveButton item={item} remove={remove} />}
                   </div>
                   {rowNote?.(item)}
                 </li>

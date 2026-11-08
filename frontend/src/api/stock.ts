@@ -28,7 +28,17 @@ export type PartsPage = { items: PartRow[]; total: number; page: number; page_si
 
 export const statusFilters = ["healthy", "low", "out", "dead", "inactive"] as const;
 export type StatusFilter = (typeof statusFilters)[number];
-export type SortKey = "name" | "sku" | "brand" | "quantity" | "min_stock" | "status" | "supplier" | "expected_30d" | "runs_out_days";
+export type SortKey =
+  | "name"
+  | "sku"
+  | "brand"
+  | "quantity"
+  | "min_stock"
+  | "status"
+  | "supplier"
+  | "expected_30d"
+  | "runs_out_days"
+  | "urgency";
 
 export type PartsQuery = {
   search?: string;
@@ -37,6 +47,7 @@ export type PartsQuery = {
   branch?: string;
   supplier?: string;
   running_out?: boolean;
+  urgent?: boolean; // out, low and running-out only, sorted by urgency (see sort: "urgency")
   sort?: SortKey;
   direction: "asc" | "desc";
   page: number;

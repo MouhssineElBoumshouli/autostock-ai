@@ -64,7 +64,8 @@ def test_same_oem_number_is_an_automatic_equivalent(browser):
     assert found["TRW-220"]["brand"] == "TRW"
     assert found["TRW-220"]["in_stock"] is True
     assert found["TRW-220"]["quantity"] == 6
-    assert {row["branch"]: row["quantity"] for row in found["TRW-220"]["stock"]} == {"Atlas Parts": 0, "Main": 6}
+    # "Atlas Parts" (the shop's default branch, never used since everything came in under "Main") is left out.
+    assert {row["branch"]: row["quantity"] for row in found["TRW-220"]["stock"]} == {"Main": 6}
     # Symmetric
     assert equivalents(browser, "TRW-220")["BP-001"]["reason_type"] == "oem"
 

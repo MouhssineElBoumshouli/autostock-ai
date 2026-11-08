@@ -35,6 +35,7 @@ export function SuppliersCard() {
       headerAction={<AddSupplierDialog add={add} />}
       rowExtra={(supplier) => <DeliveryTimeButton supplier={supplier} save={saveDetails} />}
       rowNote={(supplier) => <DeliveriesSayNote supplier={supplier} save={saveDetails} />}
+      offerRemoveWhenUsed
     />
   );
 }
