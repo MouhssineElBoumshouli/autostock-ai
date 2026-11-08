@@ -45,7 +45,7 @@ def alerts(asker: Asker, args: dict) -> ToolResult:
 def forecast(asker: Asker, args: dict) -> ToolResult:
     parts = part_choice(asker, args)
     branch_id, branch = branch_choice(asker, args)
-    days = args.get("days") if args.get("days") in (7, 30, 60) else 30
+    days = int(args["days"]) if str(args.get("days")) in ("7", "30", "60") else 30
     filters = [Forecast.organization_id == asker.organization_id, Forecast.horizon_days == days, parts.condition]
     if branch_id:
         filters.append(Forecast.branch_id == branch_id)

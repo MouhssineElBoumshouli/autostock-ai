@@ -40,6 +40,8 @@ Periods: {periods}.
 Branches with sales: {branches}. "The shop", "le magasin" or no branch named = all branches (leave branch empty).
 Parts are named "Type - Car" ("Filtre à huile - Dacia Logan"). "type" takes one of the shop's types: {types}.
 "car" is the make and model ("Peugeot 301"). "brand" is the part maker: {brands}. Never a sentence in a field.
+A general word ("batteries", "filtres", "plaquettes") goes in "type" as that word ("Batterie"): it matches every type
+starting with it. Never pick one specific type the person didn't name. Say what was counted (the "types" in the result).
 An error gives the closest names: fix the call. totals (total_pieces...) answer the whole question; rows are details.
 {money}
 Rules:
