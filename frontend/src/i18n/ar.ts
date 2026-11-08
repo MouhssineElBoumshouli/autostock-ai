@@ -489,15 +489,18 @@ export const ar: typeof en = {
     greeting: (partOfDay: "morning" | "afternoon" | "evening", name: string) =>
       `${partOfDay === "morning" ? "صباح الخير" : "مساء الخير"}، ${name}`,
     needsYouToday: ({
+      outOfStock,
       stockProblems,
       partsToOrder,
       lateDeliveries,
     }: {
+      outOfStock: number;
       stockProblems: number;
       partsToOrder: number;
       lateDeliveries: number;
     }) => {
       const segments = [
+        outOfStock > 0 && `${parts(outOfStock, String(outOfStock))} نفدت`,
         stockProblems > 0 &&
           `${counted(stockProblems, String(stockProblems), "مشكلة مخزون واحدة", "مشكلتا مخزون", "مشاكل مخزون", "مشكلة مخزون")} للمراجعة`,
         partsToOrder > 0 && `${parts(partsToOrder, String(partsToOrder))} للطلب`,

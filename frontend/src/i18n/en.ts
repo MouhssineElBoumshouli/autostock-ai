@@ -466,15 +466,18 @@ export const en = {
     // "18 stock problems to check · 222 parts to order · 1 late delivery", each part left out
     // when its count is 0. "Worth a look" doesn't count: it's informational, nothing to check.
     needsYouToday: ({
+      outOfStock,
       stockProblems,
       partsToOrder,
       lateDeliveries,
     }: {
+      outOfStock: number;
       stockProblems: number;
       partsToOrder: number;
       lateDeliveries: number;
     }) => {
       const segments = [
+        outOfStock > 0 && (outOfStock === 1 ? "1 out of stock" : `${outOfStock} out of stock`),
         stockProblems > 0 && (stockProblems === 1 ? "1 stock problem to check" : `${stockProblems} stock problems to check`),
         partsToOrder > 0 && (partsToOrder === 1 ? "1 part to order" : `${partsToOrder} parts to order`),
         lateDeliveries > 0 && (lateDeliveries === 1 ? "1 late delivery" : `${lateDeliveries} late deliveries`),

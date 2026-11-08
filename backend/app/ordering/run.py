@@ -18,16 +18,18 @@ from app.ordering.suggest import RECENT_DAYS, SLOW_LOOKBACK_DAYS, HorizonForecas
 Key = tuple[uuid.UUID, uuid.UUID]  # (part_id, branch_id)
 
 
-def make_order_run(db: Session, user: User, budget: int | None) -> OrderRun:
-    """Stores a new run with its lines. The caller commits. Nothing is ordered."""
-    organization_id = user.organization_id
+def make_order_run(db: Session, organization_id: uuid.UUID, budget: int | None, user: User | None = None) -> OrderRun:
+    """Stores a new run with its lines. The caller commits. Nothing is ordered.
+    `user` is None for the run made automatically after a forecast run: not a person's action, so
+    nothing goes in the audit log for it (like the alerts engine's own automatic runs)."""
     forecasts, last_day = _forecasts(db, organization_id)
-    run = OrderRun(organization_id=organization_id, created_by=user.id, history_last_day=last_day, budget=budget,
-                   suggested_cost=0, kept_cost=0, kept_lines=0, cut_lines=0)
+    run = OrderRun(organization_id=organization_id, created_by=user.id if user else None, history_last_day=last_day,
+                   budget=budget, suggested_cost=0, kept_cost=0, kept_lines=0, cut_lines=0)
     db.add(run)
     db.flush()
     if last_day is None:
-        record_change(db, user, "order_suggestions.created", "order_run", run.id, after={"lines": 0})
+        if user is not None:
+            record_change(db, user, "order_suggestions.created", "order_run", run.id, after={"lines": 0})
         return run
 
     stock = _stock(db, organization_id)
@@ -62,8 +64,9 @@ def make_order_run(db: Session, user: User, budget: int | None) -> OrderRun:
     run.suggested_cost = sum(line.line_cost for line in lines)
     run.kept_cost = sum(item.cost for item in kept)
     run.kept_lines, run.cut_lines = len(kept), len(cut)
-    record_change(db, user, "order_suggestions.created", "order_run", run.id,
-                  after={"lines": len(kept), "cut": len(cut), "cost": run.kept_cost, "budget": budget})
+    if user is not None:
+        record_change(db, user, "order_suggestions.created", "order_run", run.id,
+                      after={"lines": len(kept), "cut": len(cut), "cost": run.kept_cost, "budget": budget})
     return run
 
 
