@@ -31,7 +31,9 @@ class ModelFailed(Exception):
 
 def is_on(model: str = OLLAMA_MODEL) -> bool:
     """True when Ollama answers and has the model downloaded. Remembered for REMEMBER_SECONDS, so
-    a question doesn't wait for this check each time (starting Ollama shows within a minute)."""
+    a question doesn't wait for this check each time (starting Ollama shows within a minute).
+    A model that is downloaded but can't start (it crashes when loading, for example after a graphics
+    driver update) is found by the first question that fails: it counts as off until the next check."""
     if not OLLAMA_URL:
         return False
     key = (OLLAMA_URL, model)
@@ -75,8 +77,15 @@ def ask_json(instructions: str, text: str, schema: dict, model: str = OLLAMA_MOD
     try:
         with urllib.request.urlopen(request, timeout=ANSWER_SECONDS) as response:
             return json.loads(json.load(response)["message"]["content"])
-    except (OSError, ValueError, KeyError, TypeError):
+    except OSError:  # Ollama refused or crashed: off, so the app says "AI is off", not "not understood"
+        _turned_off(model)
         return None
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+def _turned_off(model: str) -> None:
+    _checked[(OLLAMA_URL, model)] = (time.monotonic(), False)
 
 
 def chat(messages: list[dict], model: str = OLLAMA_MODEL, longest: int = 300) -> Iterator[dict]:
@@ -101,5 +110,8 @@ def chat(messages: list[dict], model: str = OLLAMA_MODEL, longest: int = 300) ->
                 message = json.loads(line).get("message", {})
                 if message.get("content"):
                     yield {"text": message["content"]}
-    except (OSError, ValueError, AttributeError) as error:
+    except OSError as error:
+        _turned_off(model)
+        raise ModelFailed(str(error)) from error
+    except (ValueError, AttributeError) as error:
         raise ModelFailed(str(error)) from error
