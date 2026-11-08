@@ -1,4 +1,9 @@
-"""Import of "Parts and stock" files: creates or updates parts, sets stock on hand per branch.
+"""Import of "Parts and stock" files: creates or updates parts, sets stock on hand per branch, and
+fills in suppliers' delivery times from a delivery-time column (the most common value per supplier).
+
+A file whose parts are all known already, that fills in delivery times the shop didn't have, is
+the shop's earlier file with that column added: only the delivery times are saved then, so stock
+that moved since (orders received, recounts) is not put back. Imported again, it updates the rest.
 
 A part may come on several rows, one per branch, each with that branch's stock. The file goes row
 by row into a temporary table of this transaction, and PostgreSQL compares and saves it all at
@@ -27,8 +32,9 @@ from app.imports.plan import (
     send_rows,
 )
 from app.imports.reading import Table
-from app.imports.values import ValueProblem, clean_sku, clean_text, parse_money, parse_whole_number
-from app.models import Branch, Part, Supplier
+from app.imports.values import ValueProblem, clean_sku, clean_text, parse_delivery_days, parse_money, parse_whole_number
+from app.models import Branch, Part, Supplier, User
+from app.ordering.delivery_time import file_may_set, set_from_file
 
 TEXT_FIELDS = ("name", "brand", "category", "oem_reference")
 MONEY_FIELDS = ("unit_cost", "sale_price")
@@ -36,7 +42,7 @@ NUMBER_FIELDS = ("min_stock", "pack_size")
 PART_COLUMNS = (*TEXT_FIELDS, *MONEY_FIELDS, *NUMBER_FIELDS)
 ROWS_NAMED = 6  # how many row numbers a "same SKU" message lists
 INCOMING = (
-    f"incoming_parts (row_number, sheet, sku, {', '.join(PART_COLUMNS)}, supplier, branch, quantity, has_problem)"
+    f"incoming_parts (row_number, sheet, sku, {', '.join(PART_COLUMNS)}, supplier, branch, quantity, delivery_days, has_problem)"
 )
 
 # Good rows, each with its branch and supplier found by name.
@@ -72,6 +78,18 @@ COUNT_CHANGES = f"""
     SELECT (SELECT count(DISTINCT sku) FROM good WHERE part_id IS NULL) AS new_parts,
            (SELECT count(*) FROM changed) AS updated_parts,
            (SELECT count(DISTINCT sku) FROM good WHERE part_id IS NOT NULL) AS known_parts
+"""
+
+# Each supplier's delivery time in the file: the most common one on its rows (the shortest on a
+# tie). A row without a supplier counts for the supplier its part already has.
+DELIVERY_BY_SUPPLIER = f"""
+    SELECT coalesce(good.supplier, lower(current.name)) AS supplier,
+           mode() WITHIN GROUP (ORDER BY good.delivery_days) AS delivery_days
+    FROM ({GOOD_ROWS}) AS good
+    LEFT JOIN parts AS part ON part.id = good.part_id
+    LEFT JOIN suppliers AS current ON current.id = part.supplier_id
+    WHERE good.delivery_days IS NOT NULL
+    GROUP BY 1
 """
 
 UPDATE_PARTS = f"""
@@ -127,6 +145,8 @@ class PartsPlan:
     suppliers: NameBook
     branches: NameBook
     has_good_rows: bool
+    delivery_days: dict[str, int]  # lowercase supplier name -> days, only where the file may set them
+    delivery_only: bool  # the shop's earlier file, now with delivery times: save only those
 
 
 def plan_parts(db: Session, organization_id: uuid.UUID, table: Table, columns: dict[str, int]) -> PartsPlan:
@@ -139,9 +159,12 @@ def plan_parts(db: Session, organization_id: uuid.UUID, table: Table, columns: d
 
     report = ProblemReport()
     waiting: list[str] = []
+    unread_delivery = 0
     for number, cells in cells_by_field(table, columns):
         messages: list[str] = []
         sku, values, supplier, branch, quantity = _clean_row(cells, messages)
+        delivery, unread = _delivery_cell(cells)
+        unread_delivery += unread
         if sku and "name" not in values and sku not in known_skus:
             messages.append("Name is missing (needed for a new part)")
         if messages:
@@ -153,7 +176,7 @@ def plan_parts(db: Session, organization_id: uuid.UUID, table: Table, columns: d
                 suppliers.note(supplier)
             if branch:
                 branches.note(branch)
-        waiting.append(_copy_line(number, table.sheet, sku, values, supplier, branch, quantity, bool(messages)))
+        waiting.append(_copy_line(number, table.sheet, sku, values, supplier, branch, quantity, delivery, bool(messages)))
         if len(waiting) == ROWS_PER_SEND:
             send_rows(db, INCOMING, waiting)
             waiting = []
@@ -166,26 +189,61 @@ def plan_parts(db: Session, organization_id: uuid.UUID, table: Table, columns: d
     _forget_names_only_on_problem_rows(db, branches, "branch")
     plain = {"shop": organization_id, "default_branch": default_branch.id}
     new_parts, updated, known = db.execute(text(COUNT_CHANGES), plain).one()
+    delivery_days, filled_in = _delivery_days_to_set(db, plain, suppliers)
+    delivery_only = known > 0 and new_parts == 0 and filled_in > 0 and not suppliers.new_names and not branches.new_names
+    if delivery_only:
+        updated = 0
 
     summary = Summary(
-        counts={"new_parts": new_parts, "updated_parts": updated, "unchanged_parts": known - updated, "problem_rows": report.count},
+        counts={
+            "new_parts": new_parts, "updated_parts": updated, "unchanged_parts": known - updated,
+            "delivery_times": len(delivery_days), "delivery_only": int(delivery_only),
+            "unread_delivery_times": unread_delivery, "problem_rows": report.count,
+        },
         new_suppliers=sorted(suppliers.new_names.values()),
         new_branches=sorted(branches.new_names.values()),
         problems=report.first,
         problem_count=report.count,
     )
-    return PartsPlan(summary=summary, suppliers=suppliers, branches=branches, has_good_rows=good > 0)
+    return PartsPlan(summary=summary, suppliers=suppliers, branches=branches, has_good_rows=good > 0,
+                     delivery_days=delivery_days, delivery_only=delivery_only)
 
 
-def save_parts(db: Session, organization_id: uuid.UUID, plan: PartsPlan) -> None:
+def save_parts(db: Session, user: User, plan: PartsPlan) -> None:
     if not plan.has_good_rows:
         return
-    plan.suppliers.create_new(db)
-    plan.branches.create_new(db)
-    values = {"shop": organization_id, "default_branch": main_branch(db, organization_id).id}
-    db.execute(text(UPDATE_PARTS), values)
-    db.execute(text(INSERT_PARTS), values)
-    db.execute(text(SET_STOCK), values)
+    if not plan.delivery_only:
+        plan.suppliers.create_new(db)
+        plan.branches.create_new(db)
+        values = {"shop": user.organization_id, "default_branch": main_branch(db, user.organization_id).id}
+        db.execute(text(UPDATE_PARTS), values)
+        db.execute(text(INSERT_PARTS), values)
+        db.execute(text(SET_STOCK), values)
+    for name, days in plan.delivery_days.items():
+        set_from_file(db, user, plan.suppliers.by_name[name], days)
+
+
+def _delivery_days_to_set(db: Session, plain: dict, suppliers: NameBook) -> tuple[dict[str, int], int]:
+    """The delivery times this file changes, and how many of those the shop didn't have at all.
+    A supplier still to be created counts as one the shop didn't have."""
+    to_set: dict[str, int] = {}
+    filled_in = 0
+    for name, days in db.execute(text(DELIVERY_BY_SUPPLIER), plain):
+        known = suppliers.by_name.get(name)
+        if known is None and name in suppliers.new_names:
+            to_set[name] = days
+        elif known is not None and file_may_set(known) and known.delivery_days != days:
+            to_set[name] = days
+            filled_in += known.delivery_days is None
+    return to_set, filled_in
+
+
+def _delivery_cell(cells: dict) -> tuple[int | None, bool]:
+    """(days, could not be read). A delivery time that can't be read never leaves a part out."""
+    try:
+        return parse_delivery_days(cells.get("delivery_days")), False
+    except ValueProblem:
+        return None, True
 
 
 def analyze_parts(db: Session) -> None:
@@ -199,16 +257,17 @@ def _create_incoming_table(db: Session) -> None:
         """CREATE TEMP TABLE incoming_parts (
                place serial, row_number integer NOT NULL, sheet text, sku text NOT NULL, name text, brand text,
                category text, oem_reference text, unit_cost bigint, sale_price bigint, min_stock integer,
-               pack_size integer, supplier text, branch text, quantity integer, has_problem boolean NOT NULL,
+               pack_size integer, supplier text, branch text, quantity integer, delivery_days integer,
+               has_problem boolean NOT NULL,
                same_branch_rows integer[], different_rows integer[]
            ) ON COMMIT DROP"""
     ))
 
 
-def _copy_line(number: int, sheet, sku: str, values: dict, supplier, branch, quantity, has_problem: bool) -> str:
+def _copy_line(number: int, sheet, sku: str, values: dict, supplier, branch, quantity, delivery, has_problem: bool) -> str:
     cells = [
         number, sheet, sku, *(values.get(column) for column in PART_COLUMNS),
-        supplier.lower() if supplier else None, branch.lower() if branch else None, quantity, has_problem,
+        supplier.lower() if supplier else None, branch.lower() if branch else None, quantity, delivery, has_problem,
     ]
     return "\t".join(copy_cell(cell) for cell in cells) + "\n"
 

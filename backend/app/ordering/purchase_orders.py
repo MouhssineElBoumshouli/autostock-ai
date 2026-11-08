@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.audit import record_change
 from app.db import utc_now
 from app.models import Branch, OrderSuggestion, Part, PurchaseOrder, PurchaseOrderLine, StockLevel, Supplier, User
+from app.ordering.delivery_time import days_taken, learn_from_deliveries
 
 Key = tuple[uuid.UUID, uuid.UUID]  # (part_id, branch_id)
 
@@ -129,9 +130,12 @@ def receive_purchase_order(
     db.flush()
     if all(line.received_quantity >= line.quantity for line in lines.values()):
         po.status, po.received_at = "received", utc_now()
+        po.days_taken = days_taken(po.sent_at, po.received_at)
         supplier = db.get_one(Supplier, po.supplier_id)
         record_change(db, user, "purchase_order.received", "purchase_order", po.id,
-                      after={"order_number": po.order_number, "supplier": supplier.name})
+                      after={"order_number": po.order_number, "supplier": supplier.name, "days_taken": po.days_taken})
+        db.flush()  # so this delivery counts in what is learned
+        learn_from_deliveries(db, user, supplier)
     return po
 
 

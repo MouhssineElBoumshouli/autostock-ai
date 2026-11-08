@@ -1,5 +1,6 @@
-"""Suppliers: the owner can add one, rename, set its delivery time and contact details, merge
-(moving its parts to another supplier) or remove one that no part uses.
+"""Suppliers: the owner can add one, rename, set its contact details, merge (moving its parts to
+another supplier) or remove one that no part uses. Delivery times fill in by themselves (see
+app/ordering/delivery_time.py); the owner may still type one, or empty it to go back to automatic.
 """
 
 import uuid
@@ -14,6 +15,7 @@ from app.audit import record_change
 from app.auth.permissions import require_role
 from app.db import get_session
 from app.models import OrderSuggestion, Part, Supplier, User
+from app.ordering.delivery_time import DeliveryTime, RecentDeliveries, deliveries_disagree, delivery_time, set_by_owner
 
 router = APIRouter(prefix="/api/suppliers")
 owner_only = require_role("owner")
@@ -24,7 +26,10 @@ class SupplierOut(BaseModel):
     name: str
     phone: str | None = None
     email: str | None = None
-    delivery_days: int | None = None
+    delivery_days: int | None = None  # what the owner sees in the edit field (None: automatic, not known yet)
+    delivery: DeliveryTime  # what "what to order" uses, and where it came from
+    # A typed delivery time that 3+ real deliveries disagree with: what they say (Settings offers it).
+    deliveries_say: RecentDeliveries | None = None
     in_use: bool  # has parts pointing to it; can be merged but not removed
 
 
@@ -49,15 +54,16 @@ class SupplierMerge(BaseModel):
     into: uuid.UUID
 
 
-def _out(supplier: Supplier, used: set[uuid.UUID]) -> SupplierOut:
+def _out(db: Session, supplier: Supplier, used: set[uuid.UUID]) -> SupplierOut:
     return SupplierOut(
         id=supplier.id, name=supplier.name, phone=supplier.phone, email=supplier.email,
-        delivery_days=supplier.delivery_days, in_use=supplier.id in used,
+        delivery_days=supplier.delivery_days, delivery=delivery_time(supplier),
+        deliveries_say=deliveries_disagree(db, supplier), in_use=supplier.id in used,
     )
 
 
 def _snapshot(supplier: Supplier) -> dict:
-    return {"phone": supplier.phone, "email": supplier.email, "delivery_days": supplier.delivery_days}
+    return {"phone": supplier.phone, "email": supplier.email}
 
 
 @router.get("")
@@ -66,7 +72,7 @@ def list_suppliers(owner: User = Depends(owner_only), db: Session = Depends(get_
         select(Supplier).where(Supplier.organization_id == owner.organization_id).order_by(Supplier.name)
     ).all()
     used = _suppliers_in_use(db, owner.organization_id)
-    return [_out(supplier, used) for supplier in suppliers]
+    return [_out(db, supplier, used) for supplier in suppliers]
 
 
 @router.post("", status_code=201)
@@ -76,18 +82,16 @@ def add_supplier(
     db: Session = Depends(get_session),
 ) -> SupplierOut:
     _check_name_free(db, owner, body.name, exclude=None)
-    supplier = Supplier(
-        organization_id=owner.organization_id, name=body.name, phone=body.phone, email=body.email,
-        delivery_days=body.delivery_days,
-    )
+    supplier = Supplier(organization_id=owner.organization_id, name=body.name, phone=body.phone, email=body.email)
     db.add(supplier)
     db.flush()
     record_change(
         db, owner, "supplier.added", "supplier", supplier.id,
         after={"name": supplier.name, **_snapshot(supplier)},
     )
+    set_by_owner(db, owner, supplier, body.delivery_days)
     db.commit()
-    return _out(supplier, set())
+    return _out(db, supplier, set())
 
 
 @router.patch("/{supplier_id}")
@@ -106,7 +110,7 @@ def rename_supplier(
             db, owner, "supplier.renamed", "supplier", supplier.id, before={"name": before}, after={"name": supplier.name}
         )
     db.commit()
-    return _out(supplier, _suppliers_in_use(db, owner.organization_id))
+    return _out(db, supplier, _suppliers_in_use(db, owner.organization_id))
 
 
 @router.patch("/{supplier_id}/details")
@@ -120,15 +124,15 @@ def update_supplier_details(
     before = _snapshot(supplier)
     supplier.phone = body.phone
     supplier.email = body.email
-    supplier.delivery_days = body.delivery_days
     after = _snapshot(supplier)
     if after != before:
         record_change(
             db, owner, "supplier.details_updated", "supplier", supplier.id,
             before={"name": supplier.name, **before}, after={"name": supplier.name, **after},
         )
+    set_by_owner(db, owner, supplier, body.delivery_days)
     db.commit()
-    return _out(supplier, _suppliers_in_use(db, owner.organization_id))
+    return _out(db, supplier, _suppliers_in_use(db, owner.organization_id))
 
 
 @router.post("/{supplier_id}/merge", status_code=204)

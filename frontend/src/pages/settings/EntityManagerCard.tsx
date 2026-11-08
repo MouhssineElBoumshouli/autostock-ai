@@ -42,6 +42,7 @@ export function EntityManagerCard<T extends ManagedEntity>({
   remove,
   headerAction,
   rowExtra,
+  rowNote,
 }: {
   title: string;
   description: string;
@@ -56,6 +57,7 @@ export function EntityManagerCard<T extends ManagedEntity>({
   remove: UseMutationResult<void, Error, string>;
   headerAction?: ReactNode;
   rowExtra?: (item: T) => ReactNode;
+  rowNote?: (item: T) => ReactNode; // a line of its own under the row, when there is something to say
 }) {
   return (
     <Card className="max-w-2xl">
@@ -95,6 +97,7 @@ export function EntityManagerCard<T extends ManagedEntity>({
                         badge above already explains, so the button isn't offered at all. */}
                     {!item.in_use && <RemoveButton item={item} remove={remove} />}
                   </div>
+                  {rowNote?.(item)}
                 </li>
               ))}
             </ul>

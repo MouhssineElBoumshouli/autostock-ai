@@ -143,7 +143,8 @@ def test_a_part_with_two_different_names_is_a_problem(browser):
 
     answer = send(browser, "check", "parts", "parts.csv", STOCK_COLUMNS, content=content)
 
-    assert answer.json()["counts"] == {"new_parts": 0, "updated_parts": 0, "unchanged_parts": 0, "problem_rows": 2}
+    assert answer.json()["counts"] == {"new_parts": 0, "updated_parts": 0, "unchanged_parts": 0, "delivery_times": 0, "delivery_only": 0,
+                                       "unread_delivery_times": 0, "problem_rows": 2}
     assert answer.json()["problems"][1]["messages"] == ["Same SKU with different details (rows 2, 3)"]
     assert answer.json()["new_branches"] == []
 

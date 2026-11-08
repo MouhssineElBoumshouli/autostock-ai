@@ -150,7 +150,7 @@ def _plan(db: Session, kind: ImportKind, organization_id: uuid.UUID, table: Tabl
 
 def _save(db: Session, job: ImportJob, user: User, plan) -> None:
     if job.kind == "parts":
-        save_parts(db, job.organization_id, plan)
+        save_parts(db, user, plan)
     elif job.kind == "sales":
         save_sales(db, job.organization_id, plan)
     else:

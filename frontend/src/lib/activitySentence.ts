@@ -2,6 +2,7 @@ import type { ActivityItem } from "@/api/activity";
 import type { CareLevel } from "@/api/orders";
 import type { Role } from "@/api/users";
 import { isLanguage, languageNames, t } from "@/i18n";
+import { deliveriesText } from "@/lib/deliveryTime";
 import { formatNumber, isolate } from "@/lib/format";
 
 const words = t.activity.sentences;
@@ -12,6 +13,16 @@ function roleName(role: unknown): string {
 
 function careLevelName(level: unknown): string {
   return t.orders.settings.levels[level as CareLevel] ?? String(level);
+}
+
+// A supplier's delivery time changed: typed by the owner, back to automatic, from a file, or learned.
+function deliveryTimeSentence(actor: string, name: string, after: Record<string, unknown>): string {
+  if (after.delivery_days === null || after.delivery_days === undefined) return words.deliveryTimeAutomatic(actor, name);
+  const count = Number(after.delivery_days);
+  const days = t.common.days(count, formatNumber(count));
+  if (after.source === "learned") return words.deliveryTimeLearned(name, days, deliveriesText(Number(after.learned_from)));
+  if (after.source === "file") return words.deliveryTimeFromFile(actor, name, days);
+  return words.deliveryTimeSetByOwner(actor, name, days);
 }
 
 // Turns one audit log row into a plain sentence, e.g. "Sara changed Youssef's role from Staff to Manager."
@@ -96,6 +107,8 @@ export function activitySentence(item: ActivityItem): string {
       return words.supplierAdded(actor, isolate(String(after.name)));
     case "supplier.details_updated":
       return words.supplierDetailsUpdated(actor, isolate(String(after.name)));
+    case "supplier.delivery_time_changed":
+      return deliveryTimeSentence(actor, isolate(String(after.name)), after);
     case "supplier.merged":
       return words.supplierMerged(actor, isolate(String(after.from)), isolate(String(after.into)));
     case "supplier.removed":

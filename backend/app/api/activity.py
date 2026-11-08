@@ -36,7 +36,9 @@ SHOWN_FIELDS = {
     "sku",
     # imports
     "kind", "file_name", "new_parts", "updated_parts", "unchanged_parts", "new_sales", "already_imported",
-    "problem_rows", "new_suppliers", "new_branches", "new_equivalents", "already_linked",
+    "problem_rows", "new_suppliers", "new_branches", "new_equivalents", "already_linked", "delivery_times",
+    # suppliers' delivery times ("source" is listed below)
+    "delivery_days", "learned_from", "days_taken",
     # equivalent part links
     "part", "other_part", "source",
     # merges (branches and suppliers)

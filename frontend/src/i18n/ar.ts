@@ -25,6 +25,7 @@ const fieldNames: Record<string, string> = {
   Quantity: "الكمية",
   Branch: "الفرع",
   Supplier: "المورد",
+  "Delivery time": "مدة التوصيل",
   Date: "التاريخ",
   "Unit price": "سعر الوحدة",
   "Our code": "مرجعنا",
@@ -56,6 +57,13 @@ export const ar: typeof en = {
     hidePassword: "إخفاء كلمة المرور",
     pieces: parts,
     days: (count: number, shown: string) => counted(count, shown, "يوم واحد", "يومان", "أيام", "يومًا"),
+    deliveryTime: {
+      estimated: (days: string) => `حوالي ${days} (تقدير)`,
+      learned: (days: string, deliveries: string) => `${days} (محسوبة من ${deliveries})`,
+      fromFile: (days: string) => `${days} (حسب ملفك)`,
+      deliveries: (count: number, shown: string) =>
+        counted(count, shown, "عملية توصيل واحدة", "عمليتي توصيل", "عمليات توصيل", "عملية توصيل"),
+    },
     onlyOwner: "هذا للمالك فقط.",
     onlyOwnerOrManager: "هذا للمالك أو لمدير فقط.",
   },
@@ -369,6 +377,7 @@ export const ar: typeof en = {
         quantity: "الكمية في المخزون",
         branch: "الفرع",
         supplier: "المورد",
+        delivery_days: "مدة التوصيل (أيام)",
       },
       sales: {
         date: "التاريخ",
@@ -387,6 +396,10 @@ export const ar: typeof en = {
       new_parts: (n: string) => `${n} قطعة جديدة`,
       updated_parts: (n: string) => `${n} قطعة محدّثة`,
       unchanged_parts: (n: string) => `${n} قطعة بدون تغيير`,
+      delivery_times: (n: string) => `موردون أُخذت مدة توصيلهم من الملف: ${n}`,
+      delivery_only: () =>
+        "قطعك موجودة في التطبيق مسبقًا: تُحفظ مدد التوصيل فقط، ويبقى المخزون والأسعار كما هي. استورد الملف مرة ثانية لتحديثها أيضًا.",
+      unread_delivery_times: (n: string) => `مدد توصيل غير مقروءة (تُركت فارغة): ${n}`,
       new_sales: (n: string) => `${n} سطر مبيعات جديد`,
       already_imported: (n: string) => `${n} سطر مبيعات مستورد سابقًا (تم تخطيه)`,
       problem_rows: (n: string) => `${n} سطر به أخطاء (تم تخطيه)`,
@@ -543,8 +556,8 @@ export const ar: typeof en = {
         text: "3 أشهر على الأقل، ويُفضَّل 12 شهرًا، للحصول على تنبؤات جيدة.",
       },
       suppliers: {
-        title: "أضف الموردين ومدد التوصيل",
-        text: "حتى تعرف صفحة «ماذا نطلب» المدة التي يحتاجها كل مورد.",
+        title: "أضف مورديك",
+        text: "تُملأ مدد التوصيل تلقائيًا، من ملف القطع ثم من عمليات التوصيل الفعلية.",
       },
       team: { title: "ادعُ فريقك", text: "أعطِ كل شخص دخوله الخاص." },
     },
@@ -596,6 +609,12 @@ export const ar: typeof en = {
       branchRemoved: (actor: string, name: string) => `حذف ${actor} الفرع ${name}.`,
       supplierAdded: (actor: string, name: string) => `أضاف ${actor} المورد ${name}.`,
       supplierDetailsUpdated: (actor: string, name: string) => `غيّر ${actor} بيانات التواصل مع ${name}.`,
+      deliveryTimeSetByOwner: (actor: string, name: string, days: string) => `حدّد ${actor} مدة توصيل ${name}: ${days}.`,
+      deliveryTimeAutomatic: (actor: string, name: string) => `ترك ${actor} التطبيق يحسب مدة توصيل ${name}.`,
+      deliveryTimeFromFile: (actor: string, name: string, days: string) =>
+        `أصبحت مدة توصيل ${name} ${days}، حسب ملف استورده ${actor}.`,
+      deliveryTimeLearned: (name: string, days: string, deliveries: string) =>
+        `أصبحت مدة توصيل ${name} ${days}، محسوبة من ${deliveries}.`,
       supplierMerged: (actor: string, from: string, into: string) => `دمج ${actor} المورد ${from} في ${into}.`,
       supplierRemoved: (actor: string, name: string) => `حذف ${actor} المورد ${name}.`,
       dataExported: (actor: string) => `نزّل ${actor} جميع بيانات المتجر.`,
@@ -673,11 +692,12 @@ export const ar: typeof en = {
       phone: "الهاتف",
       email: "البريد الإلكتروني",
       deliveryDays: "مدة التوصيل (أيام)",
-      deliveryDaysHelp: "عدد الأيام التي يستغرقها الطلب عادةً. يُستعمل في تحديد ماذا نطلب.",
+      deliveryDaysHelp:
+        "تُملأ تلقائيًا، من ملف القطع ثم من عمليات التوصيل الفعلية. اكتب رقمًا فقط إذا أردت اختياره بنفسك. اتركها فارغة ليحسبها التطبيق.",
       added: (name: string) => `تمت إضافة ${name}.`,
       detailsSaved: "تم الحفظ.",
-      noDeliveryTime: "مدة التوصيل غير محددة",
-      deliveryDaysShown: (days: string) => `${days} أيام`,
+      deliveriesSay: (days: string) => `آخر عمليات التوصيل: حوالي ${days}`,
+      useDeliveries: "استعمالها",
     },
     export: {
       title: "تنزيل جميع بياناتي",

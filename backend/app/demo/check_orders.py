@@ -35,7 +35,7 @@ from app.forecast.engine import forecast_all
 from app.forecast.run import ShopDemand, load_demand
 from app.models import DemoTrueDemand, Part, Supplier
 from app.ordering.replay import ReplayResult, four_week_forecasts, minimum_rule, replay, weekly_rule
-from app.ordering.run import DEFAULT_DELIVERY_DAYS
+from app.ordering.delivery_time import DEFAULT_DELIVERY_DAYS
 from app.ordering.suggest import REVIEW_DAYS, HorizonForecast
 
 LAST_DAY = date(2026, 10, 18)  # fixed, so the result can be checked again

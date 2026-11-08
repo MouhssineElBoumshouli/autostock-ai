@@ -9,7 +9,7 @@ import {
 import { t } from "@/i18n";
 
 import { EntityManagerCard } from "./EntityManagerCard";
-import { AddSupplierDialog, DeliveryTimeButton } from "./SupplierDialogs";
+import { AddSupplierDialog, DeliveriesSayNote, DeliveryTimeButton } from "./SupplierDialogs";
 
 export function SuppliersCard() {
   const suppliers = useSuppliers();
@@ -34,6 +34,7 @@ export function SuppliersCard() {
       remove={remove}
       headerAction={<AddSupplierDialog add={add} />}
       rowExtra={(supplier) => <DeliveryTimeButton supplier={supplier} save={saveDetails} />}
+      rowNote={(supplier) => <DeliveriesSayNote supplier={supplier} save={saveDetails} />}
     />
   );
 }

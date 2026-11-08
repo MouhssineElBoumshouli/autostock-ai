@@ -53,9 +53,8 @@ def _done_steps(db: Session, organization_id: uuid.UUID) -> dict[StepKey, bool]:
         "branches": _branches_checked(db, organization_id, organization_name),
         "import_parts": bool(db.scalar(select(exists().where(Part.organization_id == organization_id)))),
         "import_sales": bool(db.scalar(select(exists().where(SaleLine.organization_id == organization_id)))),
-        "suppliers": bool(
-            db.scalar(select(exists().where(Supplier.organization_id == organization_id, Supplier.delivery_days.is_not(None))))
-        ),
+        # Their delivery times fill in by themselves (the parts file, then real deliveries).
+        "suppliers": bool(db.scalar(select(exists().where(Supplier.organization_id == organization_id)))),
         "team": team_size > 1,
     }
 

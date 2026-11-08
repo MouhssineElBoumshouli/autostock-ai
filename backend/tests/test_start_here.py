@@ -39,16 +39,14 @@ def test_renaming_the_only_branch_checks_off_that_step(browser):
     assert steps(browser)["branches"] is True
 
 
-def test_a_supplier_only_counts_once_it_has_a_delivery_time(browser):
+def test_adding_a_supplier_checks_off_the_suppliers_step(browser):
+    """No delivery time to type: it comes from the parts file or the supplier's deliveries."""
     set_up_shop(browser)
-
-    response = browser.post("/api/suppliers", json={"name": "Atlas Distribution"})
-    assert response.status_code == 201, response.text
     assert steps(browser)["suppliers"] is False
 
-    supplier_id = response.json()["id"]
-    browser.patch(f"/api/suppliers/{supplier_id}/details", json={"delivery_days": 5})
+    response = browser.post("/api/suppliers", json={"name": "Atlas Distribution"})
 
+    assert response.status_code == 201, response.text
     assert steps(browser)["suppliers"] is True
 
 

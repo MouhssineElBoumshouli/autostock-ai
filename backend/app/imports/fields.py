@@ -29,6 +29,7 @@ FIELDS: dict[str, list[Field]] = {
         Field("quantity", "Quantity"),
         Field("branch", "Branch"),
         Field("supplier", "Supplier"),
+        Field("delivery_days", "Delivery time"),  # set on the part's supplier, not on the part
     ],
     "sales": [
         Field("date", "Date", required=True),
@@ -57,7 +58,7 @@ FIELD_LABELS: dict[str, dict[ImportKind, dict[str, str]]] = {
             "sku": "SKU", "name": "Name", "brand": "Brand", "category": "Category",
             "oem_reference": "OEM reference", "unit_cost": "Unit cost", "sale_price": "Sale price",
             "min_stock": "Minimum stock", "pack_size": "Pack size", "quantity": "Quantity in stock",
-            "branch": "Branch", "supplier": "Supplier",
+            "branch": "Branch", "supplier": "Supplier", "delivery_days": "Delivery time (days)",
         },
         "sales": {"date": "Date", "sku": "SKU", "quantity": "Quantity sold", "unit_price": "Unit price", "branch": "Branch"},
     },
@@ -66,7 +67,7 @@ FIELD_LABELS: dict[str, dict[ImportKind, dict[str, str]]] = {
             "sku": "Référence", "name": "Désignation", "brand": "Marque", "category": "Famille",
             "oem_reference": "Référence OEM", "unit_cost": "Prix d’achat", "sale_price": "Prix de vente",
             "min_stock": "Stock minimum", "pack_size": "Conditionnement", "quantity": "Quantité en stock",
-            "branch": "Succursale", "supplier": "Fournisseur",
+            "branch": "Succursale", "supplier": "Fournisseur", "delivery_days": "Délai de livraison (jours)",
         },
         "sales": {
             "date": "Date", "sku": "Référence", "quantity": "Quantité vendue", "unit_price": "Prix unitaire",
@@ -78,7 +79,7 @@ FIELD_LABELS: dict[str, dict[ImportKind, dict[str, str]]] = {
             "sku": "المرجع", "name": "الاسم", "brand": "العلامة", "category": "الفئة",
             "oem_reference": "مرجع OEM", "unit_cost": "سعر الشراء", "sale_price": "سعر البيع",
             "min_stock": "الحد الأدنى للمخزون", "pack_size": "حجم العبوة", "quantity": "الكمية في المخزون",
-            "branch": "الفرع", "supplier": "المورد",
+            "branch": "الفرع", "supplier": "المورد", "delivery_days": "مدة التوصيل (أيام)",
         },
         "sales": {
             "date": "التاريخ", "sku": "المرجع", "quantity": "الكمية المبيعة", "unit_price": "سعر الوحدة",

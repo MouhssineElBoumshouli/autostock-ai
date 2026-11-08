@@ -17,6 +17,7 @@ const fieldNames: Record<string, string> = {
   Quantity: "Quantité",
   Branch: "Succursale",
   Supplier: "Fournisseur",
+  "Delivery time": "Délai de livraison",
   Date: "Date",
   "Unit price": "Prix unitaire",
   "Our code": "Notre code",
@@ -48,6 +49,12 @@ export const fr: typeof en = {
     hidePassword: "Masquer le mot de passe",
     pieces: (count: number, shown: string) => (count === 1 ? "1 pièce" : `${shown} pièces`),
     days: (count: number, shown: string) => (count === 1 ? "1 jour" : `${shown} jours`),
+    deliveryTime: {
+      estimated: (days: string) => `environ ${days} (estimé)`,
+      learned: (days: string, deliveries: string) => `${days} (appris de ${deliveries})`,
+      fromFile: (days: string) => `${days} (d’après votre fichier)`,
+      deliveries: (count: number, shown: string) => (count === 1 ? "1 livraison" : `${shown} livraisons`),
+    },
     onlyOwner: "Seul le propriétaire peut faire ceci.",
     onlyOwnerOrManager: "Seul le propriétaire ou un gérant peut faire ceci.",
   },
@@ -362,6 +369,7 @@ export const fr: typeof en = {
         quantity: "Quantité en stock",
         branch: "Succursale",
         supplier: "Fournisseur",
+        delivery_days: "Délai de livraison (jours)",
       },
       sales: {
         date: "Date",
@@ -380,6 +388,10 @@ export const fr: typeof en = {
       new_parts: (n: string) => `${n} nouvelles pièces`,
       updated_parts: (n: string) => `${n} pièces mises à jour`,
       unchanged_parts: (n: string) => `${n} pièces inchangées`,
+      delivery_times: (n: string) => `Fournisseurs dont le délai vient du fichier : ${n}`,
+      delivery_only: () =>
+        "Vos pièces sont déjà dans l’application : seuls les délais de livraison sont enregistrés, le stock et les prix restent tels quels. Importez le fichier une deuxième fois pour les mettre à jour aussi.",
+      unread_delivery_times: (n: string) => `Délais de livraison illisibles (laissés vides) : ${n}`,
       new_sales: (n: string) => `${n} nouvelles lignes de vente`,
       already_imported: (n: string) => `${n} lignes de vente déjà importées (ignorées)`,
       problem_rows: (n: string) => `${n} lignes avec des erreurs (ignorées)`,
@@ -534,8 +546,8 @@ export const fr: typeof en = {
         text: "Au moins 3 mois, idéalement 12, pour de bonnes prévisions.",
       },
       suppliers: {
-        title: "Ajoutez des fournisseurs et leurs délais",
-        text: "Pour que « quoi commander » sache combien de temps chacun prend.",
+        title: "Ajoutez vos fournisseurs",
+        text: "Leurs délais de livraison se remplissent tout seuls, d’après votre fichier de pièces puis vos livraisons.",
       },
       team: { title: "Invitez votre équipe", text: "Donnez à chacun son propre accès." },
     },
@@ -587,6 +599,14 @@ export const fr: typeof en = {
       branchRemoved: (actor: string, name: string) => `${actor} a supprimé la succursale ${name}.`,
       supplierAdded: (actor: string, name: string) => `${actor} a ajouté le fournisseur ${name}.`,
       supplierDetailsUpdated: (actor: string, name: string) => `${actor} a modifié les coordonnées de ${name}.`,
+      deliveryTimeSetByOwner: (actor: string, name: string, days: string) =>
+        `${actor} a fixé le délai de livraison de ${name} à ${days}.`,
+      deliveryTimeAutomatic: (actor: string, name: string) =>
+        `${actor} a laissé l’application calculer le délai de livraison de ${name}.`,
+      deliveryTimeFromFile: (actor: string, name: string, days: string) =>
+        `Le délai de livraison de ${name} est maintenant de ${days}, d’après un fichier importé par ${actor}.`,
+      deliveryTimeLearned: (name: string, days: string, deliveries: string) =>
+        `Le délai de livraison de ${name} est maintenant de ${days}, appris de ${deliveries}.`,
       supplierMerged: (actor: string, from: string, into: string) => `${actor} a fusionné le fournisseur ${from} avec ${into}.`,
       supplierRemoved: (actor: string, name: string) => `${actor} a supprimé le fournisseur ${name}.`,
       dataExported: (actor: string) => `${actor} a téléchargé toutes les données du magasin.`,
@@ -666,11 +686,12 @@ export const fr: typeof en = {
       phone: "Téléphone",
       email: "E-mail",
       deliveryDays: "Délai de livraison (jours)",
-      deliveryDaysHelp: "Combien de jours une commande met en général à arriver. Utilisé pour « quoi commander ».",
+      deliveryDaysHelp:
+        "Se remplit tout seul, d’après votre fichier de pièces puis vos vraies livraisons. Tapez un nombre seulement pour le choisir vous-même. Laissez vide pour que l’application le calcule.",
       added: (name: string) => `${name} a été ajouté.`,
       detailsSaved: "Enregistré.",
-      noDeliveryTime: "Délai non renseigné",
-      deliveryDaysShown: (days: string) => (days === "1" ? "1 jour" : `${days} jours`),
+      deliveriesSay: (days: string) => `Vos dernières livraisons : environ ${days}`,
+      useDeliveries: "L’utiliser",
     },
     export: {
       title: "Télécharger toutes mes données",

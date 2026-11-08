@@ -25,7 +25,7 @@ KNOWN_ACTIONS = frozenset({
     "branch.removed",
     "supplier.added",
     "supplier.renamed",
-    "supplier.details_updated",
+    "supplier.details_updated", "supplier.delivery_time_changed",
     "supplier.merged",
     "supplier.removed",
     "data.exported",

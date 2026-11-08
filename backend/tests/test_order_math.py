@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from app.ordering.budget import BudgetLine, apply_budget, expected_missed, line_value, missed_sales_prevented
+from app.ordering.delivery_time import DeliveryTime
 from app.ordering.reasons import reason
 from app.ordering.replay import Today, four_week_forecasts, minimum_rule, replay, weekly_rule
 from app.ordering.suggest import (
@@ -19,6 +20,8 @@ from app.ordering.suggest import (
     suggest,
     whole_need,
 )
+
+OWNER_14 = DeliveryTime(14, "owner")
 
 FORECASTS = (HorizonForecast(7, 7.0, 11.0), HorizonForecast(30, 30.0, 40.0), HorizonForecast(60, 60.0, 75.0))
 
@@ -129,22 +132,30 @@ def test_a_part_without_forecasts_but_recent_sales_orders_nothing_by_guessing():
 def test_reason_says_why_this_part_and_why_this_number():
     weekly_9 = (HorizonForecast(30, 9 * 30 / 7, 9 * 30 / 7 + 8),)
     s = suggest(position(forecasts=weekly_9))
-    text = reason(s, 14, 6, 0, 1, 90)
+    text = reason(s, OWNER_14, 6, 0, 1, 90)
     assert text.startswith("Sells about 9 a week, supplier takes 14 days, 6 left: order ")
     assert f"order {s.quantity} to cover the next 21 days" in text
 
 
 def test_reason_mentions_packs_orders_on_the_way_and_slow_sellers():
     s = suggest(position(pack_size=5, on_order=3))
-    assert "6 left, 3 already ordered" in reason(s, 14, 6, 3, 5, 90)
-    assert "(packs of 5)" in reason(s, 14, 6, 3, 5, 90)
+    assert "6 left, 3 already ordered" in reason(s, OWNER_14, 6, 3, 5, 90)
+    assert "(packs of 5)" in reason(s, OWNER_14, 6, 3, 5, 90)
     slow = suggest(position(sold_last_28_days=0, sold_last_90_days=2, on_hand=0))
-    assert reason(slow, 14, 0, 0, 1, 2).startswith("Out of stock, sold 2 in the last 90 days")
+    assert reason(slow, OWNER_14, 0, 0, 1, 2).startswith("Out of stock, sold 2 in the last 90 days")
+
+
+def test_reason_says_where_the_delivery_time_came_from():
+    s = suggest(position())
+    assert "supplier takes about 7 days (estimated)," in reason(s, DeliveryTime(7, "estimated"), 6, 0, 1, 90)
+    assert "supplier takes 6 days (learned from 4 deliveries)," in reason(s, DeliveryTime(6, "learned", 4), 6, 0, 1, 90)
+    assert "supplier takes 1 day (learned from 1 delivery)," in reason(s, DeliveryTime(1, "learned", 1), 6, 0, 1, 90)
+    assert "supplier takes 12 days (from your file)," in reason(s, DeliveryTime(12, "file"), 6, 0, 1, 90)
 
 
 def test_slow_rates_are_said_per_month():
     s = suggest(position(forecasts=(HorizonForecast(30, 2.0, 4.0),)))
-    assert reason(s, 14, 0, 0, 1, 6).startswith("Sells about 2 a month")
+    assert reason(s, OWNER_14, 0, 0, 1, 6).startswith("Sells about 2 a month")
 
 
 # --- budget ---

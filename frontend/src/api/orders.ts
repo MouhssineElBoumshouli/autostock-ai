@@ -1,6 +1,7 @@
 import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiRequest } from "@/api/client";
+import type { DeliverySource } from "@/lib/deliveryTime";
 
 export type SuggestionStatus = "suggested" | "cut_by_budget" | "approved" | "rejected";
 export type SuggestionRule = "forecast" | "slow_out_of_stock" | "slow_skip";
@@ -22,6 +23,8 @@ export type OrderLine = {
   on_order: number;
   pack_size: number;
   delivery_days: number;
+  delivery_source: DeliverySource | null; // null on lines made before it was kept
+  delivery_learned_from: number;
   days_covered: number;
   expected: number;
   cushion: number;

@@ -194,8 +194,9 @@ def test_pack_size_and_unknown_delivery_time(browser):
     [line] = run_lines(browser, browser.post("/api/orders/suggestions", json={}).json())
     assert line["quantity"] % 10 == 0
     assert line["delivery_days"] == 7
+    assert line["delivery_source"] == "estimated"
     assert "(packs of 10)" in line["reason"]
-    assert "7 days assumed" in line["reason"]
+    assert "supplier takes about 7 days (estimated)" in line["reason"]
 
 
 def test_a_shop_without_forecasts_gets_an_empty_run(browser):

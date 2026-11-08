@@ -130,9 +130,9 @@ def test_owner_adds_a_supplier_with_contact_details(browser):
     assert body["phone"] == "+212 522-301145"
     assert body["delivery_days"] == 6
     assert body["in_use"] is False
-    row = audit_rows("supplier.added")[-1]
-    assert row.after["name"] == "Atlas Distribution"
-    assert row.after["delivery_days"] == 6
+    assert body["delivery"] == {"days": 6, "source": "owner", "learned_from": 0}
+    assert audit_rows("supplier.added")[-1].after["name"] == "Atlas Distribution"
+    assert audit_rows("supplier.delivery_time_changed")[-1].after["delivery_days"] == 6
 
 
 def test_cannot_add_a_supplier_with_a_name_already_used(browser):
@@ -153,10 +153,22 @@ def test_owner_sets_a_suppliers_delivery_time(browser):
 
     assert response.status_code == 200, response.text
     assert response.json()["delivery_days"] == 9
+    assert response.json()["delivery"]["source"] == "owner"
     assert response.json()["email"] == "a@autohall.ma"
-    row = audit_rows("supplier.details_updated")[-1]
+    assert audit_rows("supplier.details_updated")[-1].after["email"] == "a@autohall.ma"
+    row = audit_rows("supplier.delivery_time_changed")[-1]
     assert row.before["delivery_days"] is None
-    assert row.after["delivery_days"] == 9
+    assert row.after == {"name": "Auto Hall", "delivery_days": 9, "source": "owner", "learned_from": 0}
+
+
+def test_a_supplier_with_no_delivery_time_shows_the_estimate(browser):
+    set_up_shop(browser)
+    add_part(browser, "AA-1", "Auto Hall")
+
+    [supplier] = browser.get("/api/suppliers").json()
+
+    assert supplier["delivery_days"] is None
+    assert supplier["delivery"] == {"days": 7, "source": "estimated", "learned_from": 0}
 
 
 def test_owner_cannot_manage_another_shops_suppliers(browser):
