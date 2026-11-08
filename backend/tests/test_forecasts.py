@@ -14,6 +14,7 @@ from app.forecast import run as forecast_run
 from app.forecast.engine import HORIZONS
 from app.forecast.run import load_demand, run_forecasts, run_forecasts_in_background
 from app.models import Branch, Forecast, ForecastRun, Organization, Part, SaleLine, StockOut
+from app.shop_day import shop_today
 from tests.helpers import add_member, audit_rows, create_other_shop, member_with_own_password, set_up_shop
 from tests.import_helpers import import_parts, import_sales
 
@@ -170,6 +171,49 @@ def test_a_failed_run_is_recorded(browser, monkeypatch):
     monkeypatch.setattr(forecast_run, "forecast_all", broken)
     run_forecasts_in_background(shop_id(), "manual")
     assert browser.get("/api/forecasts/runs/latest").json()["status"] == "failed"
+
+
+# keep_running_forecasts asks the database whether a shop already ran today (any trigger), not a
+# dict in memory, so a server restart never starts a second, long run on a big shop that already
+# ran today.
+
+
+def test_ran_today_checks_the_database_not_memory(browser):
+    set_up_shop(browser)
+    shop = shop_id()
+    today = shop_today()
+    assert forecast_run.ran_today(shop, today) is False
+
+    add_sales(shop, "OIL-1")
+    run_now(shop)
+
+    assert forecast_run.ran_today(shop, today) is True
+    assert forecast_run.ran_today(shop, today - timedelta(days=1)) is False  # not "yesterday"
+
+
+def test_a_failed_run_does_not_count_as_ran_today(browser, monkeypatch):
+    set_up_shop(browser)
+    shop = shop_id()
+    add_sales(shop, "OIL-1")
+
+    def broken(*args):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(forecast_run, "forecast_all", broken)
+    run_forecasts_in_background(shop, "manual")
+
+    assert browser.get("/api/forecasts/runs/latest").json()["status"] == "failed"
+    assert forecast_run.ran_today(shop, shop_today()) is False
+
+
+def test_ran_today_only_looks_at_the_callers_own_shop(browser):
+    set_up_shop(browser)
+    shop = shop_id()
+    other = create_other_shop()
+    add_sales(other.organization_id, "OTHER-1")
+    run_now(other.organization_id)
+
+    assert forecast_run.ran_today(shop, shop_today()) is False
 
 
 def test_merging_a_branch_moves_its_stock_outs_and_drops_its_forecasts(browser):

@@ -141,20 +141,33 @@ def _record_failed_run(organization_id: uuid.UUID, trigger: str) -> None:
 
 async def keep_running_forecasts() -> None:
     """Runs while the server is up: once a day per real shop, checked hourly so a restart never
-    skips a day. The demo shop's forecasts come from its own replay script, not this loop."""
-    checked_on: dict[uuid.UUID, date] = {}
+    skips a day. Whether a shop already ran today is checked against the database (any trigger:
+    an import or a click count too), not kept in memory -- a restart must never start a second,
+    long run on a big shop that already ran today. The demo shop's forecasts come from its own
+    replay script, not this loop."""
     while True:
         today = shop_today()
         try:
             with SessionLocal() as db:
                 shops = db.scalars(select(Organization.id).where(~Organization.is_demo)).all()
             for shop_id in shops:
-                if checked_on.get(shop_id) != today:
+                if not await asyncio.to_thread(ran_today, shop_id, today):
                     await asyncio.to_thread(run_forecasts_apart, shop_id, "nightly")
-                    checked_on[shop_id] = today
         except Exception:
             log.exception("Nightly forecasts failed")
         await asyncio.sleep(CHECK_EVERY_SECONDS)
+
+
+def ran_today(organization_id: uuid.UUID, today: date) -> bool:
+    """Whether a forecast run already finished today, from any trigger."""
+    with SessionLocal() as db:
+        latest = db.scalar(
+            select(ForecastRun.created_at)
+            .where(ForecastRun.organization_id == organization_id, ForecastRun.status == "done")
+            .order_by(ForecastRun.created_at.desc())
+            .limit(1)
+        )
+    return latest is not None and shop_today(latest) == today
 
 
 if __name__ == "__main__":  # started by run_forecasts_apart
