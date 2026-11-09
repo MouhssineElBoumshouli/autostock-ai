@@ -48,9 +48,14 @@ def sales(asker: Asker, args: dict) -> ToolResult:
     now = _totals(asker, parts.condition, branch_id, first, last, group, rows_wanted(args))
     data = {"period": [first.isoformat(), last.isoformat()], **({"branch": branch} if branch else {}),
             **parts.described(), **now["total"]}
-    if asker.last_sale_day and asked_period[1] > asker.last_sale_day.isoformat():
-        data["note"] = (f"sales imported up to {asker.last_sale_day.isoformat()} only: period asked "
-                        f"{asked_period[0]} to {asked_period[1]}, counted up to {last.isoformat()}")
+    if asker.last_sale_day and first > asker.last_sale_day:
+        data["note"] = (f"NO SALES IMPORTED for this period: the newest sale is from {asker.last_sale_day.isoformat()}. "
+                        "Say so first and suggest importing the latest sales file; last_7_days_with_data is what is known.")
+        data["last_7_days_with_data"] = _last_week_of_data(asker, parts.condition, branch_id)
+    elif asker.last_sale_day and asked_period[1] > asker.last_sale_day.isoformat():
+        days = (last - first).days + 1
+        data["note"] = (f"COUNTED ONLY {first.isoformat()}..{last.isoformat()} ({days} day{'s' if days > 1 else ''} with sales, "
+                        f"none imported after {asker.last_sale_day.isoformat()}): say these dates, not the ones asked")
     compare = args.get("compare") or ("none" if group in TIME_GROUPS else "previous_period")
     if compare in ("previous_period", "last_year"):
         before_first, before_last = _before(first, last, compare)
@@ -66,6 +71,17 @@ def sales(asker: Asker, args: dict) -> ToolResult:
     heading = {**asked_heading(parts, branch, first, last), **({"group_by": group} if group else {}),
                **({"compare": compare} if compare in ("previous_period", "last_year") else {})}
     return ToolResult(data, _shown(data), heading)
+
+
+def _last_week_of_data(asker: Asker, part_condition, branch_id) -> dict:
+    """The 7 days up to the newest sale, vs the 7 before: what is known when the period asked has no sales yet."""
+    last = asker.last_sale_day
+    first = last - timedelta(days=6)
+    now = _totals(asker, part_condition, branch_id, first, last, None, None)["total"]
+    before_first, before_last = _before(first, last, "previous_period")
+    before = _totals(asker, part_condition, branch_id, before_first, before_last, None, None)["total"]
+    return {"period": [first.isoformat(), last.isoformat()], **now,
+            "compared_with": _compared(asker, now, before, before_first, before_last)}
 
 
 def _compared(asker: Asker, now: dict, before: dict, first: date, last: date) -> dict:

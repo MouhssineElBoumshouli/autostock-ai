@@ -82,6 +82,7 @@ def wrong_direction(text: str, results: list[object]) -> str | None:
         return None
     directions = {result["compared_with"].get("direction") for result in results
                   if isinstance(result, dict) and isinstance(result.get("compared_with"), dict)}
+    directions |= {result["direction"] for result in results if isinstance(result, dict) and result.get("direction")}  # why_sales
     directions.discard("same")
     if len(directions) != 1:
         return None

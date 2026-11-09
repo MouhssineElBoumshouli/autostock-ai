@@ -48,13 +48,14 @@ Part fields: type = one of: {types}; or a general word for all its types ("Batte
 part maker. Never a sentence in a field. {money}
 - Numbers and facts only from tools; never compute or guess. total_* answer the question; rows are details.
 - No period asked: leave dates empty (last 30 days of data) and say which days. Sales come with the period before.
-- Why sales changed: why_sales, then say only its reasons. Will I run out / what or from which supplier to order
-  first: running_out (and order_suggestions). Money in stock: stock. Not selling: stock only=dead. stock_outs = past
-  days without stock.
+- Why sales changed: why_sales; say its direction and only its reasons. Will I run out, what to order (first),
+  which supplier first: always look up running_out and follow its order_first_from (never your own ranking). Money in stock: stock. Not
+  selling: stock only=dead. stock_outs = past days without stock. Best-selling "pièces"/parts: group_by part.
 - A question is never an action: answer it. Only doing something (order, change, delete) is not possible: say where
   in the app: orders "{orders}", alerts "{alerts}", files "{files}", suppliers "{settings}".
 - Data the shop doesn't have (customers, salaries, weather...): say so, no number.
-- Answer in {language} only: 1 to 3 short plain sentences, the direct answer first, with its period and branch."""
+- Answer in {language} only: 1 to 3 short plain sentences, the direct answer first, with its main numbers and
+  period. Name a branch only if the person did; otherwise it is the whole shop."""
 MONEY_SEEN = "Money is in {currency}."
 MONEY_HIDDEN = "This person must not see money: never mention prices, costs, values or margins."
 FIX_NUMBERS = """Not shown, fix it: {numbers}. (A number listed is not in the tool results.) Write the answer again,

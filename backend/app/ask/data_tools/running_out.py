@@ -15,7 +15,7 @@ SHOWN = 6  # rows sent to the assistant unless it asks for more (top)
 
 SPEC = {
     "name": "running_out",
-    "description": "Parts running out before a new order arrives, and by supplier.",
+    "description": "Parts running out before a new order arrives; order_first_from = the app's most urgent supplier.",
     "parameters": {"type": "object", "properties": {**PART, "branch": TEXT, **TOP}},
 }
 
@@ -54,6 +54,8 @@ def running_out(asker: Asker, args: dict) -> ToolResult:
     by_supplier = sorted(suppliers.values(), key=lambda entry: (entry["soonest_days_left"] - entry["delivery_days"], -entry["parts_at_risk"]))
     data = {**parts.described(), **({"branch": branch} if branch else {}), "part_branches_checked": len(rows),
             "at_risk": len(at_risk), "out_now": sum(item["in_stock"] <= 0 for item in at_risk),
+            # The app's own ranking: the supplier whose parts run out longest before its delivery could arrive.
+            "order_first_from": by_supplier[0]["supplier"] if by_supplier else None,
             "rows": at_risk[:rows_wanted(args) if args.get("top") else SHOWN], "by_supplier": by_supplier[:5]}
     shown = [Number(key="parts_at_risk", label="Parts that run out before an order arrives", value=len(at_risk), unit="count")]
     shown += [Number(key="days_left_about", label=f"{item['name']}, {item['branch']}", about=f"{item['name']}, {item['branch']}",

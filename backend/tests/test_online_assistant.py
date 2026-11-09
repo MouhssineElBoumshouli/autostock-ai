@@ -293,7 +293,7 @@ def test_a_period_past_the_last_sale_is_counted_up_to_it(shop):
     with SessionLocal() as db:
         data = run_tool(asker(shop, db=db), "sales", {"date_from": (LAST_DAY - timedelta(days=6)).isoformat(),
                                                       "date_to": (LAST_DAY + timedelta(days=5)).isoformat()}).data
-    assert data["period"][1] == LAST_DAY.isoformat() and "imported up to" in data["note"]
+    assert data["period"][1] == LAST_DAY.isoformat() and data["note"].startswith("COUNTED ONLY")
 
 
 def test_no_dates_means_the_30_days_up_to_the_last_sale(shop):
@@ -484,3 +484,34 @@ def test_money_in_stock_by_branch_for_owners(shop):
         staff = run_tool(asker(shop, None, db), "stock", {"group_by": "branch"}).data
     assert data["total_value_at_cost"] == 700.0 and data["rows"][0] == {"name": MAIN, "pieces": 10, "value_at_cost": 700.0}
     assert "value_at_cost" not in json.dumps(staff)
+
+
+def test_the_direction_check_reads_why_sales_too():
+    """The owner's question 'why did brake pad sales drop?' was answered 'they dropped' when why_sales said up 3 %."""
+    from app.ask.tool_numbers import wrong_direction
+    why = [{"pieces": 10539, "pieces_before": 10259, "direction": "up"}]
+    assert wrong_direction("Les ventes de plaquettes de frein ont baissé à cause de la saisonnalité.", why) == "up"
+    assert wrong_direction("Elles n'ont pas baissé : elles sont en hausse de 3 %.", why) is None
+
+
+def test_a_period_with_no_sales_imported_gives_the_last_week_of_data(shop):
+    with SessionLocal() as db:
+        after = (LAST_DAY + timedelta(days=3)).isoformat()
+        data = run_tool(asker(shop, db=db), "sales", {"date_from": after, "date_to": after}).data
+        partly = run_tool(asker(shop, db=db), "sales", {"date_from": LAST_DAY.isoformat(),
+                                                         "date_to": (LAST_DAY + timedelta(days=6)).isoformat()}).data
+    assert data["note"].startswith("NO SALES IMPORTED") and data["last_7_days_with_data"]["total_pieces"] == 11
+    assert data["last_7_days_with_data"]["period"] == [(LAST_DAY - timedelta(days=6)).isoformat(), LAST_DAY.isoformat()]
+    assert partly["note"].startswith(f"COUNTED ONLY {LAST_DAY.isoformat()}..{LAST_DAY.isoformat()} (1 day with sales")
+
+
+def test_running_out_names_the_supplier_to_order_from_first(cars_shop):
+    from app.models import Forecast, Part
+    with SessionLocal() as db:
+        part = db.scalar(select(Part).where(Part.organization_id == cars_shop, Part.name == "Filtre à huile - Dacia Logan"))
+        db.add(Forecast(organization_id=cars_shop, part_id=part.id, branch_id=branch_named(cars_shop, RABAT), horizon_days=30,
+                        history_last_day=LAST_DAY, demand_type="smooth", method="four_week_average", quantity=300,
+                        low=150, high=600, backtest_windows=4, reason="test"))
+        db.commit()
+        data = run_tool(asker(cars_shop, db=db), "running_out", {}).data
+    assert data["order_first_from"] == data["by_supplier"][0]["supplier"]

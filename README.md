@@ -119,6 +119,14 @@ To try the app like a new shop, this writes the same data as the files a real sh
 docker compose exec api python -m app.demo.trial_files
 ```
 
+A shop tried with these files stops on the day they were made. To bring it up to yesterday the way a real shop does
+with its daily file, this writes only `Ventes récentes.csv` / `.xlsx` (the same sales, from the day given to
+yesterday), to import on the Import page:
+
+```
+docker compose exec api python -m app.demo.trial_files --recent-from=2026-11-04
+```
+
 ### Big test shop (speed checks only)
 
 A second made-up shop, never shown in the presentation: 50,000 parts, 3 branches, 2 years of sales
