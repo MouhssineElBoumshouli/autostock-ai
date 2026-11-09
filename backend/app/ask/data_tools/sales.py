@@ -80,6 +80,7 @@ def _compared(asker: Asker, now: dict, before: dict, first: date, last: date) ->
     compared = {"period": [first.isoformat(), last.isoformat()], **before,
                 "change_pieces": now["total_pieces"] - before["total_pieces"],
                 "change_percent": percent_change(now["total_pieces"], before["total_pieces"])}
+    compared["direction"] = "up" if compared["change_pieces"] > 0 else "down" if compared["change_pieces"] < 0 else "same"
     if asker.sees_money and now.get("total_value") and before.get("total_value"):
         compared["average_price"] = round(before["total_value"] / before["total_pieces"], 2)
         now["average_price"] = round(now["total_value"] / now["total_pieces"], 2)

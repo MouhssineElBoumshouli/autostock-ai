@@ -25,7 +25,7 @@ from app.ai import groq
 from app.ask.data_tools import Asker, run_tool, tool_specs
 from app.ask.data_tools.context import TYPE_NAME
 from app.ask.reply_language import is_darija, reply_language
-from app.ask.tool_numbers import allowed_numbers, unknown_numbers
+from app.ask.tool_numbers import allowed_numbers, unknown_numbers, wrong_direction
 from app.models import Branch, Organization, Part, SaleLine
 
 MOST_STEPS = 5  # rounds of tool calls before the model must answer
@@ -57,6 +57,8 @@ Rules:
    ar "ما يجب طلبه"); Alerts (fr "Alertes", ar "التنبيهات"); parts, prices, stock, sales: Import (fr "Importer",
    ar "استيراد"); suppliers: Settings (fr "Paramètres", ar "الإعدادات"). No order suggestion yet: say so.
 5. Follow-ups ("and in September?", "et à Rabat ?"): keep the earlier question's part and branch, look it up again.
+   Parts that don't sell / "ne bougent plus" / dead stock: stock with only "dead". Out of stock now: stock with only
+   "out". stock_outs counts past days without stock, per part and branch: never call those parts "out of stock now".
 6. If the shop's data can't answer (customers, staff, salaries, rent, weather...), say so in one sentence, no number."""
 MONEY_SEEN = "Money is in {currency}."
 MONEY_HIDDEN = "This person must not see money: never mention prices, costs, values or margins."
@@ -116,6 +118,9 @@ def answer(
         allowed = allowed_numbers([lookup["data"] for lookup in lookups] + [turn.facts for turn in earlier],
                                   [question], [today, *([last_sale] if last_sale else [])])
         made_up = unknown_numbers(written, allowed)
+        wrong_way = wrong_direction(written, [lookup["data"] for lookup in lookups])
+        if wrong_way:
+            made_up.append(f"(the change went {wrong_way}, the answer says the opposite)")
         if not made_up and written:
             break
         if retried:

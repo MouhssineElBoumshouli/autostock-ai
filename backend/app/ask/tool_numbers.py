@@ -2,6 +2,9 @@
 (or from the question, or be a date the shop's data or today gives). Simple roundings count ("about
 6 500" for 6 513), and so do the pieces of a date ("3 nov.", "2026"). Anything else is a number the model
 made up or computed itself, and the answer is not shown as it is.
+
+A change's number is allowed without its sign ("down 9 %"), so the direction is checked apart: when every
+comparison the tools made went the same way, an answer that only says the opposite way is wrong.
 """
 
 import re
@@ -60,3 +63,32 @@ def unknown_numbers(text: str, allowed: set[float]) -> list[str]:
 
 def _close_to(number: float, allowed: set[float]) -> bool:
     return number in allowed or any(abs(number - value) < 0.006 for value in allowed)
+
+
+UP_WORDS = re.compile(r"\b(up|rose|risen|increased?|increases|grew|growth|higher|more than|hausse|augment\w*|progress\w*|"
+                      r"plus que|zad\w*|ارتفع\w*|زاد\w*|زياده|ارتفاع)\b", re.IGNORECASE)
+DOWN_WORDS = re.compile(r"\b(down|fell|fallen|dropp?ed|drop|decreased?|decline\w*|lower|less|fewer|baiss\w*|diminu\w*|recul\w*|"
+                        r"moins|n9as\w*|انخفض\w*|انخفاض|تراجع\w*|نقص\w*|قل)\b", re.IGNORECASE)
+
+LAST_YEAR_WORDS = re.compile(r"last year|year before|an dernier|année dernière|année précédente|السنه الماضيه|العام الماضي|3am li fat",
+                             re.IGNORECASE)
+
+
+def wrong_direction(text: str, results: list[object]) -> str | None:
+    """"down" when the comparisons asked for went down but the answer only says up (or the reverse). An answer
+    that talks about last year may rightly say the other way for it: then only an answer with no direction word
+    for the main change could be judged, so it is left alone."""
+    if LAST_YEAR_WORDS.search(text):
+        return None
+    directions = {result["compared_with"].get("direction") for result in results
+                  if isinstance(result, dict) and isinstance(result.get("compared_with"), dict)}
+    directions.discard("same")
+    if len(directions) != 1:
+        return None
+    went = directions.pop()
+    says_up, says_down = bool(UP_WORDS.search(text)), bool(DOWN_WORDS.search(text))
+    if went == "down" and says_up and not says_down:
+        return "down"
+    if went == "up" and says_down and not says_up:
+        return "up"
+    return None

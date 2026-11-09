@@ -393,3 +393,28 @@ def test_a_general_word_counts_every_type_starting_with_it(browser, word):
     with SessionLocal() as db:
         data = run_tool(asker(shop_id, db=db), "stock", {"type": word}).data
     assert data["total_pieces"] == 1389 and data["types"] == ["Batterie 60Ah", "Batterie 70Ah"]
+
+
+def test_an_answer_saying_up_when_the_data_went_down_is_sent_back(browser, shop, online):
+    """The real mistake of 2026-11-09: 'battery sales rose 75 pieces (+5 %)' when they fell 75 (-5 %)."""
+    oil = next(iter(db_ids(shop, "Oil filter")))
+    sell(shop, oil, MAIN, days_ago=10, quantity=20)  # the week before sold more: this week went down
+    compare = {**OIL_THIS_WEEK, "compare": "previous_period"}
+    fake = online([("tools", [("sales", compare)]), ("text", "Oil filter sales rose to 5 this week."),
+                   ("text", "Oil filter sales fell to 5 this week, from 20.")])
+    result = done(chat(browser, "Why did oil filter sales go up?"))
+    assert result["text"] == "Oil filter sales fell to 5 this week, from 20." and result["retried"] is True
+    assert "went down" in fake.sent[-1]["messages"][-1]["content"]
+
+
+def test_the_direction_check_needs_one_clear_direction():
+    from app.ask.tool_numbers import wrong_direction
+    down = [{"compared_with": {"direction": "down"}, "same_dates_last_year": {"direction": "down"}}]
+    assert wrong_direction("Sales increased, up 75 pieces (+5 %).", down) == "down"
+    assert wrong_direction("Sales didn't go up: down 5 % (75 fewer).", down) is None
+    assert wrong_direction("Les ventes sont en hausse de 5 %.", down) == "down"
+    assert wrong_direction("Les ventes ont baissé de 5 %.", down) is None
+    mixed = [{"compared_with": {"direction": "down"}, "same_dates_last_year": {"direction": "up"}}]
+    assert wrong_direction("Sales rose 5 %.", mixed) == "down"
+    assert wrong_direction("Down 5 % on last month but up 1 % on last year.", mixed) is None
+    assert wrong_direction("Sales rose 1 % on last year.", mixed) is None, "about last year: not judged"
