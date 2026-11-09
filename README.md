@@ -162,18 +162,24 @@ To score the reading on the 60 open test questions (good answers, refusals, seco
 docker compose exec api python -m app.ask.check_assistant qwen3:4b-instruct --misses
 ```
 
-### Optional: cloud writer (Groq, free)
+### The online assistant (Groq, free) — the best answers
 
-Off by default. It writes the answers in more natural sentences; the app still checks every number,
-branch, part and language, and writes the answer itself if anything is wrong, the internet is down,
-or Groq's free daily limit is reached (about 250 to 300 answers a day with this model: its free tier allows 1,000 requests but only 200,000 word pieces (tokens) a day, and one answer uses about 700). **The facts used for each answer
-are sent to Groq** (Groq does not train on them). No database access, no customer data.
+With a free Groq key, Ask becomes a real assistant: Groq's `openai/gpt-oss-120b` understands any
+question, looks things up with the app's read-only tools (stock, sales over any period, stock-outs,
+forecasts, orders, alerts, suppliers, prices) and answers in the question's language. Every number in
+its answer is checked against what the tools returned; the lookups are shown under "Based on".
+**What is sent to Groq:** the question, the conversation and the tool results — never the database,
+never passwords (Groq does not train on them). Staff never get money. Without internet, or once the
+free daily limit is reached, one line says so and the app answers itself as above. Results and
+limits: `docs/ask-real-assistant.md`.
 
 1. Make a free account at https://console.groq.com and create an API key ("API Keys").
 2. Put it in `.env`: `GROQ_API_KEY=gsk_...` (never in git), then `docker compose up -d` again.
-3. The owner turns it on in **Settings → Who writes the answers on the Ask page**.
+3. It is on by default; the owner can turn it off in **Settings → Online assistant**, which also shows
+   how many answers are left today.
 
-To score it: add `--cloud` to the command above.
+To score it on the 50 questions about the owner's trial shop (needs a copy of that shop):
+`docker compose exec api python -m app.ask.check_real_assistant` (add `--owner` for his 10 questions).
 
 ## Database changes
 

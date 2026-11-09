@@ -25,9 +25,6 @@ ENGLISH_WORDS = set(words_of(
     "and in of to for me tell about any will should order left running out going today yesterday have has "
     "all who our best give show list set change add delete remove please can parts part sell selling"
 ))
-# How the optional cloud writer is told the language.
-WRITER_LANGUAGE = {"en": "English", "fr": "French", "ar": "Arabic"}
-DARIJA_WRITER_LANGUAGE = "simple Moroccan Arabic, in Arabic letters (Darija words are welcome)"
 
 
 def is_darija(question: str) -> bool:

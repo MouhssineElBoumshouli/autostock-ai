@@ -1,4 +1,5 @@
-"""Shop settings: name, currency, default language and the optional cloud writer. Only owners can see and change them."""
+"""Shop settings: name, currency, default language and the online assistant for Ask (with Groq's daily allowance
+left). Only owners can see and change them."""
 
 from typing import Literal
 
@@ -6,8 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.ai import cloud_writer
+from app.ai import groq
 from app.api.schemas import NameText
+from app.ask.allowance import allowance
 from app.audit import record_change
 from app.auth.permissions import require_role
 from app.db import get_session
@@ -23,15 +25,16 @@ class ShopSettings(BaseModel):
     name: str
     currency: Currency
     language: Language
-    cloud_writer_on: bool
-    cloud_writer_ready: bool  # a Groq key is set (.env): only then can the cloud writer be turned on
+    online_assistant_on: bool
+    groq_ready: bool  # a Groq key is set (.env): only then can the online assistant work
+    groq_allowance: dict | None  # what is left of Groq's free daily allowance (app/ask/allowance.py)
 
 
 class SettingsChange(BaseModel):
     name: NameText | None = None
     currency: Currency | None = None
     language: Language | None = None
-    cloud_writer_on: bool | None = None
+    online_assistant_on: bool | None = None
 
 
 NO_GROQ_KEY = "Add GROQ_API_KEY to the .env file first."
@@ -39,16 +42,18 @@ NO_GROQ_KEY = "Add GROQ_API_KEY to the .env file first."
 
 def snapshot(organization: Organization) -> dict:
     return {"name": organization.name, "currency": organization.currency, "language": organization.language,
-            "cloud_writer_on": organization.cloud_writer_on}
+            "online_assistant_on": organization.online_assistant_on}
 
 
-def shown(organization: Organization) -> ShopSettings:
-    return ShopSettings(**snapshot(organization), cloud_writer_ready=cloud_writer.is_ready())
+def shown(db: Session, organization: Organization) -> ShopSettings:
+    ready = groq.is_ready()
+    return ShopSettings(**snapshot(organization), groq_ready=ready,
+                        groq_allowance=allowance(db, organization.id) if ready else None)
 
 
 @router.get("")
 def read_settings(owner: User = Depends(owner_only), db: Session = Depends(get_session)) -> ShopSettings:
-    return shown(db.get_one(Organization, owner.organization_id))
+    return shown(db, db.get_one(Organization, owner.organization_id))
 
 
 @router.patch("")
@@ -65,14 +70,14 @@ def change_settings(
         organization.currency = body.currency
     if body.language is not None:
         organization.language = body.language
-    if body.cloud_writer_on is not None:
-        if body.cloud_writer_on and not cloud_writer.is_ready():
+    if body.online_assistant_on is not None:
+        if body.online_assistant_on and not groq.is_ready():
             raise HTTPException(422, NO_GROQ_KEY)
-        organization.cloud_writer_on = body.cloud_writer_on
+        organization.online_assistant_on = body.online_assistant_on
 
     if snapshot(organization) != before:
         record_change(
             db, owner, "organization.updated", "organization", organization.id, before=before, after=snapshot(organization)
         )
     db.commit()
-    return shown(organization)
+    return shown(db, organization)

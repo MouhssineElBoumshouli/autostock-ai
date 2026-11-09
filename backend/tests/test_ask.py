@@ -185,6 +185,21 @@ def test_several_matching_parts_each_get_their_own_stock_line(browser, several_b
     assert number_starting(answer, "Brake pads premium") == 10
 
 
+def test_a_part_question_counts_only_parts_matching_the_type_and_the_car(browser):
+    """The owner's question: "filtres à huile pour Dacia Logan" once summed every Logan part and every oil filter."""
+    set_up_shop(browser)
+    organization_id = shop_named(MAIN)
+    wanted = new_part(organization_id, "Filtre à huile - Dacia Logan", "Filters")
+    for other in ("Filtre à air - Dacia Logan", "Plaquettes de frein avant - Dacia Logan", "Filtre à huile - Renault Clio"):
+        shelve(organization_id, new_part(organization_id, other, "Filters"), RABAT, 500)
+    shelve(organization_id, wanted, RABAT, 55)
+
+    answer = ask(browser, "Combien il nous reste de filtres à huile pour Dacia Logan à Rabat ?")
+
+    assert answer["filters"]["branch"] == RABAT
+    assert answer["values"]["pieces"] == 55
+
+
 def test_several_matching_parts_each_get_their_own_sales_line(browser, several_brake_pads_shop):
     answer = ask(browser, "sales of brake pads this week")
     assert numbers(answer)["Pieces sold"] == 18  # the existing total line, unchanged

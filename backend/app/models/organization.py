@@ -22,7 +22,7 @@ class Organization(Base):
     is_demo: Mapped[bool] = mapped_column(default=False)
     # How careful "what to order" suggestions should be: 0.8 (save money), 0.9 (balanced), 0.95 (never run out).
     order_service_target: Mapped[float] = mapped_column(default=0.9)
-    # The owner let the cloud writer (Groq) write "Ask your shop" answers. Off: the app writes them.
-    cloud_writer_on: Mapped[bool] = mapped_column(default=False, server_default="false")
+    # "Ask your shop" may use the online assistant (Groq, needs GROQ_API_KEY). On by default; the owner can turn it off.
+    online_assistant_on: Mapped[bool] = mapped_column(default=True, server_default="true")
     # The owner or a manager hid the "Start here" checklist on Today (a new shop finished it, or knows its own way).
     start_here_hidden: Mapped[bool] = mapped_column(default=False, server_default="false")

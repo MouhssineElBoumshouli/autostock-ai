@@ -11,7 +11,9 @@ How a search is scored:
 - A typed word found in no part at all may be a typo: it then scores how alike it is to the
   part's words (pg_trgm word similarity, 0 to 1), using the trigram index.
 - The part's score is the average over all concepts, so a part matching every word comes first.
-  Parts far below the best match are left out.
+  Parts far below the best match are left out. With every_word (Ask), when some parts match every
+  word only they are kept: "filtre à huile dacia logan" is the Logan's oil filter, never every Logan
+  part or every oil filter (the search screen keeps the near matches after them).
 - If nothing matches well, the closest parts are offered instead of an empty list.
 """
 
@@ -146,7 +148,7 @@ class SearchResult:
     closest: bool  # nothing matched well: these are the closest guesses
 
 
-def find_parts(db: Session, organization_id: uuid.UUID, search: str) -> SearchResult:
+def find_parts(db: Session, organization_id: uuid.UUID, search: str, every_word: bool = False) -> SearchResult:
     prepared = prepare(db, organization_id, search)
     in_shop = Part.organization_id == organization_id
     code_scores, concept_scores = _match_codes_and_words(db, in_shop, prepared)
@@ -162,6 +164,9 @@ def find_parts(db: Session, organization_id: uuid.UUID, search: str) -> SearchRe
     scores = {part_id: code_scores.get(part_id, 0) + _average(found) for part_id, found in concept_scores.items()}
     matches = {part_id: score for part_id, score in scores.items() if code_scores.get(part_id) or score >= MIN_SCORE}
     if matches:
+        full = {part_id for part_id in matches if _average(concept_scores[part_id]) >= 1}
+        if every_word and full:
+            matches = {part_id: score for part_id, score in matches.items() if part_id in full or code_scores.get(part_id)}
         best = max(matches.values())
         return SearchResult(_best_first({p: s for p, s in matches.items() if s >= best * NEAR_BEST}), closest=False)
 

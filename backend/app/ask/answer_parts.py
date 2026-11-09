@@ -92,7 +92,7 @@ def pick_parts(asked: Asked) -> PartPick | None:
     """The parts the question is about. None when it names a part the shop doesn't have."""
     question = asked.question
     if question.part:
-        result = find_parts(asked.db, asked.organization_id, question.part)
+        result = find_parts(asked.db, asked.organization_id, question.part, every_word=True)
         if result.closest or not result.matches:
             return None
         ids = [part_id for part_id, _ in result.matches]

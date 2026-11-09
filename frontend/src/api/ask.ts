@@ -47,46 +47,48 @@ export function useAsk() {
   });
 }
 
-// The assistant (local AI on): one lookup it made, with the real numbers.
+// The assistant: one lookup it made, with the real numbers. The online assistant's lookups have their own
+// filters (type, car, brand, branch, range, group_by...), see lookupHeading.ts.
+export type LookupFilters = AskFilters & Record<string, string>;
 export type AssistantLookup = {
   tool: string;
-  filters: AskFilters;
+  filters: LookupFilters;
   key: string;
   values: Record<string, unknown>;
   numbers: AskNumber[];
 };
 export type AssistantEvent =
   | { type: "ai_off" }
-  | { type: "looking_up"; tool: string; filters: AskFilters }
+  // The online assistant couldn't answer (offline, daily limit, busy, an unchecked number): the app's own
+  // answer follows. `reason` picks the one line the page shows.
+  | { type: "online_off"; reason: string }
+  | { type: "looking_up"; tool: string; filters: LookupFilters }
   | { type: "text"; text: string }
-  // The written answer so far is taken back: the cloud writer tries once more, or the app writes it.
-  | { type: "restart" }
-  // `text` is the answer to show: the app's own (written_by "app"), or the cloud writer's once every
-  // sentence passed the check against the shop's data.
+  // `text` is the answer to show: the online assistant's once every number passed the check against the
+  // shop's data (written_by "groq"), or the app's own (written_by "app").
   | {
       type: "done";
       text: string;
-      written_by: "app" | "cloud";
+      written_by: "app" | "groq";
       language: AnswerLanguage;
-      cloud_problems: string[];
-      retried: boolean;
-      read_by: "rule" | "model" | "follow_up";
+      read_by: "rule" | "model" | "follow_up" | "groq";
       question: AskedBefore | null; // what the app understood; sent back so a follow-up can change it
       lookups: AssistantLookup[];
     };
 export type AskedBefore = { type: string; filters: AskFilters };
 
-// Sends the question (and the one before, for follow-ups) and calls `onEvent` for each event as the
-// server writes it (newline-delimited JSON).
+// Sends the question (with, for follow-ups, the question before and how many answers belong to this
+// conversation) and calls `onEvent` for each event as the server writes it (newline-delimited JSON).
 export async function askAssistant(
   question: string,
   previous: AskedBefore | null,
+  earlierTurns: number,
   onEvent: (event: AssistantEvent) => void,
 ): Promise<void> {
   const response = await fetch("/api/ask/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, previous }),
+    body: JSON.stringify({ question, previous, earlier_turns: earlierTurns }),
   });
   if (!response.ok || !response.body) throw new ApiError(response.status, t.states.somethingWrong);
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -122,7 +124,7 @@ export function forgetAskHistory() {
 export function useAiOn() {
   return useQuery({
     queryKey: ["ask", "ai"],
-    queryFn: () => apiRequest<{ ai_on: boolean }>("/api/ask/ai"),
+    queryFn: () => apiRequest<{ ai_on: boolean; online: boolean }>("/api/ask/ai"),
     staleTime: 60_000,
   });
 }

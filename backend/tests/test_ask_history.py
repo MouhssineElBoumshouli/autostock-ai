@@ -1,13 +1,13 @@
 """Each person's last questions on the Ask page are kept on the server (newest 20), shown when they
 come back, never to anyone else, and forgotten only on "Clear history". Also: "et le mois dernier ?"
-after the briefing answers about last month, and the owner's cloud writer switch."""
+after the briefing answers about last month."""
 
 import json
 
 import pytest
 from sqlalchemy import select
 
-from app.ai import cloud_writer, llm
+from app.ai import llm
 from app.ask import history
 from app.db import SessionLocal
 from app.models import AuditLog
@@ -66,53 +66,3 @@ def test_and_last_month_after_the_briefing_is_about_last_month(browser, shop, mo
     assert follow_up["question"] == {"type": "today_briefing", "filters": {"period": "last_month"}}
     assert follow_up["text"].startswith("Le mois dernier (1 août – 31 août) :")
     assert follow_up["lookups"][0]["values"]["sales_in_period"]["period"] == "last_month"
-
-
-# The owner's switch for the cloud writer
-
-def test_the_cloud_writer_cant_be_turned_on_without_a_key(browser, shop):
-    response = browser.patch("/api/settings", json={"cloud_writer_on": True})
-    assert response.status_code == 422 and response.json()["detail"] == "Add GROQ_API_KEY to the .env file first."
-
-
-def test_the_owner_turns_the_cloud_writer_on_and_it_is_audited(browser, shop, monkeypatch):
-    monkeypatch.setattr(cloud_writer, "is_ready", lambda: True)
-    assert browser.patch("/api/settings", json={"cloud_writer_on": True}).json()["cloud_writer_on"] is True
-    with SessionLocal() as db:
-        row = db.scalars(select(AuditLog).where(AuditLog.action == "organization.updated")).one()
-    assert row.before["cloud_writer_on"] is False and row.after["cloud_writer_on"] is True
-    assert staff_browser(browser).patch("/api/settings", json={"cloud_writer_on": False}).status_code == 403
-
-
-def test_the_cloud_writer_reads_groqs_stream(monkeypatch):
-    lines = [b'data: {"choices":[{"delta":{"content":"We sold "}}]}\n', b"\n",
-             b'data: {"choices":[{"delta":{"content":"[F1] pieces."}}]}\n', b"data: [DONE]\n"]
-
-    class Reply:
-        def __enter__(self):
-            return iter(lines)
-
-        def __exit__(self, *args):
-            return False
-
-    sent = {}
-
-    def urlopen(request, timeout):
-        sent.update(json.loads(request.data), key=request.get_header("Authorization"), agent=request.get_header("User-agent"))
-        return Reply()
-
-    monkeypatch.setattr(cloud_writer, "GROQ_API_KEY", "test-key")
-    monkeypatch.setattr(cloud_writer.urllib.request, "urlopen", urlopen)
-    assert "".join(piece["text"] for piece in cloud_writer.chat([{"role": "user", "content": "hi"}])) == "We sold [F1] pieces."
-    assert sent["key"] == "Bearer test-key" and sent["stream"] is True and sent["model"] == cloud_writer.GROQ_MODEL
-    assert sent["agent"] == "AutoStock-AI/1.0", "Groq's firewall refuses Python's default name"
-
-
-def test_the_cloud_writer_failing_raises_so_the_app_writes_instead(monkeypatch):
-    def offline(request, timeout):
-        raise OSError("no internet")
-
-    monkeypatch.setattr(cloud_writer, "GROQ_API_KEY", "test-key")
-    monkeypatch.setattr(cloud_writer.urllib.request, "urlopen", offline)
-    with pytest.raises(cloud_writer.WriterFailed, match="no internet"):
-        list(cloud_writer.chat([]))

@@ -29,6 +29,7 @@ import { ClearHistoryButton } from "./ClearHistoryButton";
 import { QuestionForm } from "./QuestionForm";
 
 const HISTORY_LIMIT = 20; // the server keeps the same number per person
+const EARLIER_TURNS = 3; // answers the online assistant reads for a follow-up (the server's limit too)
 
 type RuleEntry = HistoryEntry & { kind: "rule" };
 type Entry = RuleEntry | AssistantEntry;
@@ -54,6 +55,8 @@ export function AskPage() {
   const [history, setHistory] = useState<Entry[]>([]);
   // The last question the app understood in this conversation: "and in Rabat?" changes it.
   const [previous, setPrevious] = useState<AskedBefore | null>(null);
+  // How many answers this conversation has had: the online assistant reads up to EARLIER_TURNS of them.
+  const [turns, setTurns] = useState(0);
   const [writing, setWriting] = useState(false);
   const [lastRule, setLastRule] = useState<{ request: AskRequest; question: string } | null>(null);
   const [params, setParams] = useSearchParams();
@@ -80,20 +83,22 @@ export function AskPage() {
     addEntry({ id, kind: "assistant", question, lookingUp: [], text: "", done: null, failed: false });
     setWriting(true);
     try {
-      await askAssistant(question, previous, (event) => {
-        if (event.type === "ai_off") {
+      await askAssistant(question, previous, Math.min(turns, EARLIER_TURNS), (event) => {
+        if (event.type === "online_off") {
+          // What the online assistant looked up is dropped: the app's own answer follows.
+          update(id, (entry) => ({ ...entry, lookingUp: [], text: "", onlineOff: event.reason }));
+        } else if (event.type === "ai_off") {
           setHistory((previous) => previous.filter((entry) => entry.id !== id));
           void aiOn.refetch();
           askRule({ question }, question);
         } else if (event.type === "looking_up") {
           update(id, (entry) => ({ ...entry, lookingUp: [...entry.lookingUp, { tool: event.tool, filters: event.filters }] }));
-        } else if (event.type === "restart") {
-          update(id, (entry) => ({ ...entry, text: "" }));
         } else if (event.type === "text") {
           update(id, (entry) => ({ ...entry, text: entry.text + event.text }));
         } else {
           update(id, (entry) => ({ ...entry, done: event }));
           if (event.question && event.question.type !== "cannot_answer") setPrevious(event.question);
+          setTurns((count) => count + 1);
         }
       });
     } catch {
@@ -111,10 +116,12 @@ export function AskPage() {
   // Follow-ups start again from nothing; the questions on the page (and saved) stay.
   function newConversation() {
     setPrevious(null);
+    setTurns(0);
   }
 
   function historyCleared() {
     setPrevious(null);
+    setTurns(0);
     setHistory([]);
     queryClient.setQueryData(["ask", "history"], []);
   }
@@ -140,6 +147,7 @@ export function AskPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiOn.isPending]);
 
+  const inConversation = (previous !== null || turns > 0) && !aiOff;
   const thinking = ask.isPending;
   const failed = ask.isError && !thinking;
 
@@ -156,9 +164,9 @@ export function AskPage() {
 
       {history.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-body-medium text-on-surface-variant">{previous && !aiOff ? t.ask.assistant.followUpHint : ""}</p>
+          <p className="text-body-medium text-on-surface-variant">{inConversation ? t.ask.assistant.followUpHint : ""}</p>
           <div className="flex flex-wrap gap-2">
-            {previous && !aiOff && (
+            {inConversation && (
               <Button variant="text" size="sm" onClick={newConversation} disabled={writing}>
                 {t.ask.assistant.newConversation}
               </Button>

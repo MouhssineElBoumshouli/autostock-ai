@@ -1,7 +1,7 @@
 import { ArrowRightIcon, SearchIcon } from "lucide-react";
 import { Link } from "react-router";
 
-import type { AskFilters, AssistantEvent, AssistantLookup } from "@/api/ask";
+import type { AssistantEvent, AssistantLookup, LookupFilters } from "@/api/ask";
 import type { Choice } from "@/api/stock";
 import { ErrorState } from "@/components/ErrorState";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,8 @@ import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { t } from "@/i18n";
 
 import { formatAskNumber } from "./askFormat";
-import { numberLabel, understoodHeading } from "./askSentence";
+import { numberLabel } from "./askSentence";
+import { lookupHeading } from "./lookupHeading";
 import { relatedScreen } from "./questionTypes";
 
 type Done = Extract<AssistantEvent, { type: "done" }>;
@@ -19,24 +20,21 @@ export type AssistantEntry = {
   id: string;
   kind: "assistant";
   question: string;
-  lookingUp: { tool: string; filters: AskFilters }[];
+  lookingUp: { tool: string; filters: LookupFilters }[];
   text: string;
   done: Done | null;
   failed: boolean;
+  // Why the online assistant couldn't answer this one (a key of t.ask.assistant.onlineOff): the app answered.
+  onlineOff?: string;
 };
 
-function lookupHeading(tool: string, filters: AskFilters): string {
-  return understoodHeading(tool, filters, filters.period ?? null);
-}
-
-// The cloud writer writes plain text; a stray "**bold**" from it is shown as plain words.
+// The online assistant writes plain text; a stray "**bold**" from it is shown as plain words.
 function plainText(text: string): string {
   return text.replace(/\*\*/g, "");
 }
 
-// One question to the assistant: what it is looking up, the answer (in the question's own language,
-// written by the app, or by the cloud writer when the owner turned it on and it passed every check),
-// and under it the real numbers it used.
+// One question to the assistant: what it is looking up, the answer (in the question's own language, by the
+// online assistant once every number passed the check, or by the app), and under it the real numbers it used.
 export function AssistantCard({
   entry,
   branches,
@@ -57,6 +55,12 @@ export function AssistantCard({
     <Card className="py-0">
       <CardContent className="grid grid-cols-1 gap-4 py-6">
         <p className="text-label-large text-on-surface-variant">{t.ask.asked(entry.question)}</p>
+
+        {entry.onlineOff && (
+          <p className="text-body-small text-on-surface-variant">
+            {t.ask.assistant.onlineOff[entry.onlineOff] ?? t.ask.assistant.onlineOff.error}
+          </p>
+        )}
 
         {entry.lookingUp.length > 0 && (
           <div className="flex flex-wrap gap-2">
@@ -87,8 +91,8 @@ export function AssistantCard({
                 {entry.text ? t.ask.assistant.writing : t.ask.thinking}
               </div>
             )}
-            {done?.written_by === "cloud" && (
-              <p className="mt-2 text-body-small text-on-surface-variant">{t.ask.assistant.writtenByCloud}</p>
+            {done?.written_by === "groq" && (
+              <p className="mt-2 text-body-small text-on-surface-variant">{t.ask.assistant.writtenByGroq}</p>
             )}
           </div>
         )}

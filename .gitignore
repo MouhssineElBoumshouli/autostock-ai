@@ -11,3 +11,6 @@ dist/
 backups/
 # Files for trying the app like a new shop: python -m app.demo.trial_files
 trial/
+
+# Measuring results of app/ask/check_real_assistant.py (summarised in docs, never committed)
+backend/check_results/
