@@ -20,12 +20,15 @@ SPEC = {
 
 
 def orders(asker: Asker, args: dict) -> ToolResult:
-    show = args.get("show")
+    show = args.get("show") if args.get("show") in ("purchase_orders", "suppliers") else "suggestions"
     if show == "purchase_orders":
-        return purchase_orders(asker, args)
-    if show == "suppliers":
-        return suppliers(asker, {"name": args.get("supplier")})
-    return order_suggestions(asker, args)
+        result = purchase_orders(asker, args)
+    elif show == "suppliers":
+        result = suppliers(asker, {"name": args.get("supplier")})
+    else:
+        result = order_suggestions(asker, args)
+    result.heading = {**result.heading, "show": show}
+    return result
 
 
 

@@ -882,6 +882,7 @@ export const en = {
     // One sentence per answer key. Mirrors the English sentences in backend/app/ask.
     // Labels of the real numbers under an answer.
     numberLabels: {
+      parts_at_risk: "Parts running out before an order arrives",
       pieces_sold: "Pieces sold",
       sales_value: "Sales value",
       from: "From",
@@ -924,6 +925,7 @@ export const en = {
       purchase_orders: "Purchase orders",
     } as Record<string, string>,
     numberLabelsAbout: {
+      days_left_about: (about: string) => `${about}, days left`,
       days_left: (about: string) => `${about}, days left`,
       days_late: (about: string) => `${about}, days late`,
       sold_about: (about: string) => `${about}, pieces sold`,
@@ -937,6 +939,10 @@ export const en = {
     } as Record<string, (about: string) => string>,
     // The online assistant's lookups (backend/app/ask/data_tools), shown above their numbers.
     toolHeadings: {
+      parts: "Parts",
+      why_sales: "Why sales changed",
+      running_out: "Running out before an order arrives",
+      orders: "Orders",
       find_parts: "Parts found",
       stock: "Stock",
       sales: "Sales",
@@ -956,6 +962,7 @@ export const en = {
       compare: { previous_period: "vs the period before", last_year: "vs last year" } as Record<string, string>,
       only: { out: "out of stock", low: "low", dead: "not selling" } as Record<string, string>,
       status: { draft: "drafts", sent: "on the way", late: "late", received: "received", all: "all" } as Record<string, string>,
+      show: { suggestions: "what to order", purchase_orders: "purchase orders", suppliers: "suppliers" } as Record<string, string>,
       nextDays: (days: string) => `next ${days} days`,
     },
     assistant: {
