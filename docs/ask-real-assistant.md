@@ -36,29 +36,30 @@ Written and committed before the assistant (`backend/app/ask/real_shop_questions
 the owner's shop, today pinned to 8 Nov. "Right" = says the number the plain-SQL truth gives (or refuses
 properly); answers without a truth were read by me.
 
-| | gpt-oss-120b, 1st run | gpt-oss-120b, 2nd run | qwen3.8-27b |
+| | gpt-oss-120b, 1st run | gpt-oss-120b, final (2nd run + 9 Nov) | qwen3.8-27b |
 |---|---|---|---|
-| Answered (Groq allowance) | 48 of 50 | 36 of 37 asked | 30 of 36 asked |
-| Right, checked automatically | 24/39 | 22/30 | 24/26 |
-| Right after reading every answer | — | 32/36, 3 partial, **1 wrong** | 28/30, 2 partial, 0 wrong |
+| Answered (Groq allowance) | 48 of 50 | 49 of 50 (1 blocked by the check) | 30 of 36 asked |
+| Right, checked automatically | 24/39 | 31/40 | 24/26 |
+| Right after reading every answer | — | 42/49, 6 partial, **1 wrong** | 28/30, 2 partial, 0 wrong |
 | Numbers no tool gave, shown | 0 (2 blocked) | 0 (1 blocked) | 0 |
-| Right language | 45/48 | 36/36 | 30/30 |
-| Short and plain (≤ 3 sentences) | 46/48 | 34/36 | 28/30 |
+| Right language | 45/48 | 47/49 | 30/30 |
+| Short and plain (≤ 3 sentences) | 46/48 | 47/49 | 28/30 |
 | Seconds per answer (median / max) | 1.1 / 6.3 | 1.2 / 3.7 | 1.5 / 22.5 |
-| Tokens per answer (median) | 2 730 | 3 870 | 5 520 |
+| Tokens per answer (median) | 2 730 | 3 860 | 5 520 |
 
 - **1st run → fixes:** real wrong answers came from the app's side: the model read one row as the total
   ("51 batteries" for 657), "the period before" October was 31 days ending 30 Sep ("‑0 %" instead of +3 %),
   it worked out "last week" itself and got the dates wrong, "Peugeot" went in the brand field. Fixed: totals
   are named `total_…`, whole months compare with whole months, the app gives the exact dates of common
   periods, the shop's part types and brands are in the instructions.
-- **The 1 wrong answer of the 2nd run:** "Why did battery sales go up?" was answered with Batterie 60Ah only
-  (732) as if it were all batteries (1 389). Fixed after the run (a general word counts every type starting
-  with it, and the answer says what was counted); qwen answered the same question right (1 389, down 5 %).
-  **This fix is not yet re-measured** on gpt-oss-120b.
-- **Not finished:** the 2nd gpt-oss-120b run stopped at 37 questions and qwen at 36 because each model's
-  free daily allowance (about 200 000 tokens) ran out — my measuring used it. Run again tomorrow, it goes on
-  where it stopped: `docker compose exec api python -m app.ask.check_real_assistant openai/gpt-oss-120b`.
+- **The 1 wrong answer (2nd run):** "Why did battery sales go up?" counted Batterie 60Ah only (732) as if it were
+  all batteries (1 389). Fixed: a general word counts every type starting with it (test added).
+- **Re-checked on 9 Nov (1 Groq answer):** the total is now right (1 389, both types), but the model said sales
+  "rose 75 (+5 %)" when they fell 75 (−5 %). The number check accepted it because a change is allowed without its
+  sign. Fixed after: each comparison carries its direction, and an answer that only says the opposite way is
+  sent back once, then replaced by the app's answer (tests added). **Not re-measured** (allowance kept for the owner).
+- Partial answers: the right numbers but a weak period (this week = 2 days imported), a list of names without
+  their pieces, or a page name that doesn't exist ("Prices section", "supprimer les alertes").
 - "busy" (6 qwen answers): Groq's 8 000 tokens a minute, from asking questions back to back. One person asking
   waits up to 20 s and gets the answer; two people at once may get the app's simpler answer.
 
@@ -71,24 +72,21 @@ llama-3.3-70b-versatile no longer exists on this Groq account, so it could not b
 
 ## The owner's 10 questions, old vs new
 
-Old: what his shop answered on 8 Nov. New: gpt-oss-120b on the copy of his shop — only the first could be
-asked before the allowance ran out; the other 9 are pending (`… check_real_assistant --owner`).
+Old: what his shop answered on 8 Nov. New: gpt-oss-120b on the copy of his shop, 9 Nov, each asked once
+("Et le mois dernier ?" right after the question before it).
 
-| Question | Old answer | New answer |
-|---|---|---|
-| Combien il nous reste de filtres à huile pour Dacia Logan à Rabat ? | Il reste 6 281 pièces … (WRONG: every Logan part) | Il reste 551 filtres à huile pour Dacia Logan à Rabat - Agdal. |
-| Qu'est-ce qui s'est le mieux vendu en octobre à Marrakech ? | Je n'ai pas compris la question. | pending |
-| Comment va le magasin cette semaine ? | 20 674 pièces vendues, une semaine normale c'est 20 668 … | pending |
-| Et le mois dernier ? | 92 032 pièces vendues, en hausse de 3 % … | pending |
-| Pourquoi les ventes de plaquettes de frein ont baissé ? | Je n'ai pas compris la question. | pending |
-| Quelles pièces ne bougent plus depuis longtemps ? | Je n'ai pas compris la question. | pending |
-| Compare Casablanca et Rabat sur les batteries. | Casablanca vend plus : 613 … devant Rabat (459) … | pending |
-| chhal ba9i 3andna mn amortisseur dyal clio f casa | لم أفهم السؤال | pending |
-| ما هي القطع الأكثر مبيعا في أكتوبر؟ | لم أفهم السؤال | pending |
-| Who is our biggest customer? | I can't do that … nothing about customers. | pending |
+| Question | Old answer | New answer | Verdict |
+|---|---|---|---|
+| Combien il nous reste de filtres à huile pour Dacia Logan à Rabat ? | Il reste 6 281 pièces … (WRONG: every Logan part) | Il reste 551 filtres à huile pour Dacia Logan au magasin de Rabat - Agdal. | right |
+| Qu'est-ce qui s'est le mieux vendu en octobre à Marrakech ? | Je n'ai pas compris la question. | Le meilleur vendeur en octobre à Marrakech est l'« Huile moteur 5W30 5L » avec 1 531 pièces vendues. | right (by type) |
+| Comment va le magasin cette semaine ? | 20 674 pièces vendues, une semaine normale c'est 20 668 … | Cette semaine (2–3 nov., ventes après le 3 nov. pas encore importées) : 6 872 pièces, 2 367 235 MAD, marge 30 %. | right, but no "normal week" to compare |
+| Et le mois dernier ? | 92 032 pièces vendues, en hausse de 3 % … | Octobre : 92 032 pièces, 32 152 455 MAD, marge 30 % ; en tête Filtre à huile (6 787), Huile 5W30 (6 669), Huile 10W40 (6 466). | right, no comparison |
+| Pourquoi les ventes de plaquettes de frein ont baissé ? | Je n'ai pas compris la question. | (blocked by the number check: a "9" no tool gave → the app's own answer is shown) | blocked |
+| Quelles pièces ne bougent plus depuis longtemps ? | Je n'ai pas compris la question. | « 1 272 pièces sont en rupture depuis le 1 janvier (3 816 jours) » | **wrong**: read stock-out days, not dead stock (fixed after in the instructions, not re-measured) |
+| Compare Casablanca et Rabat sur les batteries. | Casablanca vend plus : 613 … devant Rabat (459) … | Casablanca 45 batteries (25 × 70Ah, 20 × 60Ah), Rabat 40 (15 × 70Ah, 25 × 60Ah), du 2 au 3 nov. | right numbers, too short a period |
+| chhal ba9i 3andna mn amortisseur dyal clio f casa | لم أفهم السؤال | Amortisseur dyal Clio f Casa kayn 14 7aja. | right |
+| ما هي القطع الأكثر مبيعا في أكتوبر؟ | لم أفهم السؤال | أعلى القطع مبيعًا في أكتوبر: Filtre à huile، Huile moteur 5W30 5L، Huile moteur 10W40 5L، Filtre à gasoil، Bougie d'allumage | right, without the pieces |
+| Who is our biggest customer? | I can't do that … nothing about customers. | I'm sorry, but the shop's data doesn't include information about customers. | right |
 
-Close equivalents among the 50, from the 2nd runs: best seller of a branch last month (both), October vs
-September +3 % (both), dead stock 294 parts / 238 087,50 MAD (both), the top 5 of October with their pieces
-(qwen). The actions, "best customer" and the Arabic/Darija questions were only reached in the 1st run: the 7
-refusals were right; the Arabic top 5 was right; the Arabic stock (one row read as the total, 521 for 4 989) and
-the Darija sales (money instead of pieces) were wrong — the kind of mistake fixed after that run, not re-measured.
+Old: 2 good, 5 not understood, 1 wrong. New: 7 right (3 of them thinner than they should be), 1 partial (right
+numbers, 2-day period), 1 blocked by the check, 1 wrong (a wrong reading, every number from a tool), 0 numbers made up. 25 Groq answers used on 9 Nov.
