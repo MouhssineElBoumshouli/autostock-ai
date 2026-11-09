@@ -22,7 +22,7 @@ SECONDS = 25
 # Groq's firewall refuses Python's default name ("Python-urllib", error 1010), so the app says its own.
 USER_AGENT = "AutoStock-AI/1.0"
 LONGEST = 1200  # word pieces (tokens) for one reply, its thinking included
-LONGEST_WAIT = 20  # seconds: a "too many this minute" refusal that clears sooner is waited for, once
+LONGEST_WAIT = 20  # seconds waited in all for "too many this minute" refusals, then "busy"
 # Groq's free limit in tokens a day (requests a day come in each reply). Both measured on 2026-11-08: the
 # allowance ran out after about 200,000 tokens.
 TOKENS_PER_DAY = {"openai/gpt-oss-120b": 200_000, "openai/gpt-oss-20b": 200_000, "qwen/qwen3.8-27b": 200_000}
@@ -59,18 +59,18 @@ def complete(messages: list[dict], tools: list[dict], model: str = GROQ_MODEL) -
         body["tools"] = tools
     if model.startswith("openai/gpt-oss"):
         body["reasoning_effort"] = "low"  # thinking counts in the limits: low keeps answers quick and cheap
-    for attempt in range(2):
+    waited = 0.0
+    while True:
         try:
             return _sent(body)
         except urllib.error.HTTPError as error:
             failure, wait = _refusal(error)
-            if failure.reason == "busy" and attempt == 0 and wait <= LONGEST_WAIT:
-                time.sleep(wait)
-                continue
-            raise failure from error
+            if failure.reason != "busy" or waited + wait > LONGEST_WAIT:
+                raise failure from error
+            time.sleep(wait)  # the page keeps showing "thinking" meanwhile
+            waited += wait
         except (OSError, ValueError, KeyError, IndexError) as error:
             raise GroqFailed("offline" if isinstance(error, OSError) else "error", str(error)) from error
-    raise GroqFailed("busy")
 
 
 def _sent(body: dict) -> Reply:
@@ -98,7 +98,7 @@ def _refusal(error: urllib.error.HTTPError) -> tuple[GroqFailed, float]:
     if error.code == 429:
         if re.search(r"per day|\(TPD\)|\(RPD\)", text):
             return GroqFailed("daily_limit", text[:300]), 0
-        wait = float(error.headers.get("retry-after") or LONGEST_WAIT + 1)
+        wait = max(1.0, float(error.headers.get("retry-after") or 5))
         return GroqFailed("busy", text[:300]), wait
     if error.code >= 500:
         return GroqFailed("offline", text[:300]), 0

@@ -11,6 +11,7 @@ The local model only READS; the app thinks and writes.
 """
 
 import json
+import re
 import uuid
 from collections.abc import Iterator
 
@@ -24,6 +25,15 @@ from app.ask.reply_language import reply_language
 from app.ask.sentences import fixed, written_answer
 from app.ask.tools import Lookup, look_up
 from app.ask.understand import shop_words
+
+
+# A month or a year named in the question: the simple reader has no such periods, so it would answer
+# another question ("compare septembre et octobre" read as this month vs the one before). It says so instead.
+NAMED_PERIOD = re.compile(
+    r"\b(janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre|"
+    r"january|february|march|april|may|june|july|august|september|october|november|december|"
+    r"(19|20)\d\d)\b|يناير|فبراير|مارس|أبريل|ابريل|ماي|يونيو|يوليوز|غشت|شتنبر|سبتمبر|أكتوبر|اكتوبر|نونبر|نوفمبر|دجنبر|ديسمبر",
+    re.IGNORECASE)
 
 
 def read(text: str, shop: ShopWords, earlier: Question | None, model: str) -> tuple[Question | None, str]:
@@ -40,18 +50,21 @@ def read(text: str, shop: ShopWords, earlier: Question | None, model: str) -> tu
 
 def converse(
     db: Session, organization_id: uuid.UUID, currency: str | None, question: str, earlier: Question | None,
-    app_language: str = "en", model: str = llm.OLLAMA_MODEL,
+    app_language: str = "en", model: str = llm.OLLAMA_MODEL, instead_of_online: bool = False,
 ) -> Iterator[dict]:
     """Events for the website, in order: {"type": "looking_up"}, one {"type": "text"}, one {"type": "done"}.
-    `app_language` answers questions too short to tell their language."""
+    `app_language` answers questions too short to tell their language. `instead_of_online`: the online assistant
+    couldn't answer; then a question this simple version can't read gets "can't answer", never another answer."""
     shop = shop_words(db, organization_id)
     language = reply_language(question, app_language)
-    understood, read_by = read(question, shop, earlier, model)
-    if understood is None and read_by == "model" and not llm.is_on(model):
+    understood, read_by = (None, "rule") if NAMED_PERIOD.search(question) else read(question, shop, earlier, model)
+    if understood is None and read_by == "model" and not llm.is_on(model) and not instead_of_online:
         yield {"type": "ai_off"}  # the model failed to start: the website asks the keyword rule instead
         return
     lookups: list[Lookup] = []
-    if understood is None:  # the website says so and suggests asking another way
+    if instead_of_online and (understood is None or understood.type == "cannot_answer"):
+        text, understood = fixed("simple_cannot", language), None
+    elif understood is None:  # the website says so and suggests asking another way
         text = fixed("not_understood", language)
     elif understood.type == "cannot_answer":
         text = fixed("refusal", language)

@@ -23,8 +23,7 @@ STOCK_GROUPS = {
 
 STOCK_SPEC = {
     "name": "stock",
-    "description": "Pieces on the shelf now (value at cost). only: out, low (at/under minimum), "
-                   "dead (stock, no sale for no_sale_days, default 90).",
+    "description": "Stock now (value at cost). only: out, low, dead (no sale for no_sale_days, default 90).",
     "parameters": {"type": "object", "properties": {
         **PART, "branch": TEXT, "group_by": {"enum": list(STOCK_GROUPS)}, **TOP,
         "only": {"enum": ["out", "low", "dead"]}, "no_sale_days": {"type": "integer"},
@@ -32,7 +31,7 @@ STOCK_SPEC = {
 }
 STOCK_OUTS_SPEC = {
     "name": "stock_outs",
-    "description": "Days out of stock in a period, per part and branch.",
+    "description": "Past days out of stock, per part and branch.",
     "parameters": {"type": "object", "properties": {**PART, "branch": TEXT, **DATES, **TOP}},
 }
 
@@ -63,10 +62,11 @@ def stock(asker: Asker, args: dict) -> ToolResult:
     if group:
         key = STOCK_GROUPS[group]
         rows = asker.db.execute(
-            base.add_columns(key.label("name"), pieces.label("pieces")).where(*filters, key.is_not(None))
-            .group_by(key).order_by(pieces.desc(), key).limit(rows_wanted(args))
+            base.add_columns(key.label("name"), pieces.label("pieces"), value.label("value")).where(*filters, key.is_not(None))
+            .group_by(key).order_by((value if asker.sees_money else pieces).desc(), key).limit(rows_wanted(args))
         ).all()
-        data["rows"] = [{"name": str(row.name), "pieces": int(row.pieces)} for row in rows]
+        data["rows"] = [{"name": str(row.name), "pieces": int(row.pieces),
+                         **({"value_at_cost": asker.money(row.value)} if asker.sees_money else {})} for row in rows]
     shown = [Number(key="pieces_in_stock", label="Pieces in stock", value=data["total_pieces"], unit="pieces")]
     if asker.sees_money:
         shown.append(Number(key="value_at_cost", label="Value at cost", value=round(total_value), unit="money"))

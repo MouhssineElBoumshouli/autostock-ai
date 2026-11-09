@@ -9,12 +9,12 @@ from app.models import Alert, Branch, Forecast, Part
 
 ALERTS_SPEC = {
     "name": "alerts",
-    "description": "Open alerts (sales spikes/drops, stock not matching sales), newest first.",
+    "description": "Open alerts, newest first.",
     "parameters": {"type": "object", "properties": {**PART, "branch": TEXT, **TOP}},
 }
 FORECAST_SPEC = {
     "name": "forecast",
-    "description": "Pieces expected to sell in the next 7/30/60 days, and vs the simple baseline.",
+    "description": "Pieces expected to sell in the next 7/30/60 days.",
     "parameters": {"type": "object", "properties": {
         **PART, "branch": TEXT, "days": {"enum": [7, 30, 60]}, "group_by": {"enum": ["part", "branch"]}, **TOP}},
 }

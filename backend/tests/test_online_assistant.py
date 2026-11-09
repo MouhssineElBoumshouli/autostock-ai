@@ -81,7 +81,7 @@ def test_the_model_calls_tools_and_its_checked_answer_is_shown(browser, shop, on
     events = chat(browser, "How many oil filters did we sell this week?")
     result = done(events)
     assert events[0] == {"type": "looking_up", "tool": "sales", "filters": {
-        "type": "Oil filter", "range": f"{OIL_THIS_WEEK['date_from']}/{OIL_THIS_WEEK['date_to']}"}}
+        "type": "Oil filter", "range": f"{OIL_THIS_WEEK['date_from']}/{OIL_THIS_WEEK['date_to']}", "compare": "previous_period"}}
     assert result["text"] == "You sold 5 oil filters this week." and result["written_by"] == "groq"
     assert result["lookups"][0]["numbers"][0] == {"label": "Pieces sold", "value": 5, "unit": "pieces",
                                                   "key": "pieces_sold", "about": None}
@@ -94,8 +94,8 @@ def test_the_instructions_give_today_the_last_sale_and_the_branches_with_sales(b
     fake = online([("text", "Hello.")])
     chat(browser, "hello")
     instructions = fake.sent[0]["messages"][0]["content"]
-    assert f"The newest sale imported is from {LAST_DAY.isoformat()}" in instructions
-    assert "Today is" in instructions and MAIN in instructions and RABAT in instructions
+    assert f"Sales imported up to {LAST_DAY.isoformat()}" in instructions
+    assert "Today: " in instructions and MAIN in instructions and RABAT in instructions
 
 
 def test_a_number_no_tool_gave_is_sent_back_once_then_the_fixed_answer_is_shown(browser, shop, online):
@@ -109,11 +109,11 @@ def test_a_number_still_wrong_after_the_second_try_gives_the_apps_own_answer(bro
     online([("tools", [("sales", OIL_THIS_WEEK)]), ("text", "You sold 7."), ("text", "Still 7.")])
     events = chat(browser, "How many oil filters did we sell this week?")
     assert {"type": "online_off", "reason": "unchecked"} in events
-    assert events[-1] == {"type": "ai_off"}, "local model off too: the page asks the keyword rule"
-    assert not any(event["type"] == "text" for event in events), "the unchecked answer is never shown"
+    assert done(events)["written_by"] == "app", "the keyword rule reads it, even with the local model off"
+    assert "7" not in done(events)["text"], "the unchecked answer is never shown"
 
 
-@pytest.mark.parametrize("reason", ["offline", "daily_limit", "busy"])
+@pytest.mark.parametrize("reason", ["offline", "daily_limit"])
 def test_groq_failing_says_so_in_one_line_then_the_app_answers(browser, shop, online, monkeypatch, reason):
     online([("fail", reason)])
     monkeypatch.setattr(llm, "is_on", lambda model=None: True)
@@ -121,6 +121,23 @@ def test_groq_failing_says_so_in_one_line_then_the_app_answers(browser, shop, on
     events = chat(browser, "stock of oil filter")
     assert events[0] == {"type": "online_off", "reason": reason}
     assert done(events)["written_by"] == "app"
+
+
+def test_groq_still_busy_after_waiting_says_so_and_never_answers_another_question(browser, shop, online, monkeypatch):
+    online([("fail", "busy")])
+    monkeypatch.setattr(llm, "is_on", lambda model=None: True)
+    events = chat(browser, "Compare septembre et octobre.")
+    assert [event["type"] for event in events] == ["text", "done"]
+    assert done(events)["text"] == "L’assistant est occupé, réessayez dans une minute." and done(events)["lookups"] == []
+
+
+@pytest.mark.parametrize("question", ["Compare septembre et octobre.", "Combien d’argent j’ai en stock à Casablanca ?"])
+def test_the_simple_answers_never_answer_another_question_when_groq_is_off(browser, shop, online, monkeypatch, question):
+    """The owner's trial: "septembre et octobre" was answered with 1-3 Nov vs 1-3 Oct, the stock value was refused."""
+    online([("fail", "offline")])
+    monkeypatch.setattr(llm, "is_on", lambda model=None: False)
+    result = done(chat(browser, question))
+    assert result["text"].startswith("L’assistant en ligne n’est pas disponible") and result["lookups"] == []
 
 
 def test_the_owners_switch_off_sends_nothing_to_groq(browser, shop, online):
@@ -237,16 +254,39 @@ def test_a_wrong_field_or_branch_gets_an_error_the_model_can_fix(cars_shop):
         assert run_tool(asker(cars_shop, db=db), "drop_table", {}).data == {"error": "Unknown tool 'drop_table'."}
 
 
-def test_sales_compare_gives_changes_stock_outs_and_last_year(shop):
+def test_sales_always_come_with_the_period_before(shop):
+    with SessionLocal() as db:
+        data = run_tool(asker(shop, db=db), "sales", OIL_THIS_WEEK).data
+    assert data["total_pieces"] == 5 and data["compared_with"]["total_pieces"] == 0 and data["compared_with"]["change_pieces"] == 5
+
+
+def test_why_sales_gives_the_apps_own_reasons(shop):
     oil = next(iter(db_ids(shop, "Oil filter")))
+    sell(shop, oil, MAIN, days_ago=8, quantity=40)  # the week before sold much more
     sell(shop, oil, MAIN, days_ago=365, quantity=8)
     with SessionLocal() as db:
         db.add(StockOut(organization_id=shop, part_id=oil, branch_id=branch_named(shop, MAIN),
-                        first_day=LAST_DAY - timedelta(days=3), last_day=LAST_DAY))
+                        first_day=LAST_DAY - timedelta(days=4), last_day=LAST_DAY))
         db.commit()
-        data = run_tool(asker(shop, db=db), "sales", {**OIL_THIS_WEEK, "compare": "previous_period"}).data
-    assert data["total_pieces"] == 5 and data["compared_with"]["total_pieces"] == 0 and data["compared_with"]["change_pieces"] == 5
-    assert data["stock_out_days"] == 4 and data["same_dates_last_year"]["total_pieces"] == 8
+        data = run_tool(asker(shop, db=db), "why_sales", OIL_THIS_WEEK).data
+    assert data["pieces"] == 5 and data["pieces_before"] == 40 and data["direction"] == "down"
+    assert data["days_out_of_stock"] == 5 and data["days_out_of_stock_before"] == 0 and data["same_dates_last_year"] == 8
+    assert data["reasons_found"][0].startswith("the part was out of stock on more days") and "(5 days vs 0)" in data["reasons_found"][0]
+
+
+def test_running_out_compares_days_left_with_the_delivery_time(cars_shop):
+    from app.models import Forecast, Part
+    with SessionLocal() as db:
+        for name, expected in (("Filtre à huile - Dacia Logan", 300), ("Filtre à air - Dacia Logan", 10)):
+            part = db.scalar(select(Part).where(Part.organization_id == cars_shop, Part.name == name))
+            db.add(Forecast(organization_id=cars_shop, part_id=part.id, branch_id=branch_named(cars_shop, RABAT), horizon_days=30,
+                            history_last_day=LAST_DAY, demand_type="smooth", method="four_week_average", quantity=expected,
+                            low=expected / 2, high=expected * 2, backtest_windows=4, reason="test"))
+        db.commit()
+        data = run_tool(asker(cars_shop, db=db), "running_out", {}).data
+    # 55 oil filters at 10 a day last 6 days, under the 7 days a delivery takes when nothing is known; 500 air filters last years.
+    assert data["at_risk"] == 1 and data["rows"][0]["days_left"] == 6 and data["rows"][0]["delivery_days"] == 7
+    assert data["by_supplier"][0]["parts_at_risk"] == 1
 
 
 def test_a_period_past_the_last_sale_is_counted_up_to_it(shop):
@@ -381,7 +421,7 @@ def test_numbers_inside_tool_text_count_as_tool_numbers():
 def test_the_instructions_give_the_exact_dates_of_common_periods():
     from app.ask.online_assistant import periods
     text = periods(date(2026, 11, 8))
-    assert "last week 2026-10-26 to 2026-11-01" in text and "last month 2026-10-01 to 2026-10-31" in text
+    assert "last week 2026-10-26..2026-11-01" in text and "last month 2026-10-01..2026-10-31" in text
 
 
 @pytest.mark.parametrize("word", ["Batterie", "batteries", "battery"])
@@ -418,3 +458,29 @@ def test_the_direction_check_needs_one_clear_direction():
     assert wrong_direction("Sales rose 5 %.", mixed) == "down"
     assert wrong_direction("Down 5 % on last month but up 1 % on last year.", mixed) is None
     assert wrong_direction("Sales rose 1 % on last year.", mixed) is None, "about last year: not judged"
+
+
+def test_dates_in_answers_are_written_in_words():
+    from app.ask.answer_dates import in_words
+    today = date(2026, 11, 9)
+    assert in_words("du 2026‑10‑01 au 2026-10-31", "fr", today) == "du 1er octobre au 31 octobre"
+    assert in_words("from 2026-10-01 to 01-10-2025", "en", today) == "from October 1 to October 1, 2025"
+    assert in_words("2026-11-03", "ar", today) == "3 نونبر"
+
+
+def test_an_answer_in_another_language_than_the_question_is_sent_back(browser, shop, online):
+    """The owner's trial: "Which supplier should I order from first?" was answered in French."""
+    fake = online([("text", "Je ne peux pas choisir un fournisseur directement, consultez la page des commandes pour les suggestions."),
+                   ("text", "Order from the supplier whose parts run out first.")])
+    result = done(chat(browser, "Which supplier should I order from first?"))
+    assert result["text"].startswith("Order from") and "English" in fake.sent[-1]["messages"][-1]["content"]
+
+
+def test_money_in_stock_by_branch_for_owners(shop):
+    oil = next(iter(db_ids(shop, "Oil filter")))
+    shelve(shop, oil, MAIN, 10)
+    with SessionLocal() as db:
+        data = run_tool(asker(shop, db=db), "stock", {"group_by": "branch"}).data
+        staff = run_tool(asker(shop, None, db), "stock", {"group_by": "branch"}).data
+    assert data["total_value_at_cost"] == 700.0 and data["rows"][0] == {"name": MAIN, "pieces": 10, "value_at_cost": 700.0}
+    assert "value_at_cost" not in json.dumps(staff)

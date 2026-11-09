@@ -24,7 +24,7 @@ from app.ask.assistant import as_line, converse
 from app.ask.history import forget, recent, remember
 from app.ask.question import QUESTION_TYPES, Question, checked_question
 from app.ask.reply_language import reply_language
-from app.ask.sentences import written_answer
+from app.ask.sentences import fixed, written_answer
 from app.ask.understand import shop_words, understand, understand_as
 from app.ask.understood_line import heading, shown_period, understood_line
 from app.auth.permissions import require_role
@@ -154,8 +154,10 @@ def ai(user: User = Depends(anyone), db: Session = Depends(get_session)) -> dict
 
 @router.post("/chat")
 def chat(body: ChatIn, user: User = Depends(anyone), db: Session = Depends(get_session)) -> StreamingResponse:
-    """Newline-delimited JSON events (see online_assistant.answer and converse). {"type": "online_off", "reason"}:
-    the online assistant couldn't answer, the app's own answer follows. {"type": "ai_off"}: use POST /api/ask instead."""
+    """Newline-delimited JSON events (see online_assistant.answer and converse). Groq busy even after waiting: one
+    answer, "the assistant is busy, try again in a minute". {"type": "online_off", "reason"}: offline, out of
+    allowance or an unchecked number; the app's simple answer follows, or "can't answer" when it can't read the
+    question (never another question's answer). {"type": "ai_off"}: no assistant at all, use POST /api/ask."""
     currency = currency_seen(db, user)
     organization_id = user.organization_id
     earlier = None
@@ -179,17 +181,28 @@ def chat(body: ChatIn, user: User = Depends(anyone), db: Session = Depends(get_s
                         yield as_line(event)
                 return
             except groq.GroqFailed as failure:
+                if failure.reason == "busy":
+                    yield from busy_answer()
+                    return
                 yield as_line({"type": "online_off", "reason": failure.reason})
             except online_assistant.AnswerRejected:
                 yield as_line({"type": "online_off", "reason": "unchecked"})
-        if not llm.is_on():
+        elif not llm.is_on():
             yield as_line({"type": "ai_off"})
             return
         with SessionLocal() as own_db:  # its own session: the answer is still being written after this function returns
-            for event in converse(own_db, organization_id, currency, body.question, earlier, language):
+            for event in converse(own_db, organization_id, currency, body.question, earlier, language,
+                                  instead_of_online=online):
                 if event["type"] == "done":
                     remember(own_db, user, body.question, "assistant", json.loads(as_line(event)))
                 yield as_line(event)
+
+    def busy_answer():
+        answer_language = reply_language(body.question, language)
+        done = {"type": "done", "text": fixed("busy", answer_language), "written_by": "app", "language": answer_language,
+                "read_by": "groq", "question": None, "lookups": []}
+        yield as_line({"type": "text", "text": done["text"]})
+        yield as_line(done)
 
     return StreamingResponse(events(), media_type="application/x-ndjson", headers={"Cache-Control": "no-cache"})
 

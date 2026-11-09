@@ -1,13 +1,13 @@
 """Sales over any period: pieces, value and margin (money only for those who see it), grouped by part,
 type, car, brand, category, branch, day, week or month, the biggest first, optionally compared with the
-period just before or the same dates last year. Every total and % change is computed here."""
+period just before (the default: an overview always says how it compares) or the same dates last year.
+Every total and % change is computed here. Why a change happened: app/ask/data_tools/sales_change.py."""
 
 from datetime import date, timedelta
 
 from sqlalchemy import Date, cast, func, select
 
 from app.ask.answer_parts import Number
-from app.ask.data_tools.stock import days_out
 from app.ask.data_tools.context import (
     CAR_NAME, DATES, PART, TEXT, TOP, TYPE_NAME, Asker, ToolResult, asked_heading, branch_choice, part_choice, percent_change, period_choice,
     rows_wanted,
@@ -29,10 +29,10 @@ TIME_GROUPS = ("day", "week", "month")
 
 SPEC = {
     "name": "sales",
-    "description": "Pieces sold (value, margin) in a period; group_by gives rows, most first.",
+    "description": "Pieces sold, vs the period before; group_by gives rows.",
     "parameters": {"type": "object", "properties": {
         **PART, "branch": TEXT, **DATES, "group_by": {"enum": list(GROUPS)}, **TOP,
-        "compare": {"enum": ["previous_period", "last_year"]},
+        "compare": {"enum": ["previous_period", "last_year", "none"]},
     }},
 }
 
@@ -51,19 +51,11 @@ def sales(asker: Asker, args: dict) -> ToolResult:
     if asker.last_sale_day and asked_period[1] > asker.last_sale_day.isoformat():
         data["note"] = (f"sales imported up to {asker.last_sale_day.isoformat()} only: period asked "
                         f"{asked_period[0]} to {asked_period[1]}, counted up to {last.isoformat()}")
-    compare = args.get("compare")
+    compare = args.get("compare") or ("none" if group in TIME_GROUPS else "previous_period")
     if compare in ("previous_period", "last_year"):
         before_first, before_last = _before(first, last, compare)
         before = _totals(asker, parts.condition, branch_id, before_first, before_last, group, None)
         data["compared_with"] = _compared(asker, now["total"], before["total"], before_first, before_last)
-        # What may explain the change, in the same answer: days out of stock and the price in both periods,
-        # and (for the period before) the same dates last year, for the season.
-        data["stock_out_days"] = days_out(asker, parts.condition, branch_id, first, last)
-        data["compared_with"]["stock_out_days"] = days_out(asker, parts.condition, branch_id, before_first, before_last)
-        if compare == "previous_period":
-            year_first, year_last = _before(first, last, "last_year")
-            last_year = _totals(asker, parts.condition, branch_id, year_first, year_last, None, None)["total"]
-            data["same_dates_last_year"] = _compared(asker, now["total"], last_year, year_first, year_last)
         for row in now["rows"]:
             earlier = before["by_name"].get(row["name"], 0) if group not in TIME_GROUPS else None
             if earlier is not None:
@@ -77,7 +69,8 @@ def sales(asker: Asker, args: dict) -> ToolResult:
 
 
 def _compared(asker: Asker, now: dict, before: dict, first: date, last: date) -> dict:
-    compared = {"period": [first.isoformat(), last.isoformat()], **before,
+    compared = {"period": [first.isoformat(), last.isoformat()],
+                **{name: number for name, number in before.items() if name in ("total_pieces", "total_value")},
                 "change_pieces": now["total_pieces"] - before["total_pieces"],
                 "change_percent": percent_change(now["total_pieces"], before["total_pieces"])}
     compared["direction"] = "up" if compared["change_pieces"] > 0 else "down" if compared["change_pieces"] < 0 else "same"
@@ -121,7 +114,8 @@ def _totals(asker: Asker, part_condition, branch_id, first: date, last: date, gr
         rows = asker.db.execute(query).all()
         result["by_name"] = {str(row.name): int(row.pieces) for row in rows}
         shown_rows = rows if group in TIME_GROUPS else rows[:top] if top else rows
-        result["rows"] = [_money_fields(asker, {"name": str(row.name), "pieces": int(row.pieces)}, row[2], row[3]) for row in shown_rows]
+        result["rows"] = [{"name": str(row.name), "pieces": int(row.pieces),
+                           **({"value": asker.money(row[2])} if asker.sees_money and row[2] else {})} for row in shown_rows]
     return result
 
 
