@@ -883,6 +883,7 @@ export const en = {
     // Labels of the real numbers under an answer.
     numberLabels: {
       parts_at_risk: "Parts running out before an order arrives",
+      parts_out_now: "Already at zero",
       pieces_sold: "Pieces sold",
       sales_value: "Sales value",
       from: "From",

@@ -901,6 +901,7 @@ export const ar: typeof en = {
     },
     numberLabels: {
       parts_at_risk: "قطع تنفد قبل وصول طلبية",
+      parts_out_now: "نفدت الآن",
       pieces_sold: "القطع المبيعة",
       sales_value: "قيمة المبيعات",
       from: "من",

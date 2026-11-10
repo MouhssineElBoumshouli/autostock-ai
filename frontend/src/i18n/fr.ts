@@ -896,6 +896,7 @@ export const fr: typeof en = {
     },
     numberLabels: {
       parts_at_risk: "Pièces en rupture avant l’arrivée d’une commande",
+      parts_out_now: "Déjà à zéro",
       pieces_sold: "Pièces vendues",
       sales_value: "Montant des ventes",
       from: "Du",

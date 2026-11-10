@@ -27,7 +27,7 @@ from app.ask.data_tools.context import TYPE_NAME
 from app.ask.answer_dates import in_words
 from app.ask.reply_language import ARABIC_LETTER, ENGLISH_WORDS, FRENCH_WORDS, is_darija, reply_language
 from app.ask.words import words_of
-from app.ask.tool_numbers import allowed_numbers, unknown_numbers, wrong_direction
+from app.ask.tool_numbers import allowed_numbers, missing_counts, unknown_numbers, wrong_direction
 from app.models import Branch, Organization, Part, SaleLine
 
 MOST_STEPS = 5  # rounds of tool calls before the model must answer
@@ -49,7 +49,8 @@ part maker. Never a sentence in a field. {money}
 - Numbers and facts only from tools; never compute or guess. total_* answer the question; rows are details.
 - No period asked: leave dates empty (last 30 days of data) and say which days. Sales come with the period before.
 - Why sales changed: why_sales; say its direction and only its reasons. Will I run out, what to order (first),
-  which supplier first: always look up running_out and follow its order_first_from (never your own ranking). Money in stock: stock. Not
+  which supplier first: always look up running_out and follow its order_first_from (never your own ranking); give its
+  counts (at_risk part-branches: different_parts in branches, out_now already at zero) and name its first 3 rows. Money in stock: stock. Not
   selling: stock only=dead. stock_outs = past days without stock. Best-selling "pièces"/parts: group_by part.
 - A question is never an action: answer it. Only doing something (order, change, delete) is not possible: say where
   in the app: orders "{orders}", alerts "{alerts}", files "{files}", suppliers "{settings}".
@@ -117,6 +118,9 @@ def answer(
         wrong_way = wrong_direction(written, [lookup["data"] for lookup in lookups])
         if wrong_way:
             made_up.append(f"(the change went {wrong_way}, the answer says the opposite)")
+        missing = missing_counts(written, [lookup["data"] for lookup in lookups])
+        if missing:
+            made_up.append(f"(say the counts {missing} and name the first parts at risk)")
         if wrong_language(written, language, is_darija(question)):
             made_up.append(f"(the answer must be in {LANGUAGES[language]})")
         if not made_up and written:

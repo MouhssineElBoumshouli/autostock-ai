@@ -93,3 +93,16 @@ def wrong_direction(text: str, results: list[object]) -> str | None:
     if went == "up" and says_down and not says_up:
         return "up"
     return None
+
+
+def missing_counts(text: str, results: list[object]) -> str | None:
+    """A "will I run out" answer must give how many part-branches are at risk and how many are already at zero
+    (the owner's trial: "plusieurs références" without the numbers). Returns the counts left out, or None."""
+    written = {number for item in numbers_written(text) for reading in readings(item) for number in reading}
+    for result in results:
+        if isinstance(result, dict) and "order_first_from" in result and result.get("at_risk"):
+            needed = [result["at_risk"]] + ([result["out_now"]] if result.get("out_now") else [])
+            left_out = [str(count) for count in needed if float(count) not in written]
+            if left_out:
+                return ", ".join(left_out)
+    return None

@@ -286,6 +286,7 @@ def test_running_out_compares_days_left_with_the_delivery_time(cars_shop):
         data = run_tool(asker(cars_shop, db=db), "running_out", {}).data
     # 55 oil filters at 10 a day last 6 days, under the 7 days a delivery takes when nothing is known; 500 air filters last years.
     assert data["at_risk"] == 1 and data["rows"][0]["days_left"] == 6 and data["rows"][0]["delivery_days"] == 7
+    assert data["different_parts"] == 1 and data["branches"] == 1 and data["out_now"] == 0
     assert data["by_supplier"][0]["parts_at_risk"] == 1
 
 
@@ -515,3 +516,12 @@ def test_running_out_names_the_supplier_to_order_from_first(cars_shop):
         db.commit()
         data = run_tool(asker(cars_shop, db=db), "running_out", {}).data
     assert data["order_first_from"] == data["by_supplier"][0]["supplier"]
+
+
+def test_a_running_out_answer_without_its_counts_is_sent_back():
+    """The owner's trial: "plusieurs références sont à zéro" without saying how many."""
+    from app.ask.tool_numbers import missing_counts
+    found = {"order_first_from": "Atlas", "at_risk": 56, "different_parts": 20, "branches": 3, "out_now": 27, "rows": []}
+    assert missing_counts("Oui, plusieurs références sont à zéro dans les trois agences.", [found]) == "56, 27"
+    assert missing_counts("Oui : 56 pièces-agences risquent de manquer, dont 27 déjà à zéro.", [found]) is None
+    assert missing_counts("Non, rien ne manque.", [{**found, "at_risk": 0, "out_now": 0}]) is None
