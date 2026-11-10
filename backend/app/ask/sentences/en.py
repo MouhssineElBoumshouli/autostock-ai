@@ -225,14 +225,26 @@ def _way(v, s) -> str:
     return f"{way} {s.percent(v['percent_change'])}"
 
 
+def _days_over(reason: dict, when: str, s) -> str:
+    """" in total, across 5 parts and 3 branches" when the number is a sum over several parts and/or
+    branches; "" when it is really just one part in one branch, so there is nothing to sum."""
+    parts, branches = reason.get(f"days_{when}_parts"), reason.get(f"days_{when}_branches")
+    bits = []
+    if parts and parts > 1:
+        bits.append(f"{s.number(parts)} parts")
+    if branches and branches > 1:
+        bits.append(f"{s.number(branches)} branches")
+    return f" in total, across {' and '.join(bits)}" if bits else ""
+
+
 def _reason(reason: dict, v, s) -> str:
-    over = {"parts_and_branches": " (in total, all these parts and branches together)", "branches": " (in total, all branches together)"}
-    counted = over.get(v.get("days_out_of_stock_counts"), "")
     kind = reason["kind"]
     if kind == "out_of_stock":
-        return f"out of stock {s.days(reason['days_now'])} {s.period(v['period'])}{counted}, against {s.number(reason['days_before'])} before"
+        return (f"out of stock {s.days(reason['days_now'])} {s.period(v['period'])}{_days_over(reason, 'now', s)}, "
+                f"against {s.number(reason['days_before'])}{_days_over(reason, 'before', s)} before")
     if kind == "back_in_stock":
-        return f"back in stock: out {s.days(reason['days_before'])} before{counted}, only {s.number(reason['days_now'])} now"
+        return (f"back in stock: out {s.days(reason['days_before'])} before{_days_over(reason, 'before', s)}, "
+                f"only {s.number(reason['days_now'])}{_days_over(reason, 'now', s)} now")
     if kind in ("price_up", "price_down"):
         prices = f" ({s.money(reason['price_before'])} to {s.money(reason['price_now'])})" if "price_now" in reason else ""
         return f"the average price went {'up' if kind == 'price_up' else 'down'} {s.percent(reason['percent'])}{prices}"

@@ -44,19 +44,25 @@ class BranchStock(BaseModel):
 
 
 class SaleOut(BaseModel):
+    """What staff see: no money."""
+
     sold_on: date
     branch: str
     quantity: int
+
+
+class SaleOutWithMoney(SaleOut):
     unit_price: int | None
 
 
 class EquivalentPart(BaseModel):
+    """What staff see: no money."""
+
     link_id: uuid.UUID | None  # None for a same-OEM-number match: automatic, so there is nothing to remove
     part_id: uuid.UUID
     sku: str
     name: str
     brand: str | None
-    price: int | None
     quantity: int
     stock: list[BranchStock]
     in_stock: bool
@@ -64,23 +70,34 @@ class EquivalentPart(BaseModel):
     linked_by: str | None  # the manager who made a "manual" link
 
 
+class EquivalentPartWithMoney(EquivalentPart):
+    price: int | None
+
+
 class PartDetail(BaseModel):
+    """What staff see: no money (CLAUDE.md "staff never get money")."""
+
     id: uuid.UUID
     sku: str
     name: str
     brand: str | None
     category: str | None
     oem_reference: str | None
-    unit_cost: int | None
-    sale_price: int | None
     min_stock: int
     is_active: bool
     quantity: int
     status: StockStatus
     supplier: SupplierOut | None
     stock: list[BranchStock]
-    last_sales: list[SaleOut]
-    equivalents: list[EquivalentPart]
+    last_sales: list[SaleOutWithMoney | SaleOut]
+    equivalents: list[EquivalentPartWithMoney | EquivalentPart]
+
+
+class PartDetailWithMoney(PartDetail):
+    """What owners and managers also see."""
+
+    unit_cost: int | None
+    sale_price: int | None
 
 
 class EquivalentChange(BaseModel):
@@ -110,8 +127,8 @@ CLEARABLE = {"brand", "category", "oem_reference", "unit_cost", "sale_price", "s
 
 
 @router.get("/{part_id}")
-def read_part(part_id: uuid.UUID, user: User = Depends(anyone), db: Session = Depends(get_session)) -> PartDetail:
-    return describe(db, find_part(db, user, part_id))
+def read_part(part_id: uuid.UUID, user: User = Depends(anyone), db: Session = Depends(get_session)) -> PartDetailWithMoney | PartDetail:
+    return describe(db, find_part(db, user, part_id), can_see_money=user.role != "staff")
 
 
 @router.patch("/{part_id}")
@@ -120,7 +137,7 @@ def change_part(
     body: PartChange,
     user: User = Depends(can_edit),
     db: Session = Depends(get_session),
-) -> PartDetail:
+) -> PartDetailWithMoney:
     part = find_part(db, user, part_id, lock=True)
     before = snapshot(db, part)
 
@@ -149,7 +166,7 @@ def change_part(
     if after != before:
         record_change(db, user, "part.updated", "part", part.id, before=before, after=after)
     db.commit()
-    return describe(db, part)
+    return describe(db, part, can_see_money=True)
 
 
 @router.post("/{part_id}/equivalents")
@@ -158,7 +175,7 @@ def link_equivalent(
     body: EquivalentChange,
     user: User = Depends(can_edit),
     db: Session = Depends(get_session),
-) -> PartDetail:
+) -> PartDetailWithMoney:
     part = find_part(db, user, part_id)
     if body.other_part_id == part_id:
         raise HTTPException(422, "A part can't be its own equivalent.")
@@ -189,7 +206,7 @@ def link_equivalent(
         after={"part": _part_label(part), "other_part": _part_label(other), "source": "manual"},
     )
     db.commit()
-    return describe(db, part)
+    return describe(db, part, can_see_money=True)
 
 
 @router.delete("/{part_id}/equivalents/{link_id}")
@@ -198,7 +215,7 @@ def unlink_equivalent(
     link_id: uuid.UUID,
     user: User = Depends(can_edit),
     db: Session = Depends(get_session),
-) -> PartDetail:
+) -> PartDetailWithMoney:
     part = find_part(db, user, part_id)
     link = db.scalar(
         select(PartEquivalent).where(
@@ -218,7 +235,7 @@ def unlink_equivalent(
     )
     db.delete(link)
     db.commit()
-    return describe(db, part)
+    return describe(db, part, can_see_money=True)
 
 
 def _part_label(part: Part) -> str:
@@ -274,7 +291,7 @@ def snapshot(db: Session, part: Part) -> dict:
     }
 
 
-def describe(db: Session, part: Part) -> PartDetail:
+def describe(db: Session, part: Part, can_see_money: bool) -> PartDetailWithMoney | PartDetail:
     stock = stock_by_branch(db, part)
     quantity = sum(row.quantity for row in stock)
     supplier = db.get(Supplier, part.supplier_id) if part.supplier_id else None
@@ -291,27 +308,34 @@ def describe(db: Session, part: Part) -> PartDetail:
             Forecast.organization_id == part.organization_id, Forecast.part_id == part.id, Forecast.horizon_days == HORIZON_DAYS
         )
     ) or 0
-    return PartDetail(
+    last_sales = [_sale_out(s, can_see_money) for s in sales]
+    fields = dict(
         id=part.id,
         sku=part.sku,
         name=part.name,
         brand=part.brand,
         category=part.category,
         oem_reference=part.oem_reference,
-        unit_cost=part.unit_cost,
-        sale_price=part.sale_price,
         min_stock=part.min_stock,
         is_active=part.is_active,
         quantity=quantity,
         status=running_out_status(status, quantity, expected_30d),
         supplier=SupplierOut.model_validate(supplier, from_attributes=True) if supplier else None,
         stock=stock,
-        last_sales=[SaleOut(sold_on=s.sold_on, branch=s.name, quantity=s.quantity, unit_price=s.unit_price) for s in sales],
-        equivalents=equivalents_of(db, part),
+        last_sales=last_sales,
+        equivalents=equivalents_of(db, part, can_see_money),
     )
+    if can_see_money:
+        return PartDetailWithMoney(**fields, unit_cost=part.unit_cost, sale_price=part.sale_price)
+    return PartDetail(**fields)
 
 
-def equivalents_of(db: Session, part: Part) -> list[EquivalentPart]:
+def _sale_out(sale, can_see_money: bool) -> SaleOutWithMoney | SaleOut:
+    fields = dict(sold_on=sale.sold_on, branch=sale.name, quantity=sale.quantity)
+    return SaleOutWithMoney(**fields, unit_price=sale.unit_price) if can_see_money else SaleOut(**fields)
+
+
+def equivalents_of(db: Session, part: Part, can_see_money: bool) -> list[EquivalentPartWithMoney | EquivalentPart]:
     """Every part from another brand considered the same part, in stock first."""
     reached = reachable_from(db, part.organization_id, part.id)
     if not reached:
@@ -332,19 +356,19 @@ def equivalents_of(db: Session, part: Part) -> list[EquivalentPart]:
             continue
         stock = stock_by_branch(db, other)
         quantity = sum(row.quantity for row in stock)
+        fields = dict(
+            link_id=r.link_id,
+            part_id=other.id,
+            sku=other.sku,
+            name=other.name,
+            brand=other.brand,
+            quantity=quantity,
+            stock=stock,
+            in_stock=quantity > 0,
+            reason_type=r.reason_type,
+            linked_by=managers.get(r.linked_by) if r.linked_by else None,
+        )
         equivalents.append(
-            EquivalentPart(
-                link_id=r.link_id,
-                part_id=other.id,
-                sku=other.sku,
-                name=other.name,
-                brand=other.brand,
-                price=other.sale_price,
-                quantity=quantity,
-                stock=stock,
-                in_stock=quantity > 0,
-                reason_type=r.reason_type,
-                linked_by=managers.get(r.linked_by) if r.linked_by else None,
-            )
+            EquivalentPartWithMoney(**fields, price=other.sale_price) if can_see_money else EquivalentPart(**fields)
         )
     return sorted(equivalents, key=lambda e: (not e.in_stock, e.name))

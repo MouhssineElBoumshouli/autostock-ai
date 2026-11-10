@@ -71,7 +71,10 @@ class Shown:
         return f"{self.number(whole)} {one if abs(whole) == 1 or (self.language == 'fr' and whole == 0) else more}"
 
     def money(self, centimes: int) -> str:
-        amount = grouped(centimes / 100, self.language)
+        # Two decimals, like the website's formatMoney: "237 611,50 DH" in French, not "237 612".
+        whole, cents = divmod(round(centimes), 100)
+        decimal_point = "." if self.language == "en" else ","
+        amount = f"{grouped(whole, self.language)}{decimal_point}{cents:02d}"
         if self.language == "en":
             text = f"{self.currency} {amount}"
         else:

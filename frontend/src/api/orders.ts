@@ -30,23 +30,25 @@ export type OrderLine = {
   cushion: number;
   need: number;
   sold_last_90_days: number;
-  unit_cost: number | null;
-  line_cost: number;
   missed_sales_prevented: number;
-  value_per_dirham: number | null;
   reason: string; // English; screens show orderReason(line) instead
+  // Staff never get money (CLAUDE.md): the server leaves these out of the JSON for them.
+  unit_cost?: number | null;
+  line_cost?: number;
+  value_per_dirham?: number | null;
 };
 
 export type OrderRun = {
   id: string;
   created_at: string;
   history_last_day: string | null;
-  budget: number | null;
-  suggested_cost: number;
-  kept_cost: number;
   kept_lines: number;
   cut_lines: number;
   groups: OrderGroup[]; // most urgent first, the lines cut by the budget last
+  // Staff never get money (CLAUDE.md): the server leaves these out of the JSON for them.
+  budget?: number | null;
+  suggested_cost?: number;
+  kept_cost?: number;
 };
 
 // One supplier's lines, or the lines with no supplier ("none"), or the lines cut by the budget ("didnt_fit").
@@ -56,7 +58,8 @@ export type OrderGroup = {
   supplier_name: string | null;
   line_count: number;
   pending_count: number;
-  total_cost: number;
+  // Staff never get money (CLAUDE.md): the server leaves this out of the JSON for them.
+  total_cost?: number;
 };
 
 export type OrderLinesPage = { items: OrderLine[]; total: number; page: number; page_size: number };

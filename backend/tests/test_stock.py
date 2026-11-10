@@ -85,6 +85,20 @@ def test_filters(browser):
     assert in_rabat["BP-001"] == 0  # its stock is in Casablanca
 
 
+def test_all_branches_total_hides_a_branch_that_is_actually_out(browser):
+    """"All branches" adds every branch together: BP-001 looks only "Low stock" overall, but
+    Rabat itself has none of it at all -- filtering to Rabat alone shows "Out of stock"."""
+    shop_with_parts(browser)
+    item = next(i for i in parts(browser)["items"] if i["sku"] == "BP-001")
+    assert item["status"] == "low" and item["zero_branch_name"] == "Rabat"
+
+    filters = browser.get("/api/stock/filters").json()
+    rabat = next(b["id"] for b in filters["branches"] if b["name"] == "Rabat")
+    filtered = next(i for i in parts(browser, branch=rabat)["items"] if i["sku"] == "BP-001")
+    # A single branch is already the truth: no need for the note, and it already says "out".
+    assert filtered["status"] == "out" and filtered["zero_branch_name"] is None
+
+
 def test_sort_by_any_column(browser):
     shop_with_parts(browser)
 

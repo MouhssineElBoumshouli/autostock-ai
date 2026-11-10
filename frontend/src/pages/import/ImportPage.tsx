@@ -50,6 +50,11 @@ export function ImportPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
+  function useSalesInstead() {
+    if (!job || !file) return;
+    forgetImport.mutate(job.id, { onSuccess: () => { setKind("sales"); uploadImport.mutate({ file, kind: "sales" }); } });
+  }
+
   function restart() {
     if (job) forgetImport.mutate(job.id);
     setFile(null);
@@ -63,7 +68,7 @@ export function ImportPage() {
   if (current.isPending) {
     return (
       <div className="grid grid-cols-1 gap-8">
-        <PageHeader title={t.nav.importFile} subtitle={t.importFile.subtitle} />
+        <PageHeader title={t.nav.importFile} subtitle={t.importFile.subtitle} visuallyHideTitle />
         <Skeleton className="h-64 w-full" />
       </div>
     );
@@ -76,7 +81,9 @@ export function ImportPage() {
 
   return (
     <div className="grid grid-cols-1 gap-8">
-      <PageHeader title={t.nav.importFile} subtitle={t.importFile.subtitle} />
+      {/* The top app bar right above already names this page ("Importer"); showing it again here
+          read as the same title twice in a row, with nothing in between. */}
+      <PageHeader title={t.nav.importFile} subtitle={t.importFile.subtitle} visuallyHideTitle />
       <StepList current={step} />
 
       {!job && (
@@ -104,6 +111,7 @@ export function ImportPage() {
             setChangingColumns(false);
             checkImport.mutate({ id: job.id, mapping });
           }}
+          onUseSalesInstead={job.kind === "parts" ? useSalesInstead : undefined}
         />
       )}
 

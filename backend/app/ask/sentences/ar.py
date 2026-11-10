@@ -233,15 +233,26 @@ def _way(v, s) -> str:
     return f"{way} بنسبة {s.percent(v['percent_change'])}"
 
 
+def _days_over(reason: dict, when: str, s) -> str:
+    """"، في المجموع، على 5 قطع و 3 فروع" عندما يكون الرقم مجموع عدة قطع و/أو فروع؛ لا شيء عندما يتعلق
+    الأمر بقطعة واحدة في فرع واحد."""
+    parts, branches = reason.get(f"days_{when}_parts"), reason.get(f"days_{when}_branches")
+    bits = []
+    if parts and parts > 1:
+        bits.append(f"{s.number(parts)} قطع")
+    if branches and branches > 1:
+        bits.append(f"{s.number(branches)} فروع")
+    return f"، في المجموع، على {' و'.join(bits)}" if bits else ""
+
+
 def _reason(reason: dict, v, s) -> str:
-    over = {"parts_and_branches": " (في المجموع، كل هذه القطع وكل الفروع)", "branches": " (في المجموع، كل الفروع)"}
-    counted = over.get(v.get("days_out_of_stock_counts"), "")
     kind = reason["kind"]
     if kind == "out_of_stock":
-        return (f"نفاد المخزون {s.days(reason['days_now'])} {s.period(v['period'])}{counted}، "
-                f"مقابل {s.number(reason['days_before'])} قبل")
+        return (f"نفاد المخزون {s.days(reason['days_now'])} {s.period(v['period'])}{_days_over(reason, 'now', s)}، "
+                f"مقابل {s.number(reason['days_before'])}{_days_over(reason, 'before', s)} قبل")
     if kind == "back_in_stock":
-        return f"عاد المخزون: نفد {s.days(reason['days_before'])} قبل{counted}، و{s.number(reason['days_now'])} فقط الآن"
+        return (f"عاد المخزون: نفد {s.days(reason['days_before'])} قبل{_days_over(reason, 'before', s)}، "
+                f"و{s.number(reason['days_now'])}{_days_over(reason, 'now', s)} فقط الآن")
     if kind in ("price_up", "price_down"):
         prices = f" (من {s.money(reason['price_before'])} إلى {s.money(reason['price_now'])})" if "price_now" in reason else ""
         return f"{'ارتفع' if kind == 'price_up' else 'انخفض'} متوسط السعر بنسبة {s.percent(reason['percent'])}{prices}"

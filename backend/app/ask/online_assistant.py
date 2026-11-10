@@ -50,8 +50,9 @@ part maker. Never a sentence in a field. {money}
 - No period asked: leave dates empty (last 30 days of data) and say which days. Sales come with the period before.
 - Why sales changed: why_sales; say its direction and only its reasons. Will I run out, what to order (first),
   which supplier first: always look up running_out and follow its order_first_from (never your own ranking); give its
-  counts (at_risk part-branches: different_parts in branches, out_now already at zero) and name its first 3 rows. Money in stock: stock. Not
-  selling: stock only=dead. stock_outs = past days without stock. Best-selling "pièces"/parts: group_by part.
+  counts (at_risk part-branches: different_parts in branches, out_now already at zero) and name its first 3 rows. Money in stock: stock.
+  Not selling: stock only=dead (an internal value; never write the English word "dead" itself, say it in {language}). stock_outs = past
+  days without stock. Best-selling "pièces"/parts: group_by part.
 - A question is never an action: answer it. Only doing something (order, change, delete) is not possible: say where
   in the app: orders "{orders}", alerts "{alerts}", files "{files}", suppliers "{settings}".
 - Data the shop doesn't have (customers, salaries, weather...): say so, no number.
@@ -153,7 +154,7 @@ def instructions(asker: Asker, question: str, language: str) -> str:
         last_sale=asker.last_sale_day.isoformat() if asker.last_sale_day else "never (no sales imported yet)",
         branches=", ".join(name for name, has_sales in branches if has_sales) or "none yet",
         money=MONEY_SEEN.format(currency=asker.currency) if asker.sees_money else MONEY_HIDDEN,
-        periods=periods(asker.today), types=_names(db, organization_id, TYPE_NAME),
+        periods=periods(asker.today, asker.last_sale_day), types=_names(db, organization_id, TYPE_NAME),
         language=DARIJA if is_darija(question) else LANGUAGES[language], **PAGES[language],
     )
 
@@ -170,15 +171,24 @@ def wrong_language(text: str, language: str, darija: bool) -> bool:
     return not darija and not ARABIC_LETTER.search(text)
 
 
-def periods(today: date) -> str:
-    """The common periods with their exact dates, worked out by the app (models get dates wrong)."""
-    monday = today - timedelta(days=today.weekday())
-    month = today.replace(day=1)
+def periods(today: date, last_sale_day: date | None = None) -> str:
+    """The common periods with their exact dates, worked out by the app (models get dates wrong).
+
+    "This week" is the last 7 days actually imported, not the calendar week: a week that has just
+    started (or a shop whose latest sales aren't imported yet) would otherwise be compared against
+    a full "normal" week and look like a near-empty drop that isn't real. Every period ends at the
+    last imported sale instead of the real calendar day, with a plain note when the two differ, so
+    the assistant never asks a tool for days that have no data yet.
+    """
+    end = last_sale_day if last_sale_day and last_sale_day < today else today
+    week_first = end - timedelta(days=6)
+    month = end.replace(day=1)
     last_month_end = month - timedelta(days=1)
+    note = f" (sales after {end.isoformat()} not imported yet)" if end < today else ""
     return "; ".join(f"{name} {first.isoformat()}..{last.isoformat()}" for name, first, last in (
-        ("this week", monday, today), ("last week", monday - timedelta(days=7), monday - timedelta(days=1)),
-        ("this month", month, today), ("last month", last_month_end.replace(day=1), last_month_end),
-        ("this year", today.replace(month=1, day=1), today), ("yesterday", today - timedelta(days=1), today - timedelta(days=1))))
+        ("this week", week_first, end), ("last week", week_first - timedelta(days=7), week_first - timedelta(days=1)),
+        ("this month", month, end), ("last month", last_month_end.replace(day=1), last_month_end),
+        ("this year", end.replace(month=1, day=1), end), ("yesterday", end - timedelta(days=1), end - timedelta(days=1)))) + note
 
 
 def _names(db: Session, organization_id: uuid.UUID, column, most: int = 80) -> str:

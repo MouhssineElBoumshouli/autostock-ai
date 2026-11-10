@@ -100,7 +100,18 @@ export function StockPage() {
       className: "hidden 2xl:table-cell",
       cell: (part) => formatNumber(part.min_stock),
     },
-    { header: t.stock.columns.status, sortKey: "status", cell: (part) => <StockBadge status={part.status} /> },
+    {
+      header: t.stock.columns.status,
+      sortKey: "status",
+      cell: (part) => (
+        <span className="grid gap-0.5">
+          <StockBadge status={part.status} />
+          {part.zero_branch_name && (
+            <span className="text-body-small text-error">{t.stock.zeroBranchNote(part.zero_branch_name)}</span>
+          )}
+        </span>
+      ),
+    },
     {
       header: t.stock.columns.supplier,
       sortKey: "supplier",

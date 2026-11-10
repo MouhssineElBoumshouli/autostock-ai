@@ -93,7 +93,7 @@ export function EntityManagerCard<T extends ManagedEntity>({
                       </Badge>
                     )}
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex flex-wrap items-center gap-1">
                     {rowExtra?.(item)}
                     <RenameButton item={item} rename={rename} />
                     {items!.length > 1 && <MergeButton item={item} items={items!} merge={merge} />}

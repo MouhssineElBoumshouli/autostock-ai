@@ -22,6 +22,7 @@ export type PartRow = {
   expected_30d: number;
   runs_out_days: number | null; // null = over 60 days (or no expected sales at all)
   equivalent_note: EquivalentNote | null;
+  zero_branch_name: string | null; // "All branches" added up isn't out, but this one branch is
 };
 // closest: the search matched nothing well, so these are the closest parts instead.
 export type PartsPage = { items: PartRow[]; total: number; page: number; page_size: number; closest: boolean };
@@ -59,12 +60,13 @@ export type EquivalentPart = {
   sku: string;
   name: string;
   brand: string | null;
-  price: number | null;
   quantity: number;
   stock: { branch_id: string; branch: string; quantity: number }[];
   in_stock: boolean;
   reason_type: "oem" | "manual" | "supplier_file";
   linked_by: string | null;
+  // Staff never get money (CLAUDE.md): the server leaves this out of the JSON for them.
+  price?: number | null;
 };
 
 export type PartDetail = {
@@ -74,16 +76,17 @@ export type PartDetail = {
   brand: string | null;
   category: string | null;
   oem_reference: string | null;
-  unit_cost: number | null;
-  sale_price: number | null;
   min_stock: number;
   is_active: boolean;
   quantity: number;
   status: StockStatus;
   supplier: { id: string; name: string; phone: string | null; email: string | null; delivery_days: number | null } | null;
   stock: { branch_id: string; branch: string; quantity: number }[];
-  last_sales: { sold_on: string; branch: string; quantity: number; unit_price: number | null }[];
+  last_sales: { sold_on: string; branch: string; quantity: number; unit_price?: number | null }[];
   equivalents: EquivalentPart[];
+  // Staff never get money (CLAUDE.md): the server leaves these out of the JSON for them.
+  unit_cost?: number | null;
+  sale_price?: number | null;
 };
 
 export type PartChange = Partial<{

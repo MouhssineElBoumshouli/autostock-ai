@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import date, timedelta
+from typing import NamedTuple
 
 from sqlalchemy import func, select
 
@@ -48,9 +49,10 @@ def explain_part_change(asked: Asked) -> Answer:
     expected = _forecast(asked, parts.condition, shop_branch)
     percent = percent_change(now, before)
     found = reasons(SalesFacts(
-        now, before, last_year, out_now, out_before,
+        now, before, last_year, out_now.days, out_before.days,
         _average_price(asked, parts.condition, shop_branch, first, last),
         _average_price(asked, parts.condition, shop_branch, before_first, before_last), tuple(alerts),
+        out_now.parts, out_now.branches, out_before.parts, out_before.branches,
     ))
     if not asked.currency:  # people who don't see money get the price change, not the prices
         found = [{k: v for k, v in reason.items() if not k.startswith("price_")} for reason in found]
@@ -61,19 +63,19 @@ def explain_part_change(asked: Asked) -> Answer:
          "percent_change": percent, "direction": direction(now, before), "reasons": found,
          "last_year_compared": last_year_compared(now, last_year),
          "same_days_last_year": last_year, "weekly_pieces": weekly,
-         "days_out_of_stock_now": out_now, "days_out_of_stock_before": out_before,
-         "days_out_of_stock_counts": _days_counted_over(parts.part_ids, shop_branch), "stock_now": in_stock,
+         "days_out_of_stock_now": out_now.days, "days_out_of_stock_before": out_before.days, "stock_now": in_stock,
          "expected_next_30_days": expected, "open_alerts": alerts},
         f"{parts.title}{where_words(asked)}, {LABELS[period]} ({range_words(first, last)}): {pieces(now)}, "
         f"{change_words(percent)} on {range_words(before_first, before_last)} ({pieces(before)}). "
-        f"Same days last year: {pieces(last_year)}. Days out of stock (per branch): {out_now} now, {out_before} before. "
+        f"Same days last year: {pieces(last_year)}. Days out of stock (per branch): {out_now.days} now, {out_before.days} before. "
         f"In stock now: {pieces(in_stock)}. Expected next {HORIZON_DAYS} days: {pieces(expected)}. Open alerts: {len(alerts)}.",
         [
             Number(key="pieces_now", label="Pieces sold, this period", value=now, unit="pieces"),
             Number(key="pieces_before", label="Pieces sold, period before", value=before, unit="pieces"),
             Number(key="same_days_last_year", label="Same days last year", value=last_year, unit="pieces"),
-            Number(key="days_out_of_stock_now", label="Days out of stock, this period", value=out_now, unit="days"),
-            Number(key="days_out_of_stock_before", label="Days out of stock, period before", value=out_before, unit="days"),
+            Number(key="days_out_of_stock_now", label="Days out of stock, this period", value=out_now.days, unit="days"),
+            Number(key="days_out_of_stock_before", label="Days out of stock, period before", value=out_before.days, unit="days"),
+            *_days_out_breakdown_numbers("now", out_now), *_days_out_breakdown_numbers("before", out_before),
             Number(key="in_stock", label="In stock now", value=in_stock, unit="pieces"),
             Number(key="expected_next_30_days", label="Expected, next 30 days", value=expected, unit="pieces"),
             Number(key="open_alerts", label="Open alerts", value=len(alerts), unit="count"),
@@ -81,6 +83,19 @@ def explain_part_change(asked: Asked) -> Answer:
             Number(key="period_before", label="Period before", value=date_range(before_first, before_last), unit="date_range"),
         ],
     )
+
+
+def _days_out_breakdown_numbers(when: str, out: "DaysOut") -> list[Number]:
+    """Only when the days out of stock are a sum over more than one part or branch: how many of
+    each, so "69 days" doesn't look like one part's own number."""
+    numbers = []
+    if out.parts > 1:
+        numbers.append(Number(key=f"days_out_of_stock_{when}_parts", label=f"Parts counted, {when}", value=out.parts, unit="count"))
+    if out.branches > 1:
+        numbers.append(
+            Number(key=f"days_out_of_stock_{when}_branches", label=f"Branches counted, {when}", value=out.branches, unit="count")
+        )
+    return numbers
 
 
 def part_details(asked: Asked) -> Answer:
@@ -126,13 +141,6 @@ def part_details(asked: Asked) -> Answer:
         ]
         + [Number(label=f"{row['name']} ({row['sku']})", value=row["stock_total"], unit="pieces") for row in shown],
     )
-
-
-def _days_counted_over(part_ids: tuple, shop_branch: uuid.UUID | None) -> str:
-    """Days out of stock are added up per part and per branch: "parts_and_branches", "branches" or "one"."""
-    if part_ids:
-        return "parts_and_branches"
-    return "one" if shop_branch else "branches"
 
 
 def _average_price(asked: Asked, condition, shop_branch: uuid.UUID | None, first: date, last: date) -> int | None:
@@ -184,13 +192,22 @@ def _forecast(asked: Asked, condition, shop_branch: uuid.UUID | None) -> int:
     return round(asked.db.scalar(_in_branch(query, Forecast.branch_id, shop_branch)))
 
 
-def _days_out_of_stock(asked: Asked, condition, shop_branch: uuid.UUID | None, first: date, last: date) -> int:
-    """Days with zero stock inside [first, last], one per branch that was out."""
-    query = select(StockOut.first_day, StockOut.last_day).join(Part, Part.id == StockOut.part_id).where(
-        StockOut.organization_id == asked.organization_id, StockOut.first_day <= last, StockOut.last_day >= first, condition
-    )
-    rows = asked.db.execute(_in_branch(query, StockOut.branch_id, shop_branch))
-    return sum((min(out_last, last) - max(out_first, first)).days + 1 for out_first, out_last in rows)
+class DaysOut(NamedTuple):
+    days: int  # added up over every part and branch that was out
+    parts: int  # how many distinct parts had at least one day out
+    branches: int  # how many distinct branches had at least one day out
+
+
+def _days_out_of_stock(asked: Asked, condition, shop_branch: uuid.UUID | None, first: date, last: date) -> DaysOut:
+    """Days with zero stock inside [first, last], one per branch (and per part) that was out --
+    with how many parts and branches that total is spread over, so a sum over several of them can
+    say so instead of reading like one part's own number."""
+    query = select(StockOut.part_id, StockOut.branch_id, StockOut.first_day, StockOut.last_day).join(
+        Part, Part.id == StockOut.part_id
+    ).where(StockOut.organization_id == asked.organization_id, StockOut.first_day <= last, StockOut.last_day >= first, condition)
+    rows = asked.db.execute(_in_branch(query, StockOut.branch_id, shop_branch)).all()
+    days = sum((min(out_last, last) - max(out_first, first)).days + 1 for _, _, out_first, out_last in rows)
+    return DaysOut(days=days, parts=len({row.part_id for row in rows}), branches=len({row.branch_id for row in rows}))
 
 
 def _open_alerts(asked: Asked, condition, shop_branch: uuid.UUID | None) -> list[dict]:

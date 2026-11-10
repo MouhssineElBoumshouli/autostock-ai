@@ -221,6 +221,25 @@ def test_staff_can_view_but_not_ask_for_suggestions(browser):
     assert staff.get("/api/orders/suggestions/latest").status_code == 200
 
 
+def test_staff_sees_no_money_in_suggestions_or_their_lines(browser):
+    """Checked on the actual JSON, not just what the browser chooses to display."""
+    set_up_shop(browser)
+    add_part(shop_id(), "OIL-1", per_week=9, on_hand=6)
+    run = browser.post("/api/orders/suggestions", json={}).json()
+    assert run["suggested_cost"] > 0  # owner sees it
+    add_member(browser, "staff@shop.ma", "staff")
+    staff = member_with_own_password("staff@shop.ma")
+
+    staff_run = staff.get("/api/orders/suggestions/latest").json()
+    assert "budget" not in staff_run and "suggested_cost" not in staff_run and "kept_cost" not in staff_run
+    [group] = staff_run["groups"]
+    assert "total_cost" not in group
+
+    [staff_line] = run_lines(staff, staff_run)
+    for money_field in ("unit_cost", "line_cost", "value_per_dirham"):
+        assert money_field not in staff_line
+
+
 def test_each_shop_only_sees_its_own_suggestions(browser):
     set_up_shop(browser)
     add_part(shop_id(), "OIL-1", per_week=9, on_hand=6)

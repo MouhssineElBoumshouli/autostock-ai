@@ -261,6 +261,25 @@ def test_staff_can_view_purchase_orders_but_not_change_them(browser):
     assert staff.post(f"/api/orders/purchase-orders/{po['id']}/receive", json={"lines": {}}).status_code == 403
 
 
+def test_staff_sees_no_money_in_purchase_orders(browser):
+    """Checked on the actual JSON, not just what the browser chooses to display."""
+    set_up_shop(browser)
+    _, line = one_suggestion(browser, sku="OIL-1", per_week=9, on_hand=6)
+    browser.post(f"/api/orders/suggestions/{line['id']}/decide", json={"decision": "approve"})
+    [owner_po] = browser.get("/api/orders/purchase-orders").json()
+    assert owner_po["total_cost"] > 0  # owner sees it
+    add_member(browser, "staff@shop.ma", "staff")
+    staff = member_with_own_password("staff@shop.ma")
+
+    [staff_po] = staff.get("/api/orders/purchase-orders").json()
+    assert "total_cost" not in staff_po
+
+    detail = staff.get(f"/api/orders/purchase-orders/{owner_po['id']}").json()
+    assert "total_cost" not in detail
+    [detail_line] = detail["lines"]
+    assert "unit_cost" not in detail_line and "line_cost" not in detail_line
+
+
 def test_each_shop_only_sees_its_own_purchase_orders(browser):
     set_up_shop(browser)
     _, line = one_suggestion(browser, sku="OIL-1", per_week=9, on_hand=6)

@@ -3,7 +3,10 @@ or rejects each line, and reads them back. Approving turns a line into a purchas
 (see app/api/purchase_orders.py).
 
 A run is read in two steps, so a big shop never sends all its lines at once: the run with one
-total per supplier, then one supplier's lines, 50 at a time."""
+total per supplier, then one supplier's lines, 50 at a time.
+
+Staff see everything here except money (CLAUDE.md "staff never get money"): each money field has
+its own model (`*WithMoney`), built only for owners and managers, the same way app/api/today.py does it."""
 
 import uuid
 from datetime import date, datetime
@@ -39,6 +42,8 @@ class SuggestionsRequest(BaseModel):
 
 
 class LineOut(BaseModel):
+    """What staff see: no money."""
+
     id: uuid.UUID
     part_id: uuid.UUID
     part_sku: str
@@ -62,37 +67,53 @@ class LineOut(BaseModel):
     cushion: float
     need: int
     sold_last_90_days: int
-    unit_cost: int | None
-    line_cost: int
     missed_sales_prevented: float
-    value_per_dirham: float | None
     reason: str  # English; the website builds it in the person's language from the numbers above
 
 
+class LineOutWithMoney(LineOut):
+    """What owners and managers also see."""
+
+    unit_cost: int | None
+    line_cost: int
+    value_per_dirham: float | None
+
+
 class GroupOut(BaseModel):
-    """One supplier's lines (or the lines with no supplier, or the lines cut by the budget)."""
+    """One supplier's lines (or the lines with no supplier, or the lines cut by the budget). What staff see."""
+
     key: str  # the supplier's id, NO_SUPPLIER or DIDNT_FIT
     supplier_id: uuid.UUID | None
     supplier_name: str | None
     line_count: int
     pending_count: int  # lines still waiting for a decision
+
+
+class GroupOutWithMoney(GroupOut):
     total_cost: int  # what the lines cost, at the approved quantity when there is one
 
 
 class RunOut(BaseModel):
+    """What staff see."""
+
     id: uuid.UUID
     created_at: datetime
     history_last_day: date | None
+    kept_lines: int
+    cut_lines: int
+    groups: list[GroupOutWithMoney | GroupOut]  # most urgent first, the lines cut by the budget last
+
+
+class RunOutWithMoney(RunOut):
+    """What owners and managers also see."""
+
     budget: int | None
     suggested_cost: int
     kept_cost: int
-    kept_lines: int
-    cut_lines: int
-    groups: list[GroupOut]  # most urgent first, the lines cut by the budget last
 
 
 class LinesPage(BaseModel):
-    items: list[LineOut]
+    items: list[LineOutWithMoney | LineOut]
     total: int
     page: int
     page_size: int
@@ -132,18 +153,18 @@ def change_order_settings(
 
 
 @router.post("/suggestions", status_code=201)
-def new_suggestions(body: SuggestionsRequest, user: User = Depends(managers), db: Session = Depends(get_session)) -> RunOut:
+def new_suggestions(body: SuggestionsRequest, user: User = Depends(managers), db: Session = Depends(get_session)) -> RunOutWithMoney:
     run = make_order_run(db, user.organization_id, body.budget, user)
     db.commit()
-    return _run_out(db, run)
+    return _run_out(db, run, can_see_money=True)
 
 
 @router.get("/suggestions/latest")
-def latest_suggestions(user: User = Depends(anyone), db: Session = Depends(get_session)) -> RunOut | None:
+def latest_suggestions(user: User = Depends(anyone), db: Session = Depends(get_session)) -> RunOutWithMoney | RunOut | None:
     run = db.scalar(
         select(OrderRun).where(OrderRun.organization_id == user.organization_id).order_by(OrderRun.created_at.desc()).limit(1)
     )
-    return _run_out(db, run) if run else None
+    return _run_out(db, run, can_see_money=user.role != "staff") if run else None
 
 
 @router.get("/runs/{run_id}/lines")
@@ -158,17 +179,20 @@ def run_lines(
         .offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
     ).all()
     names = _names(db, user.organization_id, lines)
-    return LinesPage(items=[_line_out(db, line, names) for line in lines], total=total, page=page, page_size=PAGE_SIZE)
+    can_see_money = user.role != "staff"
+    return LinesPage(
+        items=[_line_out(db, line, names, can_see_money) for line in lines], total=total, page=page, page_size=PAGE_SIZE
+    )
 
 
 @router.post("/suggestions/{suggestion_id}/decide")
 def decide(
     suggestion_id: uuid.UUID, body: DecisionRequest, user: User = Depends(managers), db: Session = Depends(get_session)
-) -> LineOut:
+) -> LineOutWithMoney:
     suggestion = _find_suggestion(db, user, suggestion_id)
     decide_suggestion(db, user, suggestion, body.decision, body.quantity)
     db.commit()
-    return _line_out(db, suggestion)
+    return _line_out(db, suggestion, can_see_money=True)
 
 
 @router.post("/runs/{run_id}/suppliers/{supplier_id}/approve-all")
@@ -209,7 +233,7 @@ def _group_key():
     )
 
 
-def _run_out(db: Session, run: OrderRun) -> RunOut:
+def _run_out(db: Session, run: OrderRun, can_see_money: bool) -> RunOutWithMoney | RunOut:
     """The run with one total per group. Groups come in the order of their most urgent line."""
     ranked = select(
         _group_key().label("key"),
@@ -228,30 +252,37 @@ def _run_out(db: Session, run: OrderRun) -> RunOut:
         ).group_by(ranked.c.key)
     ).all()
     suppliers = dict(db.execute(select(Supplier.id, Supplier.name).where(Supplier.organization_id == run.organization_id)).all())
-    groups = []
+    groups: list[GroupOutWithMoney | GroupOut] = []
     for key, _rank, count, pending, cost in sorted(rows, key=lambda row: (row[0] == DIDNT_FIT, row[1])):
         supplier_id = None if key in (DIDNT_FIT, NO_SUPPLIER) else uuid.UUID(key)
-        groups.append(GroupOut(key=key, supplier_id=supplier_id, supplier_name=suppliers.get(supplier_id),
-                               line_count=count, pending_count=pending, total_cost=cost))
-    return RunOut(**{field: getattr(run, field) for field in RunOut.model_fields if field != "groups"}, groups=groups)
+        fields = dict(key=key, supplier_id=supplier_id, supplier_name=suppliers.get(supplier_id), line_count=count, pending_count=pending)
+        groups.append(GroupOutWithMoney(**fields, total_cost=cost) if can_see_money else GroupOut(**fields))
+    run_fields = dict(id=run.id, created_at=run.created_at, history_last_day=run.history_last_day,
+                      kept_lines=run.kept_lines, cut_lines=run.cut_lines, groups=groups)
+    if can_see_money:
+        return RunOutWithMoney(**run_fields, budget=run.budget, suggested_cost=run.suggested_cost, kept_cost=run.kept_cost)
+    return RunOut(**run_fields)
 
 
-def _line_out(db: Session, line: OrderSuggestion, names: dict[uuid.UUID, tuple[str, str]] | None = None) -> LineOut:
+def _line_out(
+    db: Session, line: OrderSuggestion, names: dict[uuid.UUID, tuple[str, str]] | None = None, can_see_money: bool = True
+) -> LineOutWithMoney | LineOut:
     names = names or _names(db, line.organization_id, [line])
     part_sku, part_name = names[line.part_id]
     branch_name = names[line.branch_id][0]
     supplier_name = names.get(line.supplier_id, (None,))[0] if line.supplier_id else None
-    return LineOut(
+    fields = dict(
         id=line.id, part_id=line.part_id, part_sku=part_sku, part_name=part_name, branch_id=line.branch_id,
         branch_name=branch_name, supplier_id=line.supplier_id, supplier_name=supplier_name, status=line.status,
         rule=line.rule, quantity=line.quantity, approved_quantity=line.approved_quantity, on_hand=line.on_hand,
         on_order=line.on_order, pack_size=line.pack_size, delivery_days=line.delivery_days,
         delivery_source=line.delivery_source, delivery_learned_from=line.delivery_learned_from,
         days_covered=line.days_covered, expected=line.expected, cushion=line.cushion, need=line.need,
-        sold_last_90_days=line.sold_last_90_days,
-        unit_cost=line.unit_cost, line_cost=line.line_cost, missed_sales_prevented=line.missed_sales_prevented,
-        value_per_dirham=line.value_per_dirham, reason=line.reason,
+        sold_last_90_days=line.sold_last_90_days, missed_sales_prevented=line.missed_sales_prevented, reason=line.reason,
     )
+    if can_see_money:
+        return LineOutWithMoney(**fields, unit_cost=line.unit_cost, line_cost=line.line_cost, value_per_dirham=line.value_per_dirham)
+    return LineOut(**fields)
 
 
 def _names(db: Session, organization_id: uuid.UUID, lines: list[OrderSuggestion]) -> dict[uuid.UUID, tuple[str, str]]:

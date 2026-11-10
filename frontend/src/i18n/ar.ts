@@ -97,6 +97,7 @@ export const ar: typeof en = {
     searchPlaceholder: "البحث عن قطعة",
     closestParts: "لا توجد نتيجة مطابقة. أقرب القطع:",
     outOfStockEquivalent: (quantity: string, brand: string) => `نفد المخزون. ${quantity} متوفرة من ${brand}.`,
+    zeroBranchNote: (branch: string) => `نفد المخزون في ${branch}.`,
     filters: {
       status: "الحالة",
       allStatuses: "كل الحالات",
@@ -243,7 +244,7 @@ export const ar: typeof en = {
     received: "تم تحديث المخزون.",
     receivedQuantity: "المستلَم حتى الآن",
     quantityOutOfRange: (max: string) => `أدخل عددًا من 0 إلى ${max}`,
-    downloadPdf: "تنزيل PDF",
+    printOrSavePdf: "طباعة أو حفظ كملف PDF",
     print: {
       orderNumber: "أمر شراء",
       date: "التاريخ",
@@ -355,6 +356,8 @@ export const ar: typeof en = {
     noFile: "اختر ملفًا أولًا.",
     readFile: "قراءة الملف",
     matchText: (rows: string) => `حدّد محتوى كل عمود. تم العثور على ${rows} سطر.`,
+    looksLikeSales: "يبدو أن هذا الملف سجل مبيعات.",
+    useSalesInstead: "استيراده كسجل مبيعات بدلاً من ذلك",
     remembered: "ملأنا هذا من آخر استيراد لك. راجعه قبل المتابعة.",
     firstRows: "الأسطر الأولى",
     columnField: (header: string) => `ماذا يحتوي «${header}»؟`,
@@ -902,6 +905,7 @@ export const ar: typeof en = {
     numberLabels: {
       parts_at_risk: "قطع تنفد قبل وصول طلبية",
       parts_out_now: "نفدت الآن",
+      order_first_from: "اطلب أولا من",
       pieces_sold: "القطع المبيعة",
       sales_value: "قيمة المبيعات",
       from: "من",
@@ -932,6 +936,10 @@ export const ar: typeof en = {
       same_days_last_year: "نفس الأيام من السنة الماضية",
       days_out_of_stock_now: "أيام نفاد المخزون، هذه الفترة",
       days_out_of_stock_before: "أيام نفاد المخزون، الفترة السابقة",
+      days_out_of_stock_now_parts: "القطع المحسوبة، هذه الفترة",
+      days_out_of_stock_now_branches: "الفروع المحسوبة، هذه الفترة",
+      days_out_of_stock_before_parts: "القطع المحسوبة، الفترة السابقة",
+      days_out_of_stock_before_branches: "الفروع المحسوبة، الفترة السابقة",
       in_stock: "في المخزون الآن",
       matching_parts: "القطع المطابقة",
       sold_last_30_days: "المباع، آخر 30 يومًا",
@@ -946,6 +954,8 @@ export const ar: typeof en = {
     numberLabelsAbout: {
       days_left_about: (about: string) => `${about}، الأيام المتبقية`,
       days_left: (about: string) => `${about}، الأيام المتبقية`,
+      order_first_from_parts: (about: string) => `${about}، قطع في خطر`,
+      order_first_from_days_left: (about: string) => `${about}، الأيام المتبقية لأقرب قطعة`,
       days_late: (about: string) => `${about}، أيام التأخير`,
       sold_about: (about: string) => `${about}، القطع المباعة`,
       stock_about: (about: string) => `${about}، في المخزون`,

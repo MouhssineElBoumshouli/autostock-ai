@@ -88,6 +88,7 @@ export const fr: typeof en = {
     searchPlaceholder: "Rechercher",
     closestParts: "Aucun résultat exact. Pièces les plus proches :",
     outOfStockEquivalent: (quantity: string, brand: string) => `En rupture. ${quantity} disponibles chez ${brand}.`,
+    zeroBranchNote: (branch: string) => `Rupture à ${branch}.`,
     filters: {
       status: "État",
       allStatuses: "Tous les états",
@@ -234,7 +235,7 @@ export const fr: typeof en = {
     received: "Stock mis à jour.",
     receivedQuantity: "Déjà reçu",
     quantityOutOfRange: (max: string) => `Saisissez un nombre entre 0 et ${max}`,
-    downloadPdf: "Télécharger le PDF",
+    printOrSavePdf: "Imprimer ou enregistrer en PDF",
     print: {
       orderNumber: "Bon de commande",
       date: "Date",
@@ -347,6 +348,8 @@ export const fr: typeof en = {
     noFile: "Choisissez d’abord un fichier.",
     readFile: "Lire le fichier",
     matchText: (rows: string) => `Indiquez ce que contient chaque colonne. ${rows} lignes trouvées.`,
+    looksLikeSales: "Ce fichier ressemble à un historique des ventes.",
+    useSalesInstead: "Importer comme historique des ventes",
     remembered: "Rempli d’après votre dernier import. Vérifiez avant de continuer.",
     firstRows: "Premières lignes",
     columnField: (header: string) => `Que contient « ${header} » ?`,
@@ -897,6 +900,7 @@ export const fr: typeof en = {
     numberLabels: {
       parts_at_risk: "Pièces en rupture avant l’arrivée d’une commande",
       parts_out_now: "Déjà à zéro",
+      order_first_from: "À commander en premier chez",
       pieces_sold: "Pièces vendues",
       sales_value: "Montant des ventes",
       from: "Du",
@@ -927,6 +931,10 @@ export const fr: typeof en = {
       same_days_last_year: "Mêmes jours l’an dernier",
       days_out_of_stock_now: "Jours en rupture, cette période",
       days_out_of_stock_before: "Jours en rupture, période précédente",
+      days_out_of_stock_now_parts: "Références comptées, cette période",
+      days_out_of_stock_now_branches: "Agences comptées, cette période",
+      days_out_of_stock_before_parts: "Références comptées, période précédente",
+      days_out_of_stock_before_branches: "Agences comptées, période précédente",
       in_stock: "En stock",
       matching_parts: "Pièces trouvées",
       sold_last_30_days: "Vendues, 30 derniers jours",
@@ -941,6 +949,8 @@ export const fr: typeof en = {
     numberLabelsAbout: {
       days_left_about: (about: string) => `${about}, jours restants`,
       days_left: (about: string) => `${about}, jours restants`,
+      order_first_from_parts: (about: string) => `${about}, pièces en rupture`,
+      order_first_from_days_left: (about: string) => `${about}, jours restants sur la pièce la plus urgente`,
       days_late: (about: string) => `${about}, jours de retard`,
       sold_about: (about: string) => `${about}, pièces vendues`,
       stock_about: (about: string) => `${about}, en stock`,

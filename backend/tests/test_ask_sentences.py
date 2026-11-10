@@ -20,8 +20,8 @@ BRANCHES = [
 ]
 EXPLAIN = {
     "subject": {"kind": "matching", "words": "filtres à huile"}, "period": "this_month", "pieces_now": 3183,
-    "pieces_before": 3346, "percent_change": -5, "direction": "down", "days_out_of_stock_counts": "branches",
-    "reasons": [{"kind": "out_of_stock", "days_now": 13, "days_before": 5}],
+    "pieces_before": 3346, "percent_change": -5, "direction": "down",
+    "reasons": [{"kind": "out_of_stock", "days_now": 13, "days_before": 5, "days_now_branches": 3}],
 }
 
 
@@ -40,7 +40,19 @@ def test_compare_branches_leads_with_the_winner_then_the_others():
 def test_why_states_the_main_reason_first():
     assert write("explain_part_change", EXPLAIN, "fr") == (
         "Les ventes de filtres à huile sont un peu en baisse (5 %) : 3 183 ce mois-ci contre 3 346 avant. "
-        "Raison principale : rupture de stock 13 jours ce mois-ci (en tout, toutes agences confondues), contre 5 avant.")
+        "Raison principale : rupture de stock 13 jours ce mois-ci en tout, sur 3 agences, contre 5 avant.")
+
+
+def test_why_names_parts_and_branches_when_the_days_out_are_a_sum_over_several():
+    reason = {"kind": "out_of_stock", "days_now": 69, "days_before": 0, "days_now_parts": 5, "days_now_branches": 3}
+    text = write("explain_part_change", {**EXPLAIN, "reasons": [reason]}, "fr")
+    assert "rupture de stock 69 jours ce mois-ci en tout, sur 5 références et 3 agences, contre 0 avant" in text
+
+
+def test_why_says_nothing_extra_for_a_single_part_in_a_single_branch():
+    reason = {"kind": "out_of_stock", "days_now": 13, "days_before": 5}
+    text = write("explain_part_change", {**EXPLAIN, "reasons": [reason]}, "fr")
+    assert "rupture de stock 13 jours ce mois-ci, contre 5 avant" in text
 
 
 def test_why_says_so_honestly_when_no_reason_fits():
@@ -61,7 +73,7 @@ def test_people_who_dont_see_money_get_no_money_words():
 
 
 @pytest.mark.parametrize(("language", "number", "money"), [
-    ("en", "4,662", "MAD 12,340"), ("fr", "4 662", "12 340 DH"), ("ar", "⁦4 662⁩", "⁦12 340 DH⁩"),
+    ("en", "4,662", "MAD 12,340.00"), ("fr", "4 662", "12 340,00 DH"), ("ar", "⁦4 662⁩", "⁦12 340,00 DH⁩"),
 ])
 def test_numbers_and_money_are_written_the_way_each_language_writes_them(language, number, money):
     shown = Shown(language, "MAD")
