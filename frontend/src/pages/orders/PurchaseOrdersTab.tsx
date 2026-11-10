@@ -28,7 +28,10 @@ export function PurchaseOrdersTab({ canEdit }: { canEdit: boolean }) {
     { header: t.purchaseOrders.columns.supplier, cell: (po) => <bdi dir="auto">{po.supplier_name}</bdi> },
     { header: t.purchaseOrders.columns.status, cell: (po) => <Badge variant={badgeVariant[po.status]}>{t.purchaseOrders.statuses[po.status]}</Badge> },
     { header: t.purchaseOrders.columns.lines, align: "end", cell: (po) => formatNumber(po.line_count) },
-    { header: t.purchaseOrders.columns.total, align: "end", cell: (po) => formatMoney(po.total_cost, currency) },
+    // Staff never get money (CLAUDE.md): the server leaves total_cost out of the JSON for them.
+    ...(canEdit
+      ? [{ header: t.purchaseOrders.columns.total, align: "end" as const, cell: (po: PurchaseOrderSummary) => formatMoney(po.total_cost, currency) }]
+      : []),
     { header: t.purchaseOrders.columns.date, cell: (po) => formatDay(po.created_at.slice(0, 10)) },
   ];
 

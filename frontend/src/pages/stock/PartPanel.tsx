@@ -151,8 +151,8 @@ function PartDetails({
 
         <Section title={t.part.prices}>
           <dl className="divide-y rounded-md border">
-            <Line label={t.part.unitCost} value={formatMoney(part.unit_cost, currency)} />
-            <Line label={t.part.salePrice} value={formatMoney(part.sale_price, currency)} />
+            {canEdit && <Line label={t.part.unitCost} value={formatMoney(part.unit_cost, currency)} />}
+            {canEdit && <Line label={t.part.salePrice} value={formatMoney(part.sale_price, currency)} />}
             <Line label={t.part.minStock} value={formatNumber(part.min_stock)} />
           </dl>
         </Section>
@@ -204,7 +204,7 @@ function PartDetails({
                   </span>
                   <span className="text-end tabular-nums">
                     {t.part.sold(formatNumber(sale.quantity))}
-                    {sale.unit_price !== null && (
+                    {sale.unit_price !== null && sale.unit_price !== undefined && (
                       <span className="block text-body-small text-on-surface-variant">{formatMoney(sale.unit_price, currency)}</span>
                     )}
                   </span>
@@ -276,7 +276,7 @@ function EquivalentRow({
           </p>
         </div>
         <div className="grid shrink-0 gap-1 text-end">
-          <span className="tabular-nums">{formatMoney(equivalent.price, currency)}</span>
+          {equivalent.price !== undefined && <span className="tabular-nums">{formatMoney(equivalent.price, currency)}</span>}
           <Badge variant={equivalent.in_stock ? "success" : "error"}>
             {equivalent.in_stock ? t.part.equivalents.inStock : t.part.equivalents.outOfStock}
           </Badge>

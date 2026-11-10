@@ -11,6 +11,7 @@ export type ImportPreview = {
   columns: { index: number; header: string; samples: string[] }[];
   fields: { key: string; required: boolean }[];
   mapping: Mapping;
+  looks_like_sales: boolean; // a "parts" file shaped like sales history instead (date + quantity sold, no name)
 };
 
 export type ImportSummary = {

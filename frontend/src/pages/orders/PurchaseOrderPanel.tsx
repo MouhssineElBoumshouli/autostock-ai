@@ -126,19 +126,21 @@ function PurchaseOrderDetails({ po, canEdit }: { po: PurchaseOrder; canEdit: boo
                 ) : (
                   <span className="tabular-nums">{formatNumber(line.quantity)}</span>
                 )}
-                <span className="tabular-nums text-on-surface-variant">{formatMoney(line.line_cost, currency)}</span>
+                {line.line_cost !== undefined && (
+                  <span className="tabular-nums text-on-surface-variant">{formatMoney(line.line_cost, currency)}</span>
+                )}
               </div>
             </li>
           ))}
         </ul>
-        <p className="text-end text-title-medium">{formatMoney(po.total_cost, currency)}</p>
+        {po.total_cost !== undefined && <p className="text-end text-title-medium">{formatMoney(po.total_cost, currency)}</p>}
       </div>
 
       <footer className="sticky bottom-0 grid gap-2 border-t bg-surface-container-low p-4">
         <Button variant="outlined" asChild>
           <Link to={`/orders/purchase-orders/${po.id}/print`} target="_blank" rel="noopener">
             <PrinterIcon aria-hidden="true" />
-            {t.purchaseOrders.downloadPdf}
+            {t.purchaseOrders.printOrSavePdf}
           </Link>
         </Button>
         {canEdit && po.status === "draft" && (

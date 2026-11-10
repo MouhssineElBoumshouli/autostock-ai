@@ -8,10 +8,11 @@ from pydantic import BaseModel
 from sqlalchemy import case, func, null, select
 from sqlalchemy.orm import Session
 
+from app.api.branches import branches_in_use
 from app.auth.permissions import require_role
 from app.db import get_session
 from app.equivalents import groups_of
-from app.models import Branch, Part, Supplier, User
+from app.models import Branch, Part, StockLevel, Supplier, User
 from app.runs_out import (
     RUNNING_OUT_WITHIN_DAYS,
     expected_30d_subquery,
@@ -71,6 +72,7 @@ class PartRow(BaseModel):
     expected_30d: int  # pieces expected to sell over the next 30 days
     runs_out_days: int | None  # None means "over 60 days" (or no expected sales at all)
     equivalent_note: EquivalentNote | None = None  # out of stock, but an equivalent from another brand isn't
+    zero_branch_name: str | None = None  # "All branches" added up isn't out, but one specific branch is
 
 
 class PartsPage(BaseModel):
@@ -216,6 +218,9 @@ def list_parts(
         ordered = (order.desc().nulls_last() if direction == "desc" else order.asc().nulls_last(),)
     rows = db.execute(base.order_by(*ordered, Part.name, Part.sku).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)).all()
     notes = _equivalent_notes(db, user.organization_id, branch, [row.Part.id for row in rows if row.status == "out"])
+    zero_branches = _zero_branch_names(
+        db, user.organization_id, branch, [row.Part.id for row in rows if row.status != "out"]
+    )
 
     return PartsPage(
         items=[
@@ -232,6 +237,7 @@ def list_parts(
                 expected_30d=round(row.expected_30d),
                 runs_out_days=shown_runs_out_days(row.runs_out_days),
                 equivalent_note=notes.get(row.Part.id),
+                zero_branch_name=zero_branches.get(row.Part.id),
             )
             for row in rows
         ],
@@ -270,6 +276,40 @@ def _equivalent_notes(
             quantity, best_id = max(in_stock)
             notes[part_id] = EquivalentNote(quantity=quantity, brand=names[best_id])
     return notes
+
+
+def _zero_branch_names(
+    db: Session, organization_id: uuid.UUID, branch_filter: uuid.UUID | None, part_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    """"All branches" adds every branch's stock together, so a part can show "Low stock" (or even
+    "Healthy") while one specific branch actually has none. Only checked when no single branch is
+    already chosen (then its own number already tells the truth), and only for parts not already
+    shown as fully out."""
+    if branch_filter is not None or not part_ids:
+        return {}
+    used = branches_in_use(db, organization_id)
+    filters = [Branch.organization_id == organization_id]
+    if used:
+        filters.append(Branch.id.in_(used))
+    branches = db.execute(select(Branch.id, Branch.name).where(*filters).order_by(Branch.created_at)).all()
+    if len(branches) < 2:
+        return {}  # only one branch: "all branches" already means that one
+
+    rows = db.execute(
+        select(StockLevel.part_id, StockLevel.branch_id, StockLevel.quantity).where(
+            StockLevel.organization_id == organization_id,
+            StockLevel.part_id.in_(part_ids),
+            StockLevel.branch_id.in_([branch_id for branch_id, _ in branches]),
+        )
+    ).all()
+    quantities = {(part_id, branch_id): quantity for part_id, branch_id, quantity in rows}
+
+    names: dict[uuid.UUID, str] = {}
+    for part_id in part_ids:
+        per_branch = [quantities.get((part_id, branch_id), 0) for branch_id, _ in branches]
+        if sum(per_branch) > 0 and min(per_branch) <= 0:
+            names[part_id] = next(name for (_, name), quantity in zip(branches, per_branch) if quantity <= 0)
+    return names
 
 
 def _status_rank(status):

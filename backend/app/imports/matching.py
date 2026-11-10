@@ -239,3 +239,14 @@ def suggest_field(header: str, kind: ImportKind) -> str | None:
     known = {field.key for field in FIELDS[kind]}
     guess = model_match(header, kind) if _USE_MODEL else keyword_match(header, kind)
     return guess if guess in known else None
+
+
+def looks_like_sales_file(headers: list[str]) -> bool:
+    """A "parts" file with a date column and a quantity column, but nothing that looks like a
+    part's name: probably a sales history dropped into the wrong import by mistake (a sales file
+    has no name column at all -- it only ever names a part by its SKU)."""
+    has_name = any(suggest_field(header, "parts") == "name" for header in headers)
+    if has_name:
+        return False
+    sales_fields = {suggest_field(header, "sales") for header in headers}
+    return "date" in sales_fields and "quantity" in sales_fields

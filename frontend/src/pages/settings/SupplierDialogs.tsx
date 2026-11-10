@@ -181,7 +181,7 @@ export function DeliveryTimeButton({
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="text">
+        <Button size="sm" variant="text" className="h-auto min-h-8 max-w-full whitespace-normal text-start">
           {deliveryTimeText(supplier.delivery.days, supplier.delivery.source, supplier.delivery.learned_from)}
         </Button>
       </DialogTrigger>

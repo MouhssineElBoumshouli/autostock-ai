@@ -14,8 +14,9 @@ export type PurchaseOrderLine = {
   branch_name: string;
   quantity: number;
   received_quantity: number;
-  unit_cost: number | null;
-  line_cost: number;
+  // Staff never get money (CLAUDE.md): the server leaves these out of the JSON for them.
+  unit_cost?: number | null;
+  line_cost?: number;
 };
 
 export type PurchaseOrderSummary = {
@@ -27,8 +28,9 @@ export type PurchaseOrderSummary = {
   received_at: string | null;
   supplier_id: string;
   supplier_name: string;
-  total_cost: number;
   line_count: number;
+  // Staff never get money (CLAUDE.md): the server leaves this out of the JSON for them.
+  total_cost?: number;
 };
 
 export type PurchaseOrder = PurchaseOrderSummary & {

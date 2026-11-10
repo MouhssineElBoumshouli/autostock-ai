@@ -63,6 +63,8 @@ export const en = {
     searchPlaceholder: "Search parts",
     closestParts: "No exact match. Closest parts:",
     outOfStockEquivalent: (quantity: string, brand: string) => `Out of stock. ${quantity} available from ${brand}.`,
+    // "All branches" adds every branch together: this part can look fine overall while one branch has none at all.
+    zeroBranchNote: (branch: string) => `Out of stock at ${branch}.`,
     filters: {
       status: "Status",
       allStatuses: "All statuses",
@@ -219,7 +221,7 @@ export const en = {
     received: "Stock updated.",
     receivedQuantity: "Received so far",
     quantityOutOfRange: (max: string) => `Enter a number from 0 to ${max}`,
-    downloadPdf: "Download PDF",
+    printOrSavePdf: "Print or save as PDF",
     print: {
       orderNumber: "Purchase order",
       date: "Date",
@@ -331,6 +333,8 @@ export const en = {
     noFile: "Choose a file first.",
     readFile: "Read the file",
     matchText: (rows: string) => `Tell us what each column contains. ${rows} rows found.`,
+    looksLikeSales: "This file looks like a sales history.",
+    useSalesInstead: "Import it as sales history instead",
     remembered: "We filled this in from your last import. Check it before going on.",
     firstRows: "First rows",
     columnField: (header: string) => `What is in “${header}”?`,
@@ -884,6 +888,7 @@ export const en = {
     numberLabels: {
       parts_at_risk: "Parts running out before an order arrives",
       parts_out_now: "Already at zero",
+      order_first_from: "Order from first",
       pieces_sold: "Pieces sold",
       sales_value: "Sales value",
       from: "From",
@@ -914,6 +919,10 @@ export const en = {
       same_days_last_year: "Same days last year",
       days_out_of_stock_now: "Days out of stock, this period",
       days_out_of_stock_before: "Days out of stock, period before",
+      days_out_of_stock_now_parts: "Parts counted, this period",
+      days_out_of_stock_now_branches: "Branches counted, this period",
+      days_out_of_stock_before_parts: "Parts counted, period before",
+      days_out_of_stock_before_branches: "Branches counted, period before",
       in_stock: "In stock now",
       matching_parts: "Matching parts",
       sold_last_30_days: "Sold, last 30 days",
@@ -927,6 +936,8 @@ export const en = {
     } as Record<string, string>,
     numberLabelsAbout: {
       days_left_about: (about: string) => `${about}, days left`,
+      order_first_from_parts: (about: string) => `${about}, parts at risk`,
+      order_first_from_days_left: (about: string) => `${about}, days left on the soonest part`,
       days_left: (about: string) => `${about}, days left`,
       days_late: (about: string) => `${about}, days late`,
       sold_about: (about: string) => `${about}, pieces sold`,

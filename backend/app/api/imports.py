@@ -18,7 +18,7 @@ from app.db import SessionLocal, get_session, utc_now
 from app.forecast.run import run_forecasts_apart
 from app.imports import jobs
 from app.imports.fields import FIELDS, ImportKind, check_mapping
-from app.imports.matching import suggest_field
+from app.imports.matching import looks_like_sales_file, suggest_field
 from app.imports.reading import Table, open_table
 from app.imports.sample_files import build_sample_file
 from app.imports.values import normalize_header, show_cell
@@ -52,6 +52,9 @@ class PreviewOut(BaseModel):
     columns: list[ColumnOut]
     fields: list[FieldOut]
     mapping: dict[int, str]  # pre-filled from the shop's last import of this kind
+    # A "parts" file with a date and a quantity column, but no name: probably sales history.
+    # Defaults to False so a preview saved before this existed still reads back fine.
+    looks_like_sales: bool = False
 
 
 class ProblemOut(BaseModel):
@@ -238,6 +241,7 @@ def _preview(table: Table, kind: ImportKind, remembered: dict[str, str]) -> Prev
         ],
         fields=[FieldOut(key=field.key, required=field.required) for field in FIELDS[kind]],
         mapping=_suggest_mapping(kind, table.headers, remembered),
+        looks_like_sales=kind == "parts" and looks_like_sales_file(table.headers),
     )
 
 

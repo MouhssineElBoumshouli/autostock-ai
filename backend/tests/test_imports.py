@@ -43,6 +43,35 @@ def test_preview_reads_french_csv_with_semicolons_and_windows_encoding(browser):
     assert preview["row_count"] == 20  # the empty row is left out
 
 
+def test_a_real_parts_file_does_not_look_like_sales(browser):
+    set_up_shop(browser)
+    assert send(browser, "preview", "parts", "parts_fr_messy.xlsx").json()["looks_like_sales"] is False
+
+
+def test_sales_looking_file_dropped_into_parts_is_flagged(browser):
+    """Date + quantity sold, no name column at all: a sales history, not a parts file."""
+    set_up_shop(browser)
+    content = (
+        "Date;Référence;Quantité vendue;Prix unitaire\n"
+        "01/11/2026;AL-0118;3;125.50\n"
+        "02/11/2026;AL-0017;2;89.00\n"
+    ).encode()
+
+    preview = send(browser, "preview", "parts", "looks_like_sales.csv", content=content).json()
+    assert preview["looks_like_sales"] is True
+
+    # The same file, read as what it actually is: never flagged against itself.
+    assert send(browser, "preview", "sales", "looks_like_sales.csv", content=content).json()["looks_like_sales"] is False
+
+
+def test_a_parts_file_with_no_name_but_no_date_either_is_not_flagged(browser):
+    """Missing the name column alone isn't enough: it also needs a date and a quantity, the shape
+    only a sales file has."""
+    set_up_shop(browser)
+    content = "Référence;Prix d'achat;Quantité en stock\nAL-0118;125.50;6\n".encode()
+    assert send(browser, "preview", "parts", "no_name_no_date.csv", content=content).json()["looks_like_sales"] is False
+
+
 def test_column_matching_is_remembered_for_next_time(browser):
     set_up_shop(browser)
     import_parts(browser)

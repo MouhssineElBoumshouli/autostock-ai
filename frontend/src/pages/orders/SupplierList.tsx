@@ -11,7 +11,7 @@ export function groupName(group: OrderGroup): string {
   return group.supplier_name ?? t.orders.noSupplierGroup;
 }
 
-// One row per supplier with its total: open one to see its lines.
+// One row per supplier with its total: open one to see its lines. Staff never get money (CLAUDE.md).
 export function SupplierList({ groups, onOpen }: { groups: OrderGroup[]; onOpen: (key: string) => void }) {
   const currency = useSignedIn().organization.currency;
 
@@ -34,7 +34,9 @@ export function SupplierList({ groups, onOpen }: { groups: OrderGroup[]; onOpen:
                 </span>
               </span>
               <span className="flex shrink-0 items-center gap-2">
-                <span className="text-body-large tabular-nums">{formatMoney(group.total_cost, currency)}</span>
+                {group.total_cost !== undefined && (
+                  <span className="text-body-large tabular-nums">{formatMoney(group.total_cost, currency)}</span>
+                )}
                 <ChevronRightIcon aria-hidden="true" className="size-5 text-on-surface-variant rtl:rotate-180" />
               </span>
             </button>

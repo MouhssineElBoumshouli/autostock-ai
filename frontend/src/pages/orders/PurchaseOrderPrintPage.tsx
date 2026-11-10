@@ -11,7 +11,7 @@ import { t } from "@/i18n";
 import { formatDay, formatMoney, formatNumber } from "@/lib/format";
 
 // A clean page for one purchase order: shop name, supplier, date, lines, totals.
-// "Download PDF" opens the browser's print dialog ("Save as PDF" is one of its options).
+// The button opens the browser's print dialog, honestly named: "Save as PDF" is one of its options.
 // No sidebar or top bar here (see router.tsx), so what prints is only this.
 export function PurchaseOrderPrintPage() {
   const { id = null } = useParams();
@@ -40,13 +40,14 @@ export function PurchaseOrderPrintPage() {
   }
 
   const order = po.data;
+  const canSeeMoney = me.user.role !== "staff"; // staff never get money (CLAUDE.md)
 
   return (
     <div className="mx-auto max-w-2xl p-6 sm:p-10">
       <div className="mb-6 flex justify-end print:hidden">
         <Button variant="filled" onClick={() => window.print()}>
           <PrinterIcon aria-hidden="true" />
-          {t.purchaseOrders.downloadPdf}
+          {t.purchaseOrders.printOrSavePdf}
         </Button>
       </div>
 
@@ -75,8 +76,8 @@ export function PurchaseOrderPrintPage() {
             <th className="px-3 py-2 text-start font-medium">{t.purchaseOrders.print.sku}</th>
             <th className="px-3 py-2 text-start font-medium">{t.purchaseOrders.print.branch}</th>
             <th className="px-3 py-2 text-end font-medium">{t.purchaseOrders.print.quantity}</th>
-            <th className="px-3 py-2 text-end font-medium">{t.purchaseOrders.print.unitCost}</th>
-            <th className="ps-3 py-2 text-end font-medium">{t.purchaseOrders.print.total}</th>
+            {canSeeMoney && <th className="px-3 py-2 text-end font-medium">{t.purchaseOrders.print.unitCost}</th>}
+            {canSeeMoney && <th className="ps-3 py-2 text-end font-medium">{t.purchaseOrders.print.total}</th>}
           </tr>
         </thead>
         <tbody>
@@ -90,18 +91,24 @@ export function PurchaseOrderPrintPage() {
               </td>
               <td className="px-3 py-2">{line.branch_name}</td>
               <td className="px-3 py-2 text-end tabular-nums">{formatNumber(line.quantity)}</td>
-              <td className="px-3 py-2 text-end tabular-nums">{formatMoney(line.unit_cost, me.organization.currency)}</td>
-              <td className="ps-3 py-2 text-end tabular-nums">{formatMoney(line.line_cost, me.organization.currency)}</td>
+              {canSeeMoney && (
+                <td className="px-3 py-2 text-end tabular-nums">{formatMoney(line.unit_cost, me.organization.currency)}</td>
+              )}
+              {canSeeMoney && (
+                <td className="ps-3 py-2 text-end tabular-nums">{formatMoney(line.line_cost, me.organization.currency)}</td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
 
-      <div className="mt-4 flex justify-end border-t border-black/40 pt-4">
-        <p className="text-title-medium">
-          {t.purchaseOrders.print.total}: {formatMoney(order.total_cost, me.organization.currency)}
-        </p>
-      </div>
+      {canSeeMoney && (
+        <div className="mt-4 flex justify-end border-t border-black/40 pt-4">
+          <p className="text-title-medium">
+            {t.purchaseOrders.print.total}: {formatMoney(order.total_cost, me.organization.currency)}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -21,8 +21,10 @@ const badgeVariant = {
   rejected: "error",
 } as const;
 
-export function lineCost(line: OrderLine): number {
-  return (line.approved_quantity ?? line.quantity) * (line.unit_cost ?? 0);
+// undefined when the line carries no money at all (staff never get money, CLAUDE.md).
+export function lineCost(line: OrderLine, quantity?: number): number | undefined {
+  if (line.unit_cost === undefined) return undefined;
+  return (quantity ?? line.approved_quantity ?? line.quantity) * (line.unit_cost ?? 0);
 }
 
 // One part, for one branch: the suggested quantity (editable), its cost, why, and the decision.
@@ -32,6 +34,8 @@ export function OrderLineRow({ line, canEdit }: { line: OrderLine; canEdit: bool
   const [quantity, setQuantity] = useState(String(line.approved_quantity ?? line.quantity));
   const [showError, setShowError] = useState(false);
   const parsed = wholeNumber(quantity);
+  // Reacts at once to the typed quantity, instead of staying at the old amount until Validate.
+  const shownCost = lineCost(line, parsed === "invalid" ? undefined : parsed);
 
   function approve() {
     if (parsed === "invalid") {
@@ -85,7 +89,9 @@ export function OrderLineRow({ line, canEdit }: { line: OrderLine; canEdit: bool
           ) : (
             <span className="tabular-nums">{formatNumber(line.approved_quantity ?? line.quantity)}</span>
           )}
-          <span className="tabular-nums text-on-surface-variant">{formatMoney(lineCost(line), currency)}</span>
+          {shownCost !== undefined && (
+            <span className="tabular-nums text-on-surface-variant">{formatMoney(shownCost, currency)}</span>
+          )}
         </div>
         {showError && parsed === "invalid" && <p className="text-body-small text-error">{t.orders.quantityError}</p>}
         {canEdit && (

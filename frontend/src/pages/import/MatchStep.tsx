@@ -21,6 +21,7 @@ export function MatchStep({
   error,
   onBack,
   onNext,
+  onUseSalesInstead,
 }: {
   kind: ImportKind;
   preview: ImportPreview;
@@ -30,6 +31,9 @@ export function MatchStep({
   error?: string;
   onBack: () => void;
   onNext: () => void;
+  // The file looks like sales history, not parts (see preview.looks_like_sales): one click
+  // starts the import over with the same file, as "Sales history" instead.
+  onUseSalesInstead?: () => void;
 }) {
   const names = t.importFile.fieldNames[kind];
   const chosen = Object.values(mapping);
@@ -49,6 +53,15 @@ export function MatchStep({
     <Card>
       <CardContent className="grid gap-5">
         <p className="text-body-medium text-on-surface-variant">{t.importFile.matchText(formatNumber(preview.row_count))}</p>
+        {preview.looks_like_sales && onUseSalesInstead && (
+          <p className="flex flex-wrap items-center gap-2 rounded-md bg-tertiary-container px-3 py-2.5 text-body-medium text-on-tertiary-container">
+            <InfoIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            {t.importFile.looksLikeSales}
+            <Button size="sm" variant="tonal" onClick={onUseSalesInstead}>
+              {t.importFile.useSalesInstead}
+            </Button>
+          </p>
+        )}
         {prefilled && (
           <p className="flex items-start gap-2 rounded-md bg-secondary-container px-3 py-2.5 text-body-medium text-on-secondary-container">
             <InfoIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />

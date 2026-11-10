@@ -236,16 +236,26 @@ def _way(v, s) -> str:
     return f"{way} de {s.percent(v['percent_change'])}"
 
 
+def _days_over(reason: dict, when: str, s: Shown) -> str:
+    """" en tout, sur 5 références et 3 agences" when the number is a sum over several parts and/or
+    branches; "" when it is really just one part in one branch, so there is nothing to sum."""
+    parts, branches = reason.get(f"days_{when}_parts"), reason.get(f"days_{when}_branches")
+    bits = []
+    if parts and parts > 1:
+        bits.append(f"{s.number(parts)} références")
+    if branches and branches > 1:
+        bits.append(f"{s.number(branches)} agences")
+    return f" en tout, sur {' et '.join(bits)}" if bits else ""
+
+
 def _reason(reason: dict, v, s) -> str:
-    over = {"parts_and_branches": " (en tout, toutes pièces et agences confondues)", "branches": " (en tout, toutes agences confondues)"}
-    counted = over.get(v.get("days_out_of_stock_counts"), "")
     kind = reason["kind"]
     if kind == "out_of_stock":
-        return (f"rupture de stock {s.days(reason['days_now'])} {s.period(v['period'])}{counted}, "
-                f"contre {s.number(reason['days_before'])} avant")
+        return (f"rupture de stock {s.days(reason['days_now'])} {s.period(v['period'])}{_days_over(reason, 'now', s)}, "
+                f"contre {s.number(reason['days_before'])}{_days_over(reason, 'before', s)} avant")
     if kind == "back_in_stock":
-        return (f"de nouveau en stock : {s.days(reason['days_before'])} de rupture avant{counted}, "
-                f"seulement {s.number(reason['days_now'])} maintenant")
+        return (f"de nouveau en stock : {s.days(reason['days_before'])} de rupture avant{_days_over(reason, 'before', s)}, "
+                f"seulement {s.number(reason['days_now'])}{_days_over(reason, 'now', s)} maintenant")
     if kind in ("price_up", "price_down"):
         prices = f" ({s.money(reason['price_before'])} à {s.money(reason['price_now'])})" if "price_now" in reason else ""
         return f"le prix moyen a {'augmenté' if kind == 'price_up' else 'baissé'} de {s.percent(reason['percent'])}{prices}"

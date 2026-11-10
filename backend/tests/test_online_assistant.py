@@ -425,6 +425,30 @@ def test_the_instructions_give_the_exact_dates_of_common_periods():
     assert "last week 2026-10-26..2026-11-01" in text and "last month 2026-10-01..2026-10-31" in text
 
 
+def test_this_week_falls_back_to_the_last_7_imported_days_and_says_so():
+    """A week that has just started (or whose latest sales aren't imported yet) must never be
+    compared against a full "normal" week: "this week" ends at the last real sale, not today."""
+    from app.ask.online_assistant import periods
+    text = periods(date(2026, 11, 10), last_sale_day=date(2026, 11, 3))
+    assert "this week 2026-10-28..2026-11-03" in text
+    assert "sales after 2026-11-03 not imported yet" in text
+
+
+def test_this_week_is_the_calendar_week_when_sales_are_fully_up_to_date():
+    from app.ask.online_assistant import periods
+    text = periods(date(2026, 11, 8), last_sale_day=date(2026, 11, 8))
+    assert "this week 2026-11-02..2026-11-08" in text and "not imported" not in text
+
+
+def test_the_instructions_tell_the_model_never_to_say_dead_in_the_answer(shop):
+    """The real mistake of a trial: a French answer said the English word "dead" (from the
+    tool's own "stock only=dead" value) instead of saying it in French."""
+    from app.ask.online_assistant import instructions
+    with SessionLocal() as db:
+        text = instructions(asker(shop, db=db), "quelles pièces ne se vendent plus ?", "fr")
+    assert 'never write the English word "dead" itself, say it in French' in text
+
+
 @pytest.mark.parametrize("word", ["Batterie", "batteries", "battery"])
 def test_a_general_word_counts_every_type_starting_with_it(browser, word):
     set_up_shop(browser)

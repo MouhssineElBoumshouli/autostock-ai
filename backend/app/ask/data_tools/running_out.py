@@ -52,14 +52,24 @@ def running_out(asker: Asker, args: dict) -> ToolResult:
         entry["parts_at_risk"] += 1
         entry["soonest_days_left"] = min(entry["soonest_days_left"], item["days_left"])
     by_supplier = sorted(suppliers.values(), key=lambda entry: (entry["soonest_days_left"] - entry["delivery_days"], -entry["parts_at_risk"]))
+    first_supplier = by_supplier[0] if by_supplier else None
     data = {**parts.described(), **({"branch": branch} if branch else {}), "part_branches_checked": len(rows),
             "at_risk": len(at_risk), "different_parts": len({item["name"] for item in at_risk}),
             "branches": len({item["branch"] for item in at_risk}), "out_now": sum(item["in_stock"] <= 0 for item in at_risk),
             # The app's own ranking: the supplier whose parts run out longest before its delivery could arrive.
-            "order_first_from": by_supplier[0]["supplier"] if by_supplier else None,
+            "order_first_from": first_supplier["supplier"] if first_supplier else None,
             "rows": at_risk[:rows_wanted(args) if args.get("top") else SHOWN], "by_supplier": by_supplier[:5]}
     shown = [Number(key="parts_at_risk", label="Parts that run out before an order arrives", value=len(at_risk), unit="count"),
              Number(key="parts_out_now", label="Already at zero", value=data["out_now"], unit="count")]
+    if first_supplier:
+        # Why that supplier is first, for "which supplier should I order from first?" to show under "Based on".
+        shown += [
+            Number(key="order_first_from", label="Order from first", value=first_supplier["supplier"], unit="text"),
+            Number(key="order_first_from_parts", label="Parts at risk", about=first_supplier["supplier"],
+                   value=first_supplier["parts_at_risk"], unit="count"),
+            Number(key="order_first_from_days_left", label="Days left on the soonest part", about=first_supplier["supplier"],
+                   value=first_supplier["soonest_days_left"], unit="days"),
+        ]
     shown += [Number(key="days_left_about", label=f"{item['name']}, {item['branch']}", about=f"{item['name']}, {item['branch']}",
                      value=item["days_left"], unit="days") for item in at_risk[:8]]
     return ToolResult(data, shown, asked_heading(parts, branch))

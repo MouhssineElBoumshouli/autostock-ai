@@ -29,6 +29,12 @@ class SalesFacts:
     price_now: int | None  # average selling price in centimes, None without priced sales
     price_before: int | None
     alerts: tuple[dict, ...] = ()  # open alerts on the part: {"kind", "branch", ...}
+    # How many distinct parts and branches out_now/out_before are a sum over, so the sentence can
+    # say "in total, across 5 parts and 3 branches" instead of reading like one part's own number.
+    out_now_parts: int = 0
+    out_now_branches: int = 0
+    out_before_parts: int = 0
+    out_before_branches: int = 0
 
 
 def direction(now: int, before: int) -> str:
@@ -89,8 +95,17 @@ def reasons(facts: SalesFacts) -> list[dict]:
     found = []
     more_days_out = facts.out_now - facts.out_before
     if (way == "down" and more_days_out >= STOCK_OUT_DAYS) or (way == "up" and -more_days_out >= STOCK_OUT_DAYS):
-        found.append({"kind": "out_of_stock" if way == "down" else "back_in_stock",
-                      "days_now": facts.out_now, "days_before": facts.out_before})
+        reason = {"kind": "out_of_stock" if way == "down" else "back_in_stock",
+                  "days_now": facts.out_now, "days_before": facts.out_before}
+        # Only when it's really a sum over more than one: a single part in a single branch needs no "across ...".
+        for when, parts, branches in (
+            ("now", facts.out_now_parts, facts.out_now_branches), ("before", facts.out_before_parts, facts.out_before_branches),
+        ):
+            if parts > 1:
+                reason[f"days_{when}_parts"] = parts
+            if branches > 1:
+                reason[f"days_{when}_branches"] = branches
+        found.append(reason)
     if facts.price_now and facts.price_before:
         price_change = round(100 * (facts.price_now - facts.price_before) / facts.price_before)
         if (way == "down" and price_change >= PRICE_PERCENT) or (way == "up" and price_change <= -PRICE_PERCENT):
