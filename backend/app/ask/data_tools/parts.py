@@ -8,16 +8,21 @@ from app.ask.data_tools.context import CAR_NAME, PART, TEXT, TOP, TYPE_NAME, Ask
 from app.models import Part
 
 PART_PARAMS = {**PART, "oem": TEXT, "category": TEXT}
-FIND_PARTS_SPEC = {
-    "name": "find_parts",
-    "description": "Which parts the shop has: count, types, cars, brands, examples.",
+SPEC = {
+    "name": "parts",
+    "description": "Parts the shop has; prices and margin if allowed.",
     "parameters": {"type": "object", "properties": {**PART_PARAMS, **TOP}},
 }
-PRICES_SPEC = {
-    "name": "prices",
-    "description": "Sale price, cost, margin per part.",
-    "parameters": {"type": "object", "properties": {**PART_PARAMS, **TOP}},
-}
+
+
+def parts(asker: Asker, args: dict) -> ToolResult:
+    """What the shop has; for people who see money, each part's price, cost and margin instead of plain examples."""
+    found = find_parts(asker, args)
+    if not asker.sees_money:
+        return found
+    priced = prices(asker, args)
+    found.data.pop("examples")
+    return ToolResult({**found.data, "prices": priced.data["rows"]}, found.shown + priced.shown, found.heading)
 
 
 def find_parts(asker: Asker, args: dict) -> ToolResult:

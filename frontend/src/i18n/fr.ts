@@ -895,6 +895,8 @@ export const fr: typeof en = {
       last_30_days: "ces 30 derniers jours",
     },
     numberLabels: {
+      parts_at_risk: "Pièces en rupture avant l’arrivée d’une commande",
+      parts_out_now: "Déjà à zéro",
       pieces_sold: "Pièces vendues",
       sales_value: "Montant des ventes",
       from: "Du",
@@ -937,6 +939,7 @@ export const fr: typeof en = {
       purchase_orders: "Bons de commande",
     },
     numberLabelsAbout: {
+      days_left_about: (about: string) => `${about}, jours restants`,
       days_left: (about: string) => `${about}, jours restants`,
       days_late: (about: string) => `${about}, jours de retard`,
       sold_about: (about: string) => `${about}, pièces vendues`,
@@ -950,6 +953,10 @@ export const fr: typeof en = {
     },
     // Les recherches de l’assistant en ligne (backend/app/ask/data_tools), au-dessus de leurs chiffres.
     toolHeadings: {
+      parts: "Pièces",
+      why_sales: "Pourquoi les ventes ont changé",
+      running_out: "Ruptures avant l’arrivée d’une commande",
+      orders: "Commandes",
       find_parts: "Pièces trouvées",
       stock: "Stock",
       sales: "Ventes",
@@ -969,6 +976,7 @@ export const fr: typeof en = {
       compare: { previous_period: "vs la période d’avant", last_year: "vs l’an dernier" },
       only: { out: "en rupture", low: "stock bas", dead: "ne se vendent plus" },
       status: { draft: "brouillons", sent: "en route", late: "en retard", received: "reçus", all: "tous" },
+      show: { suggestions: "à commander", purchase_orders: "bons de commande", suppliers: "fournisseurs" },
       nextDays: (days: string) => `${days} prochains jours`,
     },
     assistant: {

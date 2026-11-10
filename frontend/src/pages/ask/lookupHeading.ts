@@ -21,5 +21,6 @@ export function lookupHeading(tool: string, filters: LookupFilters): string {
   if (filters.compare && words.compare[filters.compare]) pieces.push(words.compare[filters.compare]);
   if (filters.only && words.only[filters.only]) pieces.push(words.only[filters.only]);
   if (filters.status && words.status[filters.status]) pieces.push(words.status[filters.status]);
+  if (filters.show && words.show[filters.show]) pieces.push(words.show[filters.show]);
   return pieces.join(" · ");
 }

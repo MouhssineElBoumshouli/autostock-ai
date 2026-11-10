@@ -10,22 +10,27 @@ from app.ask.answer_parts import Number
 from app.ask.data_tools.context import PART, TEXT, TOP, Asker, ToolResult, asked_heading, branch_choice, part_choice, rows_wanted
 from app.models import Branch, OrderRun, OrderSuggestion, Part, PurchaseOrder, PurchaseOrderLine, Supplier
 
-ORDER_SUGGESTIONS_SPEC = {
-    "name": "order_suggestions",
-    "description": "What to order: the latest suggestion's lines, pieces, cost, reasons.",
-    "parameters": {"type": "object", "properties": {**PART, "branch": TEXT, "supplier": TEXT, **TOP}},
-}
-PURCHASE_ORDERS_SPEC = {
-    "name": "purchase_orders",
-    "description": "Purchase orders and deliveries (sent = on the way).",
+SPEC = {
+    "name": "orders",
+    "description": "suggestions (what to order), purchase_orders (sent = on the way), suppliers (delivery days).",
     "parameters": {"type": "object", "properties": {
-        "status": {"enum": ["draft", "sent", "late", "received", "all"]}, "supplier": TEXT, **TOP}},
+        "show": {"enum": ["suggestions", "purchase_orders", "suppliers"]}, **PART, "branch": TEXT, "supplier": TEXT,
+        "status": {"enum": ["draft", "sent", "late", "received", "all"]}, **TOP}},
 }
-SUPPLIERS_SPEC = {
-    "name": "suppliers",
-    "description": "Suppliers, delivery days, parts, orders on the way.",
-    "parameters": {"type": "object", "properties": {"name": TEXT}},
-}
+
+
+def orders(asker: Asker, args: dict) -> ToolResult:
+    show = args.get("show") if args.get("show") in ("purchase_orders", "suppliers") else "suggestions"
+    if show == "purchase_orders":
+        result = purchase_orders(asker, args)
+    elif show == "suppliers":
+        result = suppliers(asker, {"name": args.get("supplier")})
+    else:
+        result = order_suggestions(asker, args)
+    result.heading = {**result.heading, "show": show}
+    return result
+
+
 
 
 def order_suggestions(asker: Asker, args: dict) -> ToolResult:

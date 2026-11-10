@@ -4,6 +4,8 @@ from app.ask.sentences.shown import Shown
 from app.ask.why import SMALL_CHANGE_PERCENT
 
 FIXED = {
+    "busy": "L’assistant est occupé, réessayez dans une minute.",
+    "simple_cannot": "L’assistant en ligne n’est pas disponible pour le moment et la version simple de l’application ne sait pas répondre à cette question. Réessayez plus tard.",
     "refusal": "Je ne peux pas faire ça. Je lis seulement le stock, les ventes, les alertes, les commandes et les "
                "fournisseurs du magasin : je ne change jamais les données, je ne passe pas de commande, et je ne sais "
                "rien des clients ni du personnel.",

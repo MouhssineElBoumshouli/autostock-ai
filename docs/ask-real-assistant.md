@@ -90,3 +90,37 @@ Old: what his shop answered on 8 Nov. New: gpt-oss-120b on the copy of his shop,
 
 Old: 2 good, 5 not understood, 1 wrong. New: 7 right (3 of them thinner than they should be), 1 partial (right
 numbers, 2-day period), 1 blocked by the check, 1 wrong (a wrong reading, every number from a tool), 0 numbers made up. 25 Groq answers used on 9 Nov.
+
+## Owner's second trial and fixes (9 November 2026)
+
+He asked 5 questions in his shop: 1 good, 1 so-so, 3 bad. Two of the bad ones were not Groq at all: Groq said
+"busy" (its free limit is about 8 000 tokens a minute, an answer used about 3 900) and the old simple answers
+replied to a different question (1–3 Nov vs 1–3 Oct for "septembre et octobre") or refused the stock value.
+
+Fixed: Groq "busy" is waited for up to 20 s, then "L'assistant est occupé, réessayez dans une minute" (the simple
+answers never step in for "busy", and when Groq is offline they say "can't answer" rather than read a named month
+they don't know). New tools: `running_out` (stock vs 30-day forecast vs the supplier's delivery time, by supplier,
+with the app's "order first from") and `why_sales` (the app's own rules: stock-out days, price, same dates last
+year, alerts). Stock value per branch or type. Sales always come with the period before; whole months with whole
+months. The answer must be in the question's language, dates are written in words ("1er octobre"). A period
+with no sales imported gives the last 7 days of data and says to import the latest sales. Instructions and tool
+descriptions: 7 425 → 5 775 characters per request.
+
+Measured with 15 Groq answers (the 11 first, then 4 after fixes, on the copy of his shop):
+- **Tokens per answer:** median 3 330 (was 3 860 on the 50 questions; his 3 Groq answers that day: 2 903 to
+  6 841). So about 2.4 questions a minute fit Groq's free per-minute limit instead of 2; 0 "busy" in the 15
+  (asked 30 s apart).
+- Still wrong, found here and fixed after (tested, not re-measured — the 15 answers were used):
+  "pourquoi les plaquettes ont baissé ?" answered "elles ont baissé" when the data said up 3 % (the direction check
+  now reads why_sales: on the second try the check blocked it and the answer said "augmenté"); "cette semaine"
+  called one day "the 7 previous days" (the tool now says which days it really counted, and gives the last 7
+  days of data); "what to order first" named the supplier with the shortest delivery instead of the app's most
+  urgent one (the tool now names it).
+
+| Owner's question | Old answer (his shop) | New answer |
+|---|---|---|
+| Quelles sont mes 5 pièces les plus vendues en octobre ? | Huile moteur 10W40 5 L – 441, Filtre à huile – 421, … (good) | Huile moteur 10W40 5L (441), Filtre à huile (421), Huile moteur 10W40 5L (409), Huile moteur 5W30 5L (391), Plaquettes de frein arrière (373). (2nd ask; the 1st gave part types without pieces) |
+| Est-ce que je risque de manquer de batteries bientôt ? | « en rupture depuis 4 jours … 168 jours d'absence » (past stock-outs: wrong) | Oui : plusieurs références sont à zéro dans les trois agences, avec des livraisons de 18 à 35 jours. (right tool, but without its counts: 56 part-branches at risk, 27 empty) |
+| Combien d'argent j'ai en stock à Casablanca ? | « Je ne peux pas faire ça » (refused) | Vous avez 16 482 917,5 MAD en stock à Casablanca - Maarif. |
+| Which supplier should I order from first? | French, refused | Order first from Maghreb Auto Supply (the supplier for the out-of-stock Ampoule de phare H4 – Hyundai i10). (English; picked from the order suggestions, not the most urgent) |
+| Compare septembre et octobre. | 1–3 nov. vs 1–3 oct., −15 % (wrong question) | Septembre : 88 994 pièces, octobre : 92 032 pièces, +3 % (with values and margins). |

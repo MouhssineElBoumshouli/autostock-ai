@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 
 from app.db import SessionLocal
 from app.demo.demo_shop import create_demo_shop
-from app.demo.trial_files import shop_sku, write_files
+from app.demo.trial_files import RECENT_SALES, shop_sku, write_files, write_recent_sales
 from app.models import Part, PartEquivalent, SaleLine, StockLevel, Supplier
 from tests.helpers import set_up_shop
 from tests.import_helpers import send
@@ -174,3 +174,22 @@ def test_the_same_parts_file_again_with_delivery_times_only_fills_them_in(browse
     assert number_of(Part, shop_id) == parts_before and len(suppliers_delivery(shop_id)) == len(expected)
     with SessionLocal() as db:
         assert db.get(StockLevel, moved_id).quantity == moved_to - 40
+
+
+def test_recent_sales_continue_the_history_and_import_cleanly(browser, tmp_path):
+    """The owner's trial shop stops on its first day: "Ventes récentes" brings the days after it, like a daily file."""
+    since = date(2026, 6, 25)
+    with SessionLocal() as db:
+        seed, _ = create_demo_shop(db, LAST_DAY, parts_count=200, history_days=90, seed=7)
+        db.commit()
+        write_files(db, seed.id, tmp_path)
+        recent = write_recent_sales(db, seed.id, tmp_path, since)[RECENT_SALES]
+        expected = db.scalar(select(func.count()).select_from(SaleLine).where(SaleLine.organization_id == seed.id,
+                                                                              SaleLine.sold_on >= since))
+    set_up_shop(browser)
+    bring_in(browser, "parts", tmp_path / "Pièces.xlsx")
+    rows = (tmp_path / f"{RECENT_SALES}.csv").read_text(encoding="cp1252").splitlines()[1:]
+    assert recent == expected == len(rows) > 0
+    assert all(date(*reversed([int(piece) for piece in row.split(";")[0].split("/")])) >= since for row in rows)
+    summary = bring_in(browser, "sales", tmp_path / f"{RECENT_SALES}.csv")
+    assert summary["counts"]["new_sales"] == recent

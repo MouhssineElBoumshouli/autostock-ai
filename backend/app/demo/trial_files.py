@@ -1,13 +1,15 @@
 """Writes the realistic shop's data as the files a real shop would bring on its first day, to try
 the app the way a new customer does: an empty app, first setup, then these files.
 
-Run inside Docker:  docker compose exec api python -m app.demo.trial_files
+Run inside Docker:  docker compose exec api python -m app.demo.trial_files [--recent-from=YYYY-MM-DD]
 Writes into the trial/ folder next to this project (git-ignored):
   Pièces.xlsx        one row per part and branch: stock, supplier and its delivery time, prices,
                      pack size, minimum, OEM
   Ventes.csv         24 months of sales, the way Excel in French saves a CSV
   Ventes.xlsx        the same sales as an Excel file
   Équivalences.xlsx  which parts are the same part under another brand
+With --recent-from=2026-11-04, only "Ventes récentes" (.csv and .xlsx): the same shop's sales from that day up
+to yesterday, the daily file a real shop imports after its first day (its sales history then reaches yesterday).
 
 The same made-up data as the seed of app/demo/demo_shop.py, built in a transaction that is then
 undone: the database stays exactly as it was.
@@ -16,6 +18,7 @@ undone: the database stays exactly as it was.
 import csv
 import os
 import re
+import sys
 from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
@@ -103,15 +106,16 @@ def _write_parts(path: Path, parts: list[Part], suppliers: dict, stock: dict) ->
     return rows
 
 
-def _write_sales(folder: Path, db: Session, organization_id, parts: list[Part], branch_names: dict) -> int:
+def _write_sales(folder: Path, db: Session, organization_id, parts: list[Part], branch_names: dict,
+                 name: str = "Ventes", since: date | None = None) -> int:
     skus = {part.id: shop_sku(part.sku) for part in parts}
-    lines = db.execute(
-        select(SaleLine.sold_on, SaleLine.part_id, SaleLine.quantity, SaleLine.unit_price, SaleLine.branch_id)
-        .where(SaleLine.organization_id == organization_id)
-        .order_by(SaleLine.sold_on)
-    ).yield_per(10_000)
+    query = (select(SaleLine.sold_on, SaleLine.part_id, SaleLine.quantity, SaleLine.unit_price, SaleLine.branch_id)
+             .where(SaleLine.organization_id == organization_id).order_by(SaleLine.sold_on))
+    if since:
+        query = query.where(SaleLine.sold_on >= since)
+    lines = db.execute(query).yield_per(10_000)
     rows = 0
-    with open(folder / "Ventes.csv", "w", encoding="cp1252", newline="") as csv_file, open(folder / "Ventes.xlsx", "wb") as xlsx_file:
+    with open(folder / f"{name}.csv", "w", encoding="cp1252", newline="") as csv_file, open(folder / f"{name}.xlsx", "wb") as xlsx_file:
         writer = csv.writer(csv_file, delimiter=";")
         writer.writerow(SALES_HEADERS)
         book = Workbook(xlsx_file)
@@ -144,15 +148,26 @@ def _write_equivalents(path: Path, parts: list[Part]) -> int:
     return rows
 
 
+def write_recent_sales(db: Session, organization_id, folder: Path, since: date) -> dict[str, int]:
+    """Only the sales from `since` on, as "Ventes récentes" (the same shop, its history continued)."""
+    parts = db.scalars(select(Part).where(Part.organization_id == organization_id)).all()
+    branch_names = dict(db.execute(select(Branch.id, Branch.name).where(Branch.organization_id == organization_id)).all())
+    return {"Ventes récentes": _write_sales(folder, db, organization_id, parts, branch_names, RECENT_SALES, since)}
+
+
+RECENT_SALES = "Ventes récentes"
+
+
 def main() -> None:
     refuse_demo_in_production()
     started = perf_counter()
     folder = Path(os.environ.get("TRIAL_DIR", "trial"))
     folder.mkdir(parents=True, exist_ok=True)
+    recent = next((date.fromisoformat(arg.split("=", 1)[1]) for arg in sys.argv if arg.startswith("--recent-from=")), None)
     with SessionLocal() as db:
         shop, _ = create_demo_shop(db, last_day=date.today() - timedelta(days=1))
         db.flush()
-        counts = write_files(db, shop.id, folder)
+        counts = write_recent_sales(db, shop.id, folder, recent) if recent else write_files(db, shop.id, folder)
         db.rollback()  # the shop was only needed to write the files
     for name, rows in counts.items():
         print(f"{name}: {rows:,} rows")

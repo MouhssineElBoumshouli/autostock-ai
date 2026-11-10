@@ -900,6 +900,8 @@ export const ar: typeof en = {
       last_30_days: "خلال آخر 30 يومًا",
     },
     numberLabels: {
+      parts_at_risk: "قطع تنفد قبل وصول طلبية",
+      parts_out_now: "نفدت الآن",
       pieces_sold: "القطع المبيعة",
       sales_value: "قيمة المبيعات",
       from: "من",
@@ -942,6 +944,7 @@ export const ar: typeof en = {
       purchase_orders: "أوامر الشراء",
     },
     numberLabelsAbout: {
+      days_left_about: (about: string) => `${about}، الأيام المتبقية`,
       days_left: (about: string) => `${about}، الأيام المتبقية`,
       days_late: (about: string) => `${about}، أيام التأخير`,
       sold_about: (about: string) => `${about}، القطع المباعة`,
@@ -955,6 +958,10 @@ export const ar: typeof en = {
     },
     // عمليات البحث التي يقوم بها المساعد عبر الإنترنت (backend/app/ask/data_tools)، فوق أرقامها.
     toolHeadings: {
+      parts: "القطع",
+      why_sales: "لماذا تغيرت المبيعات",
+      running_out: "قطع تنفد قبل وصول طلبية",
+      orders: "الطلبيات",
       find_parts: "القطع الموجودة",
       stock: "المخزون",
       sales: "المبيعات",
@@ -974,6 +981,7 @@ export const ar: typeof en = {
       compare: { previous_period: "مقارنة بالفترة السابقة", last_year: "مقارنة بالسنة الماضية" },
       only: { out: "نفدت", low: "مخزون منخفض", dead: "لا تُباع" },
       status: { draft: "مسودات", sent: "في الطريق", late: "متأخرة", received: "مستلمة", all: "الكل" },
+      show: { suggestions: "ما يجب طلبه", purchase_orders: "أوامر الشراء", suppliers: "الموردون" },
       nextDays: (days: string) => `الأيام ${days} القادمة`,
     },
     assistant: {

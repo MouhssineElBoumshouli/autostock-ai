@@ -4,6 +4,8 @@ from app.ask.sentences.shown import Shown
 from app.ask.why import SMALL_CHANGE_PERCENT
 
 FIXED = {
+    "busy": "The assistant is busy, try again in a minute.",
+    "simple_cannot": "The online assistant isn’t available right now and the app’s simple version can’t answer this question. Try again later.",
     "refusal": "I can't do that. I only read your shop's stock, sales, alerts, orders and suppliers: "
                "I never change data or place orders, and I know nothing about customers or staff.",
     "not_understood": "I didn't understand that question. Try asking it another way, for example “stock of brake pads in Rabat”.",
