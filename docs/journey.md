@@ -191,6 +191,8 @@ Update this section as each step of `PLAN.md` is finished, so the final presenta
 
 - **Step 7e, after the owner's second trial (9 November 2026):** of 5 questions, 3 were bad: two were the old simple answers stepping in when Groq said "busy" and answering another question, one used past stock-outs for "will I run out". Now "busy" waits up to 20 s, then says so (never another question's answer); new tools for running out before a delivery arrives (and which supplier first) and for the app's own reasons why sales changed; stock value by branch; the question's language enforced; dates in words; a "Ventes récentes" trial file brings a shop up to yesterday. 15 Groq answers measured: tokens per answer 3 860 → 3 330, money in stock, supplier, September vs October now right; three remaining mistakes (a direction, a period mislabeled, the supplier ranking) fixed after, not re-measured (`docs/ask-real-assistant.md`).
 
+- **Confidence intervals and the English report (11 November 2026):** `app.demo.check_confidence` gives 95% intervals for the forecast scores (paired bootstrap over the 5,153 part-branch pairs, 2,000 resamples): the gain over the 4-week average is 8.4% [6.3, 10.4] at 7 days, 26.7% [24.2, 29.2] at 30 days and 37.5% [35.2, 39.7] at 60 days, so it is not luck. Every constant in the report's methods chapter was checked against the code. The internship report is now fully in English (`docs/internship-report.pdf`), and the README pictures are English screenshots.
+
 ## The design we kept
 
 The approved design direction, used for both versions:

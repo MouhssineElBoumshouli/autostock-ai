@@ -36,7 +36,7 @@ import and export company in Béni Mellal, as part of the engineering programme 
 
 | | |
 |---|---|
-| <img src="docs/images/search.jpg" width="430"><br>**Search that forgives typos** — "plaquete frein logan" finds Dacia Logan brake pads; part numbers in any format; synonyms in French, English, Arabic and Darija. | <img src="docs/images/part.jpg" width="430"><br>**One page per part** — stock per branch, forecast with its range, price, and equivalent parts from other brands. |
+| <img src="docs/images/search.jpg" width="430"><br>**Search that forgives typos** — "brak pads logan" finds Dacia Logan brake pads; part numbers in any format; synonyms in French, English, Arabic and Darija. | <img src="docs/images/part.jpg" width="430"><br>**One page per part** — stock per branch, forecast with its range, price, and equivalent parts from other brands. |
 | <img src="docs/images/order.jpg" width="430"><br>**What to order** — grouped by supplier, rounded to pack sizes, optional budget. Every line says why. Approve, edit or refuse; then print the purchase order. | <img src="docs/images/alerts.jpg" width="430"><br>**Daily alerts** — stock that does not match sales (negative stock, sold at zero, frozen stock) and unusual sales spikes or drops, at most 3 a day. |
 | <img src="docs/images/import.jpg" width="430"><br>**Import the shop's own files** — Excel or CSV, columns matched automatically, every refused line explained, up to about 2 million sales lines. | <img src="docs/images/ask.jpg" width="430"><br>**Ask your shop** — questions in plain words, answered from the shop's real numbers. Every number is checked, and the data used is shown under the answer. |
 
@@ -49,7 +49,7 @@ true future demand is known. These numbers show the method works on that shop; a
 
 | Question | Result |
 |---|---|
-| Better forecasts than a 4-week average? | **37% less error at 60 days**, 27% at 30 days, 8% at 7 days (WAPE vs true demand) |
+| Better forecasts than a 4-week average? | **37% less error at 60 days** (95% CI 35–40%), 27% at 30 days (24–29%), 8% at 7 days (6–10%) (WAPE vs true demand, paired bootstrap) |
 | Fewer lost sales for the same money in stock? | **5.5% of sales lost**, vs 8.1% for the classic reorder point and 16.4% for the "minimum stock" rule (182-day replay) |
 | Stock problems caught? | 24 of 24 planted problems, 0 false alerts |
 | Assistant answers right? | 42 of 50 right, 6 partly right, 1 wrong, 1 blocked by the number check |
@@ -60,7 +60,7 @@ true future demand is known. These numbers show the method works on that shop; a
 <img src="docs/images/forecast-error.jpg" width="440"> <img src="docs/images/orders-frontier.jpg" width="440">
 </p>
 
-Everything can be measured again with two commands (see [Demo shop and forecasts](#demo-shop-and-forecasts)).
+Everything can be measured again with three commands (see [Demo shop and forecasts](#demo-shop-and-forecasts)).
 
 ## How it works
 
@@ -78,7 +78,7 @@ Everything can be measured again with two commands (see [Demo shop and forecasts
 - **Ask.** An online model (Groq, free tier) calls the app's read-only tools, scoped to the shop and the person's role.
   It never sees the database. Every number in its answer must come from a tool result, or the answer is not shown.
 
-The full method, with formulas, is in the [internship report](docs/rapport-de-stage.pdf) (French).
+The full method, with formulas and confidence intervals, is in the [internship report](docs/internship-report.pdf).
 
 ## The story: from Odoo to a lean app
 
@@ -117,7 +117,7 @@ The full story, step by step: [docs/journey.md](docs/journey.md).
 
 ## Project documents
 
-- [Internship report (PDF, French)](docs/rapport-de-stage.pdf)
+- [Internship report (PDF)](docs/internship-report.pdf)
 - [Install guide for a shop (French, then English)](docs/INSTALL.md)
 - [Project journey](docs/journey.md) · [Plan](PLAN.md)
 
@@ -231,10 +231,12 @@ It is its own organization, marked as demo; running it again replaces it and nev
 ```
 docker compose exec api python -m app.demo.demo_shop
 docker compose exec api python -m app.demo.check_forecasts
+docker compose exec api python -m app.demo.check_confidence
 ```
 
 The first command prints a login for the demo shop (a new password each time).
 The second command remakes the demo shop's forecasts and scores them against the true demand the demo was made from.
+The third gives 95% confidence intervals for those scores (paired bootstrap over part-branch pairs, 2,000 resamples, about 2 minutes).
 Forecasts are remade by themselves after every sales import, or with `POST /api/forecasts/run` (owners and managers).
 
 To try the app like a new shop, this writes the same data as the files a real shop would have, into `trial/` (git-ignored, nothing is added to the database). `Pièces.xlsx` carries each supplier's delivery time; importing it into a shop that already has these parts only fills in the delivery times:

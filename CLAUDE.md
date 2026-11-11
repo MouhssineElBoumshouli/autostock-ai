@@ -41,7 +41,7 @@ Ask before adding any new library. Every dependency must earn its place.
 - All user-facing text lives in one place per language (`frontend/src/i18n/`), so French and Arabic can be added later. Start in English.
   One exception: Ask answers are written on the server in the question's own language (by the online assistant, or by `backend/app/ask/sentences/`, one file per language, when it is off).
 - Tests: every backend endpoint and every calculation gets a pytest test. Run tests before saying a task is done.
-- Keep docs short: `README.md` (what it is + how to run), `PLAN.md` (what's next), `docs/journey.md` (the project story), `docs/rapport-de-stage.pdf` (the internship report). No QA report files. The only images in git are the few compressed README pictures in `docs/images/`.
+- Keep docs short: `README.md` (what it is + how to run), `PLAN.md` (what's next), `docs/journey.md` (the project story), `docs/internship-report.pdf` (the internship report, in English). No QA report files. The only images in git are the few compressed README pictures in `docs/images/`.
 
 ## AI rules
 
