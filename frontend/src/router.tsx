@@ -1,68 +1,63 @@
-import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router'
-import { LazyDashboardRoute } from '@/routes/lazy-dashboard'
-import { LazyInventoryRoute } from '@/routes/lazy-inventory'
-import { LazyWarehouseDetailRoute, LazyWarehousesRoute } from '@/routes/lazy-warehouses'
-import { LazySupplierDetailRoute, LazySupplierGapsRoute, LazySuppliersRoute } from '@/routes/lazy-suppliers'
-import { LazyForecastDetailRoute, LazyForecastsRoute } from '@/routes/lazy-forecasts'
+import type { ReactNode } from "react";
+import { createBrowserRouter, type RouteObject } from "react-router";
 
-const rootRoute = createRootRoute({ component: Outlet })
-const dashboardRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/',
-  component: LazyDashboardRoute,
-})
-const inventoryRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/inventory',
-  component: LazyInventoryRoute,
-})
-const warehousesRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/warehouses',
-  component: LazyWarehousesRoute,
-})
-const warehouseDetailRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/warehouses/$warehouseId',
-  component: LazyWarehouseDetailRoute,
-})
-const suppliersRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/suppliers',
-  component: LazySuppliersRoute,
-})
-const supplierGapsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/suppliers/missing',
-  component: LazySupplierGapsRoute,
-})
-const supplierDetailRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/suppliers/$supplierId',
-  component: LazySupplierDetailRoute,
-})
+import { RequireLogin } from "@/components/RequireLogin";
+import { RequireRole } from "@/components/RequireRole";
+import { AppShell } from "@/components/shell/AppShell";
+import type { PageHandle } from "@/components/shell/navigation";
+import { ActivityPage } from "@/pages/ActivityPage";
+import { AlertsPage } from "@/pages/AlertsPage";
+import { AskPage } from "@/pages/ask/AskPage";
+import { ChangePasswordPage } from "@/pages/ChangePasswordPage";
+import { DesignPage } from "@/pages/design/DesignPage";
+import { HomePage } from "@/pages/HomePage";
+import { ImportPage } from "@/pages/import/ImportPage";
+import { LoginPage } from "@/pages/LoginPage";
+import { NotFoundPage } from "@/pages/NotFoundPage";
+import { OrdersPage } from "@/pages/orders/OrdersPage";
+import { PurchaseOrderPrintPage } from "@/pages/orders/PurchaseOrderPrintPage";
+import { SettingsPage } from "@/pages/SettingsPage";
+import { SetupPage } from "@/pages/SetupPage";
+import { StockPage } from "@/pages/stock/StockPage";
+import { TeamPage } from "@/pages/team/TeamPage";
 
-const validateForecastSearch = (search: Record<string, unknown>) => search.view === 'history'
-  ? { view: 'history' as const }
-  : search.view === 'parts' ? { view: 'parts' as const } : {}
+// The /design page is a tool for building screens, so it only exists while developing. It is public.
+const developmentRoutes: RouteObject[] = import.meta.env.DEV ? [{ path: "/design", element: <DesignPage /> }] : [];
 
-const forecastsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/forecasts',
-  validateSearch: validateForecastSearch,
-  component: LazyForecastsRoute,
-})
-const forecastDetailRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/forecasts/$runId',
-  validateSearch: validateForecastSearch,
-  component: LazyForecastDetailRoute,
-})
-
-export const router = createRouter({ routeTree: rootRoute.addChildren([dashboardRoute, inventoryRoute, warehousesRoute, warehouseDetailRoute, suppliersRoute, supplierGapsRoute, supplierDetailRoute, forecastsRoute, forecastDetailRoute]) })
-
-declare module '@tanstack/react-router' {
-  interface Register {
-    router: typeof router
-  }
+function page(path: string, element: ReactNode, title: PageHandle["title"]): RouteObject {
+  return { path, element, handle: { title } satisfies PageHandle };
 }
+
+export const router = createBrowserRouter([
+  // Outside the app frame: first-time setup, login, and the design page.
+  { path: "/setup", element: <SetupPage /> },
+  { path: "/login", element: <LoginPage /> },
+  ...developmentRoutes,
+  {
+    element: <RequireLogin />,
+    children: [
+      // The printable purchase order page: no sidebar or top bar, so printing only shows the order.
+      { path: "/orders/purchase-orders/:id/print", element: <PurchaseOrderPrintPage /> },
+      {
+        element: <AppShell />,
+        children: [
+          page("/", <HomePage />, "home"),
+          page("/ask", <AskPage />, "ask"),
+          page("/alerts", <AlertsPage />, "alerts"),
+          page("/change-password", <ChangePasswordPage />, "changePassword"),
+          page("/stock", <StockPage />, "stock"),
+          page("/orders", <OrdersPage />, "orders"),
+          {
+            element: <RequireRole roles={["owner", "manager"]} />,
+            children: [page("/activity", <ActivityPage />, "activity"), page("/stock/import", <ImportPage />, "importFile")],
+          },
+          {
+            element: <RequireRole roles={["owner"]} />,
+            children: [page("/team", <TeamPage />, "team"), page("/settings", <SettingsPage />, "settings")],
+          },
+          page("*", <NotFoundPage />, "notFound"),
+        ],
+      },
+    ],
+  },
+]);

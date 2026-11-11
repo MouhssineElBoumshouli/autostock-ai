@@ -1,35 +1,16 @@
-# Local credentials and environment overrides
 .env
-.env.*
-!.env.example
-docker-compose.override.yml
-.showroom/
-
-# Python
 __pycache__/
-*.py[cod]
-*.pyd
-.Python
+*.pyc
 .venv/
-venv/
-ENV/
 .pytest_cache/
-.coverage
-htmlcov/
-.ruff_cache/
-
-# Generated synthetic data and forecast output
-ml/output/
-
-# Editors and operating systems
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-
-# JavaScript dependencies and generated frontend files
 node_modules/
-frontend/dist/
-frontend/.vite/
-frontend/playwright-report/
-frontend/test-results/
+dist/
+.DS_Store
+*.log
+.playwright-mcp/
+backups/
+# Files for trying the app like a new shop: python -m app.demo.trial_files
+trial/
+
+# Measuring results of app/ask/check_real_assistant.py (summarised in docs, never committed)
+backend/check_results/

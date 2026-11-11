@@ -1,0 +1,119 @@
+"""Log in, log out, "who am I", and changing your own password."""
+
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.api.schemas import EmailText, Me, OrganizationOut, PasswordText, UserOut
+from app.audit import record_change
+from app.auth import login_limits
+from app.auth.passwords import check_password_rules, hash_password, password_matches
+from app.auth.permissions import require_role
+from app.auth.sessions import COOKIE_NAME, end_other_sessions, end_session, start_session
+from app.db import get_session, utc_now
+from app.models import Language, Organization, User
+
+router = APIRouter(prefix="/api/auth")
+
+WRONG_LOGIN = "Wrong email or password."
+TOO_MANY_TRIES = "Too many tries. Wait 15 minutes."
+ACCOUNT_OFF = "This account is deactivated. Ask your shop owner."
+
+
+class LoginRequest(BaseModel):
+    email: EmailText
+    password: PasswordText
+
+
+class LanguageChoice(BaseModel):
+    language: Language | None  # None = follow the shop's language
+
+
+class PasswordChange(BaseModel):
+    current_password: PasswordText
+    new_password: PasswordText
+
+
+def describe_me(db: Session, user: User) -> Me:
+    organization = db.get_one(Organization, user.organization_id)
+    return Me(
+        user=UserOut.of(user),
+        organization=OrganizationOut(
+            id=organization.id, name=organization.name, currency=organization.currency,
+            language=organization.language, is_demo=organization.is_demo,
+        ),
+    )
+
+
+@router.post("/login")
+def login(body: LoginRequest, response: Response, db: Session = Depends(get_session)) -> Me:
+    email = body.email.strip().lower()
+    if login_limits.is_blocked(db, email):
+        raise HTTPException(429, TOO_MANY_TRIES)
+
+    user = db.scalar(select(User).where(User.email == email))
+    if not password_matches(user.password_hash if user else None, body.password):
+        login_limits.record_failure(db, email, user.organization_id if user else None)
+        raise HTTPException(401, WRONG_LOGIN)
+    if not user.is_active:
+        raise HTTPException(403, ACCOUNT_OFF)
+
+    login_limits.clear_failures(db, email)
+    user.last_login_at = utc_now()
+    record_change(db, user, "user.logged_in", "user", user.id)
+    start_session(db, user, response)
+    db.commit()
+    return describe_me(db, user)
+
+
+@router.post("/logout", status_code=204)
+def logout(
+    response: Response,
+    db: Session = Depends(get_session),
+    token: str | None = Cookie(default=None, alias=COOKIE_NAME),
+) -> None:
+    end_session(db, token, response)
+
+
+@router.get("/me")
+def me(user: User = Depends(require_role(before_password_change=True)), db: Session = Depends(get_session)) -> Me:
+    return describe_me(db, user)
+
+
+@router.post("/password")
+def change_password(
+    body: PasswordChange,
+    user: User = Depends(require_role(before_password_change=True)),
+    db: Session = Depends(get_session),
+    token: str = Cookie(alias=COOKIE_NAME),
+) -> Me:
+    """Changes your own password. Other browsers where you are logged in are logged out."""
+    if login_limits.is_blocked(db, user.email):
+        raise HTTPException(429, TOO_MANY_TRIES)
+    if not password_matches(user.password_hash, body.current_password):
+        login_limits.record_failure(db, user.email, user.organization_id)
+        raise HTTPException(400, "Your current password is wrong.")
+    check_password_rules(body.new_password)
+    if body.new_password == body.current_password:
+        raise HTTPException(422, "Choose a password different from the current one.")
+
+    user.password_hash = hash_password(body.new_password)
+    user.must_change_password = False
+    end_other_sessions(db, user, token)
+    record_change(db, user, "user.password_changed", "user", user.id)
+    db.commit()
+    return describe_me(db, user)
+
+
+
+@router.put("/language")
+def choose_language(
+    body: LanguageChoice,
+    user: User = Depends(require_role(before_password_change=True)),
+    db: Session = Depends(get_session),
+) -> Me:
+    """Your own language. A personal preference, not shop data, so it isn't in the activity log."""
+    user.language = body.language
+    db.commit()
+    return describe_me(db, user)

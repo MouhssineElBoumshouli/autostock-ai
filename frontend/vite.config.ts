@@ -1,35 +1,21 @@
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import tailwindcss from '@tailwindcss/vite'
-import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vitest/config'
-import { loadEnv } from 'vite'
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
+import { defineConfig } from "vite";
 
-const projectDirectory = path.dirname(fileURLToPath(import.meta.url))
+// In Docker, the server runs in the "api" container. Requests to /api are forwarded there.
+const apiTarget = process.env.API_PROXY_TARGET ?? "http://localhost:8000";
 
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, projectDirectory, '')
-  const odooTarget = env.ODOO_PROXY_TARGET || 'http://127.0.0.1:8177'
-
-  return {
-    plugins: [react(), tailwindcss()],
-    resolve: {
-      alias: { '@': path.resolve(projectDirectory, 'src') },
-    },
-    server: {
-      host: '127.0.0.1',
-      port: 5173,
-      strictPort: true,
-      proxy: {
-        '/autostock/api': { target: odooTarget, changeOrigin: true },
-        '/web': { target: odooTarget, changeOrigin: true },
-      },
-    },
-    test: {
-      environment: 'node',
-      include: ['src/**/*.test.{ts,tsx}', 'tests/**/*.test.ts'],
-      restoreMocks: true,
-      clearMocks: true,
-    },
-  }
-})
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  // "@/components/..." means "src/components/...".
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
+  server: {
+    port: 5173,
+    strictPort: true,
+    proxy: { "/api": apiTarget },
+    // Docker Desktop on Windows does not always pass file-change events into containers,
+    // so we check for changes regularly instead. This keeps auto-reload working.
+    watch: { usePolling: true, interval: 300 },
+  },
+});

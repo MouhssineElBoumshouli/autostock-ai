@@ -1,79 +1,330 @@
+<div align="center">
+
 # AutoStock AI
 
-**An Odoo 19 Community addon for automotive inventory intelligence.**
+**Inventory and demand forecasting for auto parts shops.**
+Know what you have, what is selling, and what to order.
 
-Built as a new project concept for Bounaim Auto, separate from SmartImport. This is an Odoo development project, not a completed AI ERP. Phase 2 connects an evaluated demand forecaster to permission-aware Odoo history; forecasts remain decision support and are not automatic purchasing instructions.
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-TypeScript-61DAFB?logo=react&logoColor=black)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?logo=scikitlearn&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-one%20command-2496ED?logo=docker&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-822%20passing-2ea44f)
 
-![Approved UI direction](design/dashboard-concept.png)
+<img src="docs/images/home.jpg" alt="AutoStock AI home page" width="900">
 
-> The screenshot is an AI-generated **design concept**, not a capture of the running implementation. Its sample figures and claimed accuracy are illustrative and must not be treated as measured results.
+</div>
 
-## What is included now
+## Why
 
-- Local-only Docker Compose Odoo 19 + PostgreSQL environment.
-- Custom installable Odoo module `autostock_ai`, separate from Odoo core.
-- Automotive product metadata: OEM reference, priority, safety stock, planning lead time, enable/disable tracking.
-- React 19 + TypeScript frontend foundation under `frontend/`, with a new Odoo-backed Dashboard, company-aware product search, forecast preview, inventory health, and read-only restock preview. The old Owl dashboard remains unchanged while the replacement is reviewed; new screens will use the React client.
-- Odoo demand forecasts for 7, 30, or 60 days from a bounded history of completed customer deliveries and linked returns, with provenance, baseline metrics, explicit assumptions, and review status.
-- Read-only stock-risk and reorder guidance scoped to the active company and warehouse, using Odoo on-hand/reservations/open moves, native reordering rules and multiples, supplier lead times and explicitly maintained MOQ terms, and only fresh, fully evaluated, manager-reviewed exact-scope forecasts.
-- A scheduled worker evaluates queued forecasts; browser requests do not train models. Standard Odoo access rules and active-company scope apply.
-- A labeled synthetic demo that is isolated from Odoo sale, stock, and supplier records.
-- Offline **scikit-learn demand forecasting**, chronological holdout evaluation, trailing-mean / seasonal-naive / Croston SBA baselines, and clearly labeled heuristic ranges.
-- Python and Odoo integration tests, an isolated PostgreSQL 16 + Odoo 19 GitHub Actions job, and project/QA documentation.
+Most small auto parts shops in Morocco run their stock on Excel. They run out of the parts that sell and
+keep money stuck in parts that never move. AutoStock AI answers three questions every day:
 
-The React interface's first milestone intentionally contains the Dashboard only. It is backed by authenticated routes under `/autostock/api/v1/` and reuses Odoo's inventory, forecast, and risk services. See [frontend architecture](docs/FRONTEND_ARCHITECTURE.md) and the [React dashboard QA report](docs/qa/react-dashboard-foundation.md).
+1. **What do I have?** Stock per branch, in plain words: *In stock*, *Low stock*, *Out of stock*.
+2. **What is selling?** Sales forecasts for the next 7, 30 and 60 days, with an honest range.
+3. **What should I order?** Quantities per supplier, each with a one-line reason. A person approves every line.
 
-The Phase 3A recommendation screen is read-only. It does not create RFQs, purchase orders, or stock moves. When a reliable real forecast is absent, the screen either shows an explicitly labeled Odoo-policy baseline that excludes demand not yet recorded in Odoo, or withholds a numeric quantity when policy, permission, or source data is missing. Synthetic chart forecasts never feed real inventory guidance. Vendor price-break quantity and the separate AutoStock supplier MOQ are not treated as interchangeable. The [Phase 3A QA report](docs/qa/phase3a-risk-replenishment.md) records the integration, calculation, browser and visual checks.
+It starts from the Excel files a shop already has, runs on one shop PC, and is free.
 
-**Not implemented:** budget optimizer, what-if simulator, report generator, assistant, complete mockup-matching visual polish, production deployment, and comprehensive security review. Forecast demand is fulfilled-sales history, so stockouts can censor demand. A single chronological holdout and heuristic ranges do not establish calibrated real-world accuracy. AutoStock AI is not described as production-ready until the commercial release requirements have been completed and independently verified.
+This project grew out of a summer internship (July–August 2026, remote) with **Bounaim Auto**, a car parts
+import and export company in Béni Mellal, as part of the engineering programme at
+**EIDIA – Université Euromed de Fès**.
 
-## Start Odoo on Windows (Docker Desktop + WSL2)
+## What it does
 
-1. Install **Docker Desktop** and enable the WSL2 backend. Open a terminal in the project folder.
-2. Create `.env`: PowerShell `Copy-Item .env.example .env` (or bash `cp .env.example .env`). **Edit `.env` to set a strong unique POSTGRES_PASSWORD**. Do not commit this file.
-3. Start services: `docker compose up -d`
-4. Open **http://localhost:8069** (the port binds to `127.0.0.1` only). Create an Odoo database and choose your own database administrator credentials.
-5. In **Apps**, use *Update Apps List* (enable developer mode if needed). Search for **AutoStock AI — Inventory Intelligence** and install. Odoo's Inventory app will be installed as a dependency.
-6. Open **AutoStock AI → Automotive Inventory**, then create/edit products and enable **Track in AutoStock AI** on the product's **AutoStock AI** tab. Return to **AutoStock AI → Dashboard** and refresh.
+| | |
+|---|---|
+| <img src="docs/images/search.jpg" width="430"><br>**Search that forgives typos** — "plaquete frein logan" finds Dacia Logan brake pads; part numbers in any format; synonyms in French, English, Arabic and Darija. | <img src="docs/images/part.jpg" width="430"><br>**One page per part** — stock per branch, forecast with its range, price, and equivalent parts from other brands. |
+| <img src="docs/images/order.jpg" width="430"><br>**What to order** — grouped by supplier, rounded to pack sizes, optional budget. Every line says why. Approve, edit or refuse; then print the purchase order. | <img src="docs/images/alerts.jpg" width="430"><br>**Daily alerts** — stock that does not match sales (negative stock, sold at zero, frozen stock) and unusual sales spikes or drops, at most 3 a day. |
+| <img src="docs/images/import.jpg" width="430"><br>**Import the shop's own files** — Excel or CSV, columns matched automatically, every refused line explained, up to about 2 million sales lines. | <img src="docs/images/ask.jpg" width="430"><br>**Ask your shop** — questions in plain words, answered from the shop's real numbers. Every number is checked, and the data used is shown under the answer. |
 
-Useful commands: `docker compose ps`, `docker compose logs -f odoo`, `docker compose down`. **Do not** run `docker compose down -v` unless you mean to erase local database and filestore volumes.
+Also: French, English and Arabic (right to left) · works on desktop, tablet and phone · roles (owner, manager, staff — staff never see money) · every change logged · nightly checked backups · full Excel export.
 
-**Security:** This is local development only. Never deploy the container ports publicly or import Bounaim Auto's confidential records without explicit permission and security review. Odoo's web administrator, master DB password, permissions, secure sessions and backups must all be configured before production use. The Compose file is not a hardened production deployment.
+## Results
 
-## Run the offline AI research
+Measured on a realistic **simulated** shop (2,014 parts, 3 branches, 2 years and 838,738 sales lines) where the
+true future demand is known. These numbers show the method works on that shop; a trial in a real shop is the next step.
 
-With Python 3.11+ installed:
+| Question | Result |
+|---|---|
+| Better forecasts than a 4-week average? | **37% less error at 60 days**, 27% at 30 days, 8% at 7 days (WAPE vs true demand) |
+| Fewer lost sales for the same money in stock? | **5.5% of sales lost**, vs 8.1% for the classic reorder point and 16.4% for the "minimum stock" rule (182-day replay) |
+| Stock problems caught? | 24 of 24 planted problems, 0 false alerts |
+| Assistant answers right? | 42 of 50 right, 6 partly right, 1 wrong, 1 blocked by the number check |
+| Search finds the right part? | 88% first result, 98% in the top 3 (40 new searches) |
+| Fast on a big shop (50,000 parts, 20.9M sales lines)? | Stock and search pages 0.02–0.4 s; What to order 0.14 s |
 
-```bash
-python -m venv .venv
-# Activate the environment for your OS
-python -m pip install -r ml/requirements.txt
-python scripts/generate_synthetic_sales.py
-python -m ml.evaluate ml/output/synthetic_daily_sales.csv --days 30
-python -m pytest -q
+<p align="center">
+<img src="docs/images/forecast-error.jpg" width="440"> <img src="docs/images/orders-frontier.jpg" width="440">
+</p>
+
+Everything can be measured again with two commands (see [Demo shop and forecasts](#demo-shop-and-forecasts)).
+
+## How it works
+
+<p align="center"><img src="docs/images/architecture.jpg" width="760"></p>
+
+- **Forecasts.** Each part is classed by how it sells (smooth, erratic, slow, lumpy). For each class, several methods
+  compete on 12 past windows: 4-week average (the baseline), exponential smoothing, Croston, SBA, TSB and a global
+  gradient-boosting model (scikit-learn). A method is used only if it beats the baseline by at least 5%.
+  Stock-out days count as unknown demand, never as zero sales. Ranges are tuned to hold the real sale about 8 times in 10.
+- **Orders.** Plain maths, not a language model: cover the supplier's delivery time plus one week, add a safety margin
+  from the forecast range (90% service target), subtract stock and open orders, round to the pack size.
+  With a budget, keep the lines that avoid the most lost profit per dirham.
+- **Alerts.** Fixed rules for stock problems; a Poisson / negative-binomial test for unusual sales, with thresholds
+  tuned on a separate simulated shop.
+- **Ask.** An online model (Groq, free tier) calls the app's read-only tools, scoped to the shop and the person's role.
+  It never sees the database. Every number in its answer must come from a tool result, or the answer is not shown.
+
+The full method, with formulas, is in the [internship report](docs/rapport-de-stage.pdf) (French).
+
+## The story: from Odoo to a lean app
+
+<p align="center"><img src="docs/images/odoo-to-lean.jpg" width="760"></p>
+
+**Version 1 (9–17 October 2026)** was an add-on for **Odoo 19**, the open-source business system:
+forecasts at 7/30/60 days (random forest vs baselines and Croston), stock-risk warnings, read-only reorder
+suggestions, and a React site on top. After 9 days we stopped:
+
+- **Heavy to build** — most of the work went into the platform. About 25 pull requests were only about loading demo
+  data into Odoo or fixing the Windows setup; about 5,800 lines of code just loaded test data.
+- **Heavy to adopt** — a shop would need a whole business system to use the app, while most small parts shops use Excel.
+- **Too complicated** — Odoo's rules pulled the screens away from a design a normal employee can use.
+- **Key features missing** — purchase orders, budgets, the assistant, PDF output, French and Arabic.
+
+**Version 2 (17 October – 10 November 2026)** is this repository: FastAPI + PostgreSQL + React, no ERP, fed
+directly by the shop's Excel files. It is faster to install (one command), simpler to use, easier to change,
+and covers far more: import, search, orders and budgets, alerts, the assistant, three languages, backups and export.
+
+The Odoo version is kept untouched on the
+[`archive/odoo-v0`](https://github.com/MouhssineElBoumshouli/autostock-ai/tree/archive/odoo-v0) branch
+([screenshot](https://github.com/MouhssineElBoumshouli/autostock-ai/blob/archive/odoo-v0/docs/qa/screenshots/issue-34-gate-7-employee-first/forecasts-by-part-30-day-1440.png)).
+The full story, step by step: [docs/journey.md](docs/journey.md).
+
+## Built with
+
+| Part | Tools |
+|---|---|
+| Website | React, TypeScript, Vite, Tailwind CSS, shadcn/ui, TanStack Query, Recharts — Material Design 3 style |
+| Server | Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Pydantic |
+| Database | PostgreSQL 16 (with `pg_trgm` for typo-tolerant search) |
+| Forecasting | NumPy, scikit-learn |
+| Assistant | Groq (`openai/gpt-oss-120b`, free tier), optional local model through Ollama |
+| Running | Docker Compose — one command, nightly backups |
+| Quality | 822 automated tests (pytest) |
+
+## Project documents
+
+- [Internship report (PDF, French)](docs/rapport-de-stage.pdf)
+- [Install guide for a shop (French, then English)](docs/INSTALL.md)
+- [Project journey](docs/journey.md) · [Plan](PLAN.md)
+
+## Authors
+
+- **Mouhssine El Boumshouli** — architecture, back-end, website and design
+- **Badr Lasri** — internship and company relationship, mathematical methods and statistical evaluation
+
+Engineering students at EIDIA, Université Euromed de Fès. Internship supervisor: M. Habib Ouayloul (Bounaim Auto).
+Built with the help of an AI coding assistant (Claude Code).
+
+---
+
+# Developer guide
+
+## Install it in a shop
+
+**[docs/INSTALL.md](docs/INSTALL.md)** (French, then English): one PC in the shop, the other computers
+and phones open it on the shop network. In short:
+
+```
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-Check `ml/output/forecast.json` for, per SKU: selected approach, chronological holdout MAE for the ML model and baseline, and daily predictions. This is **synthetic-data evaluation only**; the result is not a real business forecast. Forecast runs require at least 90 days of covered history. Error bands are heuristic, not calibrated confidence intervals. A single holdout and a small synthetic generator are insufficient proof of real-world accuracy.
+Production mode (`docker-compose.prod.yml`): one container serves the built website and `/api` on
+port 8080, with no reload, no `/api/docs`, no `/design`; a strong database password is required;
+every service restarts by itself; a daily checked backup goes to the `backups` folder; an update
+backs up first. The commands in this README (`docker compose up`) are for developing only.
 
-For the Odoo flow, install the addon, configure the earliest date with verified complete sales history on the company (or selected warehouse), and use **AutoStock AI → Dashboard → Demand forecast**. A stock manager can mark a completed run as reviewed. Synthetic demo runs can be removed from a local development database with the scoped cleanup steps in [the Phase 2 QA report](docs/qa/phase2-demand-forecast.md).
+## Run it on Windows (developing)
 
-## Milestones
+1. Install and open **Docker Desktop**. Wait until it says "Engine running".
+2. Open a terminal (PowerShell or Command Prompt) in this folder.
+3. Optional: copy the settings file and change the database password.
+   ```
+   copy .env.example .env
+   ```
+   Do this before the first start. The database keeps the password it was created with.
+4. Start everything:
+   ```
+   docker compose up
+   ```
+   The first start downloads and builds images. It takes a few minutes. Later starts take seconds.
+5. Open **http://localhost:5173**. The first time, you see **Set up your shop**: enter the shop name,
+   your name, email and a password (10+ characters). You become the owner and are logged in.
+   Setup only works once. After that, everyone logs in at http://localhost:5173/login.
 
-1. **Foundation:** Odoo project setup, read-only inventory dashboard, product metadata, offline ML experiment, tests, design/spec. Validated in PR #1.
-2. **Data & ML:** completed delivery/return aggregation, provenance, chronological baseline evaluation, permission-aware forecast storage, scheduled worker, forecast chart, and synthetic demo. Implemented in Phase 2; see the [QA report](docs/qa/phase2-demand-forecast.md) for evidence and limitations.
-3. **Decision tools:** stockout-risk analysis and read-only, human-reviewable reorder guidance delivered in Phase 3A; constraint-based budget optimizer and what-if simulation remain later milestones.
-4. **AI explanations & reports:** controlled read-only natural-language queries; print-quality PDF management report with executive summary, evidence, tables, forecasts, assumptions, and a technical appendix.
-5. **Experience & release quality:** implement the full approved design consistently throughout Odoo; keyboard/mobile/accessibility checks, end-to-end tests, backup and operational documentation.
+Stop with `Ctrl+C`, or `docker compose down` from another terminal.
+Your data stays in a Docker volume. `docker compose down -v` deletes it.
 
-See [CODEX_START_HERE.md](CODEX_START_HERE.md), [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md), and [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+## What runs
 
-## Source references
+| Service | What it is | Address |
+|---------|------------|---------|
+| `web` | The website (React + Vite) | http://localhost:5173 |
+| `api` | The server (FastAPI) | reached through the website at `/api`, e.g. http://localhost:5173/api/health |
+| `db`  | The database (PostgreSQL 16) | inside Docker only |
 
-- [Odoo 19 developer documentation](https://www.odoo.com/documentation/19.0/developer.html)
-- [Odoo 19 client actions](https://www.odoo.com/documentation/19.0/developer/howtos/javascript_client_action.html)
-- [Odoo 19 replenishment (existing native behavior)](https://www.odoo.com/documentation/19.0/applications/inventory_and_mrp/inventory/warehouses_storage/replenishment.html)
-- [Official Odoo Docker image / addon mounts](https://github.com/odoo/docker-docs/blob/master/odoo/content.md)
+Server API docs: http://localhost:5173/api/docs
 
-## Academic and business integrity
+Design system (every button, card, table… in one page): http://localhost:5173/design
+It only exists while developing. New screens are built from these pieces.
+Colors, sizes and corners are defined once, in `frontend/src/index.css`.
 
-SmartImport was completed during the Bounaim Auto internship from **1 July to 26 August 2026**. AutoStock AI is a **new, later project**. Its work and dates must be accurately disclosed in any university presentation; confirm that new work is eligible for inclusion. Synthetic reports and model results must be labeled as such. Do not claim Bounaim Auto adopted or approved the software without authorization.
+Code changes reload by themselves: save a file in `frontend/` or `backend/` and the page or server updates.
+If you change `package.json`, `requirements.txt` or a `Dockerfile`, run `docker compose up --build`.
+
+## Accounts
+
+- Roles: **owner** (manages the team), **manager**, **staff**. Owners add people on the **Team** page with a temporary password.
+- Someone with a temporary password (new, or reset by an owner) must choose their own right after logging in.
+- Anyone can change their password from the menu under their name (bottom of the sidebar). This logs them out on their other devices.
+- 5 wrong passwords for one email within 15 minutes block that email for 15 minutes.
+- A login lasts until 7 days without use. Every change to people or settings is written to the `audit_log` table.
+
+## Pages
+
+| Page | Who sees it | What it shows |
+|------|-------------|---------------|
+| Home | everyone | greeting, stock numbers and low stock (once there are parts), last 5 events (owners and managers) |
+| Stock | everyone (owners and managers can edit) | all parts with search, filters, sorting and a detail panel per part |
+| Import | owners, managers | bring parts, stock and sales in from Excel (.xlsx) or CSV, in 4 steps |
+| Activity | owners, managers | the shop's history in plain sentences, 25 per page, filter by person and type |
+| Team | owners | add people, change roles, reset passwords, deactivate |
+| Settings | owners | shop name, currency (MAD, EUR or USD), language, backups (installed version), branches, suppliers, search words, orders |
+
+## Tests
+
+With the app running, in another terminal:
+
+```
+docker compose exec api pytest
+```
+
+This skips the one `slow` test, which builds and forecasts the full ~2,000-part demo shop (a few
+minutes on its own). Run it with:
+
+```
+docker compose exec api pytest -m slow
+```
+
+Tests use their own database (`autostock_test`), so they never touch your data.
+Example import files (a messy French one and a clean English one per kind) are in `backend/tests/fixtures/`.
+They are only for tests; `python tests/fixtures/make_fixtures.py` (inside the api container) rebuilds them.
+
+## Demo shop and forecasts
+
+A made-up demo shop (about 2,000 parts, 3 branches, 24 months of sales) to try forecasts on.
+It is its own organization, marked as demo; running it again replaces it and never touches a real shop.
+
+```
+docker compose exec api python -m app.demo.demo_shop
+docker compose exec api python -m app.demo.check_forecasts
+```
+
+The first command prints a login for the demo shop (a new password each time).
+The second command remakes the demo shop's forecasts and scores them against the true demand the demo was made from.
+Forecasts are remade by themselves after every sales import, or with `POST /api/forecasts/run` (owners and managers).
+
+To try the app like a new shop, this writes the same data as the files a real shop would have, into `trial/` (git-ignored, nothing is added to the database). `Pièces.xlsx` carries each supplier's delivery time; importing it into a shop that already has these parts only fills in the delivery times:
+
+```
+docker compose exec api python -m app.demo.trial_files
+```
+
+A shop tried with these files stops on the day they were made. To bring it up to yesterday the way a real shop does
+with its daily file, this writes only `Ventes récentes.csv` / `.xlsx` (the same sales, from the day given to
+yesterday), to import on the Import page:
+
+```
+docker compose exec api python -m app.demo.trial_files --recent-from=2026-11-04
+```
+
+### Big test shop (speed checks only)
+
+A second made-up shop, never shown in the presentation: 50,000 parts, 3 branches, 2 years of sales
+with the same mix as the demo (about 21 million sales lines). It replaces only itself, never the demo
+or a real shop. Making it takes about 15 minutes; then time every page (20 tries each):
+
+```
+docker compose exec api python -m app.demo.big_shop
+docker compose run --rm -e CHECK_PASSWORD=<printed password> api python -m app.demo.check_speed --url http://api:8000 --email big@autostock.local
+```
+
+Add `--actions` to also time the order buttons (adds suggestions and a purchase order to that shop),
+or `--while-forecasting` to start a forecast run and time a few pages while it works.
+
+## Ask your shop (optional local AI)
+
+The app always writes the answers itself, in the question's language (English, French, or Arabic,
+also for Darija questions), from the shop's real numbers. Without AI, questions are read by simple
+keyword rules ("stock of brake pads in Rabat"); nothing extra is needed, and the Ask page says so at
+the top. With the free local AI (Ollama, model `qwen3:4b-instruct`, about 2.5 GB downloaded once,
+nothing leaves the computer), the model reads questions asked in any words and follow-ups
+("and in Rabat?", "et le mois dernier ?"). Each person's last 20 questions are kept and shown again.
+
+On a computer with an NVIDIA graphics card (much faster), start it with:
+
+```
+docker compose --profile ai-gpu up
+```
+
+Without one: `docker compose --profile ai up` (works, but answers take much longer).
+
+**Close heavy apps (games, animated wallpapers, many browser tabs) before using it on a 4 GB
+graphics card.** Windows and open apps already use part of the card's memory; if the model doesn't
+fit, part of it runs on the processor and answers get several times slower. Check with
+`docker compose exec ollama-gpu ollama ps`: the PROCESSOR column should say mostly GPU. If it says
+100% CPU even with apps closed, restart the AI once: `docker compose --profile ai-gpu restart ollama-gpu`.
+
+To score the reading on the 60 open test questions (good answers, refusals, seconds):
+
+```
+docker compose exec api python -m app.ask.check_assistant qwen3:4b-instruct --misses
+```
+
+### The online assistant (Groq, free) — the best answers
+
+With a free Groq key, Ask becomes a real assistant: Groq's `openai/gpt-oss-120b` understands any
+question, looks things up with the app's read-only tools (stock, sales over any period, stock-outs,
+forecasts, orders, alerts, suppliers, prices) and answers in the question's language. Every number in
+its answer is checked against what the tools returned; the lookups are shown under "Based on".
+**What is sent to Groq:** the question, the conversation and the tool results — never the database,
+never passwords (Groq does not train on them). Staff never get money. Without internet, or once the
+free daily limit is reached, one line says so and the app answers itself as above. Results and
+limits: `docs/ask-real-assistant.md`.
+
+1. Make a free account at https://console.groq.com and create an API key ("API Keys").
+2. Put it in `.env`: `GROQ_API_KEY=gsk_...` (never in git), then `docker compose up -d` again.
+3. It is on by default; the owner can turn it off in **Settings → Online assistant**, which also shows
+   how many answers are left today.
+
+To score it on the 50 questions about the owner's trial shop (needs a copy of that shop):
+`docker compose exec api python -m app.ask.check_real_assistant` (add `--owner` for his 10 questions).
+
+## Database changes
+
+Database changes (migrations) live in `backend/migrations/versions/` and run automatically when the server starts.
+To create a new one after changing tables:
+
+```
+docker compose exec api alembic revision --autogenerate -m "describe the change"
+```
+
+## If something goes wrong
+
+- **Port 5173 is already in use**: set another port in `.env`, e.g. `WEB_PORT=5174` and `APP_URL=http://localhost:5174`, then open that port.
+- **"This request did not come from the AutoStock website"**: `APP_URL` in `.env` must be exactly the address in your browser bar.
+- **Start over with an empty shop**: `docker compose down -v`, then `docker compose up` (this deletes all data).
+- **Badge says "Can't reach server"**: run `docker compose logs api` to see the server's error.

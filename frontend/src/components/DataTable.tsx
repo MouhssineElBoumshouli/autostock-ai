@@ -1,0 +1,194 @@
+import { cn } from "cn";
+import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon } from "lucide-react";
+import type { KeyboardEvent, ReactNode } from "react";
+
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+export type Column<Row> = {
+  header: string;
+  cell: (row: Row) => ReactNode;
+  /** "end" for numbers, so digits line up. */
+  align?: "start" | "end";
+  /** The column used as the title of each card on phones. Exactly one column should set this. */
+  primary?: boolean;
+  /** Set to make the column sortable: clicking its header sorts by this key. */
+  sortKey?: string;
+  /** Extra classes for the table's own `<th>`/`<td>` (e.g. "hidden xl:table-cell" to free up
+   * space on a tablet). Phone cards always show every column, since they stack instead of
+   * stretching sideways. */
+  className?: string;
+};
+
+export type TableSort = { key: string; direction: "asc" | "desc" };
+
+const loadingRowCount = 4;
+
+// A table on tablets and computers. On phones, each row becomes a small card,
+// so nobody has to scroll sideways.
+export function DataTable<Row>({
+  columns,
+  rows,
+  rowKey,
+  loading = false,
+  sort,
+  onSort,
+  onRowClick,
+}: {
+  columns: Column<Row>[];
+  rows: Row[];
+  rowKey: (row: Row) => string;
+  loading?: boolean;
+  sort?: TableSort;
+  onSort?: (sort: TableSort) => void;
+  /** Makes the whole row (or card, on phones) open it, not just one cell. */
+  onRowClick?: (row: Row) => void;
+}) {
+  const primary = columns.find((column) => column.primary) ?? columns[0];
+  const details = columns.filter((column) => column !== primary);
+
+  // Mouse, tap or keyboard (Enter/Space) on the row opens it, not just one cell inside it.
+  function activation(row: Row) {
+    if (!onRowClick) return {};
+    return {
+      onClick: () => onRowClick(row),
+      onKeyDown: (event: KeyboardEvent) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onRowClick(row);
+        }
+      },
+      tabIndex: 0,
+    };
+  }
+
+  return (
+    <div aria-busy={loading || undefined} className="min-w-0">
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              {columns.map((column) => {
+                const sorted = sort && column.sortKey === sort.key ? sort.direction : undefined;
+                return (
+                  <TableHead
+                    key={column.header}
+                    className={alignClass(column)}
+                    aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : undefined}
+                  >
+                    {column.sortKey && onSort ? (
+                      <SortButton
+                        label={column.header}
+                        direction={sorted}
+                        alignEnd={column.align === "end"}
+                        onClick={() =>
+                          onSort({ key: column.sortKey!, direction: sorted === "asc" ? "desc" : "asc" })
+                        }
+                      />
+                    ) : (
+                      column.header
+                    )}
+                  </TableHead>
+                );
+              })}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading
+              ? range(loadingRowCount).map((index) => (
+                  <TableRow key={index}>
+                    {columns.map((column) => (
+                      <TableCell key={column.header} className={column.className}>
+                        <Skeleton className={cn("h-4 w-20", column.align === "end" && "ms-auto w-12")} />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              : rows.map((row) => (
+                  <TableRow
+                    key={rowKey(row)}
+                    className={cn(onRowClick && "cursor-pointer outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary")}
+                    {...activation(row)}
+                  >
+                    {columns.map((column) => (
+                      <TableCell key={column.header} className={alignClass(column)}>
+                        {column.cell(row)}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <ul className="divide-y border-t md:hidden">
+        {loading
+          ? range(loadingRowCount).map((index) => (
+              <li key={index} className="grid gap-3 px-6 py-4">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+              </li>
+            ))
+          : rows.map((row) => (
+              <li
+                key={rowKey(row)}
+                className={cn(
+                  "grid grid-cols-1 gap-3 px-6 py-4",
+                  onRowClick && "cursor-pointer outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
+                )}
+                {...activation(row)}
+              >
+                <div className="text-title-medium">{primary.cell(row)}</div>
+                <dl className="grid gap-2">
+                  {details.map((column) => (
+                    <div key={column.header} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                      <dt className="text-body-small text-on-surface-variant">{column.header}</dt>
+                      <dd className={cn("min-w-0 text-end", column.align === "end" && "tabular-nums")}>{column.cell(row)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </li>
+            ))}
+      </ul>
+    </div>
+  );
+}
+
+// Number columns line up at the end, with same-width digits.
+// Clicking a header sorts by it; clicking again flips the order.
+function SortButton({
+  label,
+  direction,
+  alignEnd,
+  onClick,
+}: {
+  label: string;
+  direction?: "asc" | "desc";
+  alignEnd: boolean;
+  onClick: () => void;
+}) {
+  const Icon = direction === "asc" ? ArrowUpIcon : direction === "desc" ? ArrowDownIcon : ChevronsUpDownIcon;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "-mx-1 inline-flex items-center gap-1 rounded-xs px-1 py-0.5 hover:text-on-surface",
+        direction && "text-on-surface",
+        alignEnd && "flex-row-reverse",
+      )}
+    >
+      {label}
+      <Icon aria-hidden="true" className={cn("size-3.5", !direction && "opacity-50")} />
+    </button>
+  );
+}
+
+function alignClass(column: { align?: "start" | "end"; className?: string }) {
+  return cn(column.align === "end" ? "text-end tabular-nums" : "text-start", column.className);
+}
+
+function range(count: number) {
+  return Array.from({ length: count }, (_, index) => index);
+}
