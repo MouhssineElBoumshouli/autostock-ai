@@ -11,7 +11,7 @@ Know what you have, what is selling, and what to order.
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?logo=scikitlearn&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-one%20command-2496ED?logo=docker&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-822%20passing-2ea44f)
+![Tests](https://img.shields.io/badge/tests-826%20passing-2ea44f)
 
 <img src="docs/images/home.jpg" alt="AutoStock AI home page" width="900">
 
@@ -113,7 +113,7 @@ The full story, step by step: [docs/journey.md](docs/journey.md).
 | Forecasting | NumPy, scikit-learn |
 | Assistant | Groq (`openai/gpt-oss-120b`, free tier), optional local model through Ollama |
 | Running | Docker Compose — one command, nightly backups |
-| Quality | 822 automated tests (pytest) |
+| Quality | 826 automated tests (pytest) |
 
 ## Project documents
 
