@@ -1,13 +1,137 @@
+<div align="center">
+
 # AutoStock AI
 
-Inventory and demand forecasting for auto parts shops.
+**Inventory and demand forecasting for auto parts shops.**
 Know what you have, what is selling, and what to order.
 
-Being rebuilt from scratch. See `PLAN.md` for progress.
-The old Odoo-based version is kept on the `archive/odoo-v0` branch. Why we rebuilt: [docs/journey.md](docs/journey.md).
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-TypeScript-61DAFB?logo=react&logoColor=black)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?logo=scikitlearn&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-one%20command-2496ED?logo=docker&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-822%20passing-2ea44f)
 
-![Approved design concept](design/dashboard-concept.png)
+<img src="docs/images/home.jpg" alt="AutoStock AI home page" width="900">
 
+</div>
+
+## Why
+
+Most small auto parts shops in Morocco run their stock on Excel. They run out of the parts that sell and
+keep money stuck in parts that never move. AutoStock AI answers three questions every day:
+
+1. **What do I have?** Stock per branch, in plain words: *In stock*, *Low stock*, *Out of stock*.
+2. **What is selling?** Sales forecasts for the next 7, 30 and 60 days, with an honest range.
+3. **What should I order?** Quantities per supplier, each with a one-line reason. A person approves every line.
+
+It starts from the Excel files a shop already has, runs on one shop PC, and is free.
+
+This project grew out of a summer internship (July–August 2026, remote) with **Bounaim Auto**, a car parts
+import and export company in Béni Mellal, as part of the engineering programme at
+**EIDIA – Université Euromed de Fès**.
+
+## What it does
+
+| | |
+|---|---|
+| <img src="docs/images/search.jpg" width="430"><br>**Search that forgives typos** — "plaquete frein logan" finds Dacia Logan brake pads; part numbers in any format; synonyms in French, English, Arabic and Darija. | <img src="docs/images/part.jpg" width="430"><br>**One page per part** — stock per branch, forecast with its range, price, and equivalent parts from other brands. |
+| <img src="docs/images/order.jpg" width="430"><br>**What to order** — grouped by supplier, rounded to pack sizes, optional budget. Every line says why. Approve, edit or refuse; then print the purchase order. | <img src="docs/images/alerts.jpg" width="430"><br>**Daily alerts** — stock that does not match sales (negative stock, sold at zero, frozen stock) and unusual sales spikes or drops, at most 3 a day. |
+| <img src="docs/images/import.jpg" width="430"><br>**Import the shop's own files** — Excel or CSV, columns matched automatically, every refused line explained, up to about 2 million sales lines. | <img src="docs/images/ask.jpg" width="430"><br>**Ask your shop** — questions in plain words, answered from the shop's real numbers. Every number is checked, and the data used is shown under the answer. |
+
+Also: French, English and Arabic (right to left) · works on desktop, tablet and phone · roles (owner, manager, staff — staff never see money) · every change logged · nightly checked backups · full Excel export.
+
+## Results
+
+Measured on a realistic **simulated** shop (2,014 parts, 3 branches, 2 years and 838,738 sales lines) where the
+true future demand is known. These numbers show the method works on that shop; a trial in a real shop is the next step.
+
+| Question | Result |
+|---|---|
+| Better forecasts than a 4-week average? | **37% less error at 60 days**, 27% at 30 days, 8% at 7 days (WAPE vs true demand) |
+| Fewer lost sales for the same money in stock? | **5.5% of sales lost**, vs 8.1% for the classic reorder point and 16.4% for the "minimum stock" rule (182-day replay) |
+| Stock problems caught? | 24 of 24 planted problems, 0 false alerts |
+| Assistant answers right? | 42 of 50 right, 6 partly right, 1 wrong, 1 blocked by the number check |
+| Search finds the right part? | 88% first result, 98% in the top 3 (40 new searches) |
+| Fast on a big shop (50,000 parts, 20.9M sales lines)? | Stock and search pages 0.02–0.4 s; What to order 0.14 s |
+
+<p align="center">
+<img src="docs/images/forecast-error.jpg" width="440"> <img src="docs/images/orders-frontier.jpg" width="440">
+</p>
+
+Everything can be measured again with two commands (see [Demo shop and forecasts](#demo-shop-and-forecasts)).
+
+## How it works
+
+<p align="center"><img src="docs/images/architecture.jpg" width="760"></p>
+
+- **Forecasts.** Each part is classed by how it sells (smooth, erratic, slow, lumpy). For each class, several methods
+  compete on 12 past windows: 4-week average (the baseline), exponential smoothing, Croston, SBA, TSB and a global
+  gradient-boosting model (scikit-learn). A method is used only if it beats the baseline by at least 5%.
+  Stock-out days count as unknown demand, never as zero sales. Ranges are tuned to hold the real sale about 8 times in 10.
+- **Orders.** Plain maths, not a language model: cover the supplier's delivery time plus one week, add a safety margin
+  from the forecast range (90% service target), subtract stock and open orders, round to the pack size.
+  With a budget, keep the lines that avoid the most lost profit per dirham.
+- **Alerts.** Fixed rules for stock problems; a Poisson / negative-binomial test for unusual sales, with thresholds
+  tuned on a separate simulated shop.
+- **Ask.** An online model (Groq, free tier) calls the app's read-only tools, scoped to the shop and the person's role.
+  It never sees the database. Every number in its answer must come from a tool result, or the answer is not shown.
+
+The full method, with formulas, is in the [internship report](docs/rapport-de-stage.pdf) (French).
+
+## The story: from Odoo to a lean app
+
+<p align="center"><img src="docs/images/odoo-to-lean.jpg" width="760"></p>
+
+**Version 1 (9–17 October 2026)** was an add-on for **Odoo 19**, the open-source business system:
+forecasts at 7/30/60 days (random forest vs baselines and Croston), stock-risk warnings, read-only reorder
+suggestions, and a React site on top. After 9 days we stopped:
+
+- **Heavy to build** — most of the work went into the platform. About 25 pull requests were only about loading demo
+  data into Odoo or fixing the Windows setup; about 5,800 lines of code just loaded test data.
+- **Heavy to adopt** — a shop would need a whole business system to use the app, while most small parts shops use Excel.
+- **Too complicated** — Odoo's rules pulled the screens away from a design a normal employee can use.
+- **Key features missing** — purchase orders, budgets, the assistant, PDF output, French and Arabic.
+
+**Version 2 (17 October – 10 November 2026)** is this repository: FastAPI + PostgreSQL + React, no ERP, fed
+directly by the shop's Excel files. It is faster to install (one command), simpler to use, easier to change,
+and covers far more: import, search, orders and budgets, alerts, the assistant, three languages, backups and export.
+
+The Odoo version is kept untouched on the
+[`archive/odoo-v0`](https://github.com/MouhssineElBoumshouli/autostock-ai/tree/archive/odoo-v0) branch
+([screenshot](https://github.com/MouhssineElBoumshouli/autostock-ai/blob/archive/odoo-v0/docs/qa/screenshots/issue-34-gate-7-employee-first/forecasts-by-part-30-day-1440.png)).
+The full story, step by step: [docs/journey.md](docs/journey.md).
+
+## Built with
+
+| Part | Tools |
+|---|---|
+| Website | React, TypeScript, Vite, Tailwind CSS, shadcn/ui, TanStack Query, Recharts — Material Design 3 style |
+| Server | Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Pydantic |
+| Database | PostgreSQL 16 (with `pg_trgm` for typo-tolerant search) |
+| Forecasting | NumPy, scikit-learn |
+| Assistant | Groq (`openai/gpt-oss-120b`, free tier), optional local model through Ollama |
+| Running | Docker Compose — one command, nightly backups |
+| Quality | 822 automated tests (pytest) |
+
+## Project documents
+
+- [Internship report (PDF, French)](docs/rapport-de-stage.pdf)
+- [Install guide for a shop (French, then English)](docs/INSTALL.md)
+- [Project journey](docs/journey.md) · [Plan](PLAN.md)
+
+## Authors
+
+- **Mouhssine El Boumshouli** — architecture, back-end, website and design
+- **Badr Lasri** — internship and company relationship, mathematical methods and statistical evaluation
+
+Engineering students at EIDIA, Université Euromed de Fès. Internship supervisor: M. Habib Ouayloul (Bounaim Auto).
+Built with the help of an AI coding assistant (Claude Code).
+
+---
+
+# Developer guide
 
 ## Install it in a shop
 
