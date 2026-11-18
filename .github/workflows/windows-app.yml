@@ -33,7 +33,7 @@ jobs:
               try { if ((Invoke-WebRequest http://127.0.0.1:8765/api/health -UseBasicParsing -TimeoutSec 2).StatusCode -eq 200) { return } } catch {}
               Start-Sleep 1
             }
-            Get-Content "$env:LOCALAPPDATA\AutoStock\logs\*.log" -ErrorAction SilentlyContinue | Select-Object -Last 80
+            Get-ChildItem "$env:LOCALAPPDATA\AutoStock\logs" -ErrorAction SilentlyContinue | ForEach-Object { "== $($_.Name)"; Get-Content $_.FullName -Tail 60 }
             throw "AutoStock did not start"
           }
           $exe = "$env:LOCALAPPDATA\Programs\AutoStock\AutoStock.exe"
@@ -77,7 +77,7 @@ jobs:
       - name: Logs if something failed
         if: failure()
         shell: pwsh
-        run: Get-Content "$env:LOCALAPPDATA\AutoStock\logs\*.log" -ErrorAction SilentlyContinue | Select-Object -Last 200
+        run: Get-ChildItem "$env:LOCALAPPDATA\AutoStock\logs" -ErrorAction SilentlyContinue | ForEach-Object { "== $($_.Name)"; Get-Content $_.FullName -Tail 120 }
 
       - uses: actions/upload-artifact@v4
         with:

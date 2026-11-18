@@ -126,10 +126,14 @@ def start_database(password: str) -> None:
         return  # already running (AutoStock was stopped in a hurry)
     logs = data_folder() / "logs"
     logs.mkdir(parents=True, exist_ok=True)
-    started = run(tool("pg_ctl"), "start", "-w", "-t", "60", "-D", str(folder), "-l", str(logs / "database.log"),
-                  "-o", f"-p {DATABASE_PORT} -c listen_addresses=127.0.0.1")
+    # Output to a file, not a pipe: on Windows the database keeps the pipe open, so reading it never ends.
+    output = logs / "database-start.log"
+    with output.open("w", encoding="utf-8") as file:
+        started = subprocess.run([tool("pg_ctl"), "start", "-w", "-t", "60", "-D", str(folder), "-l", str(logs / "database.log"),
+                                  "-o", f"-p {DATABASE_PORT} -c listen_addresses=127.0.0.1"],
+                                 stdout=file, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, creationflags=HIDE_WINDOW)
     if started.returncode != 0:
-        raise RuntimeError(f"The database did not start: {started.stderr.strip() or started.stdout.strip()}"
+        raise RuntimeError(f"The database did not start: {output.read_text(encoding='utf-8').strip()}"
                            f" (see {logs / 'database.log'})")
 
 
