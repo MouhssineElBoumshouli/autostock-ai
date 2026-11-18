@@ -116,7 +116,7 @@ def test_an_older_version_refuses_a_database_a_newer_one_updated(browser, tmp_pa
     try:
         assert start.database_version() == "newer"
         problem = start.update_database()
-        assert problem == start.NEWER_DATABASE and "autostock-before-update-" in problem
+        assert problem == start.NEWER_DATABASE.format(restore=start.RESTORE_COMMAND) and "autostock-before-update-" in problem
         assert list(tmp_path.iterdir()) == []  # nothing backed up, nothing changed
     finally:
         with engine.begin() as connection:

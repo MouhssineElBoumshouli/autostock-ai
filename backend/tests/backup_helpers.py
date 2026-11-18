@@ -1,7 +1,5 @@
 """A shop with a bit of everything, for the backup, restore and update tests."""
 
-import os
-import subprocess
 from datetime import date
 
 from app.db import SessionLocal
@@ -20,9 +18,3 @@ def shop_with_everything(browser) -> None:
     _, line = one_suggestion(browser, sku="OIL-1", per_week=9, on_hand=6)
     assert browser.post(f"/api/orders/suggestions/{line['id']}/decide", json={"decision": "approve"}).status_code == 200
 
-
-def run_backup_script(*args: str, folder, **env: str) -> subprocess.CompletedProcess:
-    from app.backups import SCRIPT, database_env
-
-    return subprocess.run(["sh", str(SCRIPT), *args], env={**os.environ, **database_env(), "BACKUP_DIR": str(folder), **env},
-                          capture_output=True, text=True)

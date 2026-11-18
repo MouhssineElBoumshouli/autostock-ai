@@ -1,0 +1,86 @@
+# Builds the Windows installer (AutoStock-Setup.exe) on GitHub's Windows computers, then installs it,
+# starts it, creates a shop, measures its memory, stops it, updates it, and checks the shop is still there.
+name: Windows app
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", "frontend/**", "windows/**", ".github/workflows/windows-app.yml"]
+  pull_request:
+    paths: ["backend/**", "frontend/**", "windows/**", ".github/workflows/windows-app.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+
+      - name: Build the installer
+        run: powershell -ExecutionPolicy Bypass -File windows\build.ps1
+
+      - name: Install, start, use, stop, update
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          function Wait-Up {
+            for ($i = 0; $i -lt 180; $i++) {
+              try { if ((Invoke-WebRequest http://127.0.0.1:8765/api/health -UseBasicParsing -TimeoutSec 2).StatusCode -eq 200) { return } } catch {}
+              Start-Sleep 1
+            }
+            Get-Content "$env:LOCALAPPDATA\AutoStock\logs\*.log" -ErrorAction SilentlyContinue | Select-Object -Last 80
+            throw "AutoStock did not start"
+          }
+          $exe = "$env:LOCALAPPDATA\Programs\AutoStock\AutoStock.exe"
+          Start-Process build\AutoStock-Setup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          if (-not (Test-Path $exe)) { throw "Not installed" }
+          $started = Get-Date
+          Start-Process $exe -ArgumentList "--background"
+          Wait-Up
+          Write-Host ("Started in {0:N0} seconds (first start: creates the database)" -f ((Get-Date) - $started).TotalSeconds)
+
+          $page = Invoke-WebRequest http://127.0.0.1:8765/ -UseBasicParsing
+          if ($page.Content -notmatch "AutoStock") { throw "The website is not served" }
+          $body = '{"shop_name":"Windows Test","name":"Owner","email":"owner@shop.ma","password":"a-strong-password-123"}'
+          $setup = Invoke-WebRequest http://127.0.0.1:8765/api/setup -Method Post -Body $body -ContentType "application/json" `
+            -Headers @{ Origin = "http://localhost:8765" } -SessionVariable shop -UseBasicParsing
+          if ($setup.StatusCode -ne 201) { throw "Could not create a shop" }
+          Invoke-WebRequest http://127.0.0.1:8765/api/today -WebSession $shop -UseBasicParsing | Out-Null
+
+          Start-Sleep 20
+          $procs = Get-Process AutoStock, postgres -ErrorAction SilentlyContinue
+          $mb = ($procs | Measure-Object WorkingSet64 -Sum).Sum / 1MB
+          $private = ($procs | Measure-Object PrivateMemorySize64 -Sum).Sum / 1MB
+          Write-Host ("Memory while running: {0:N0} MB in use ({1:N0} MB private), {2} processes" -f $mb, $private, $procs.Count)
+          "memory_mb=$([int]$mb)" >> $env:GITHUB_STEP_SUMMARY
+          Get-ChildItem "$env:USERPROFILE\Documents\AutoStock backups" | Format-Table Name, Length
+
+          & $exe --stop | Out-Null
+          Start-Sleep 5
+          if (Get-Process AutoStock, postgres -ErrorAction SilentlyContinue) { throw "Stop AutoStock left something running" }
+
+          # An update: install again over it, start, and the shop must still be there.
+          Start-Process build\AutoStock-Setup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          Start-Process $exe -ArgumentList "--background"
+          Wait-Up
+          $login = Invoke-WebRequest http://127.0.0.1:8765/api/auth/login -Method Post -ContentType "application/json" `
+            -Body '{"email":"owner@shop.ma","password":"a-strong-password-123"}' -Headers @{ Origin = "http://localhost:8765" } -UseBasicParsing
+          if ($login.StatusCode -ne 200) { throw "The shop was lost by the update" }
+          & $exe --stop | Out-Null
+          Write-Host "Installed, started, used, stopped and updated: all good."
+
+      - name: Logs if something failed
+        if: failure()
+        shell: pwsh
+        run: Get-Content "$env:LOCALAPPDATA\AutoStock\logs\*.log" -ErrorAction SilentlyContinue | Select-Object -Last 200
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AutoStock-Setup
+          path: build/AutoStock-Setup.exe
+          retention-days: 30

@@ -28,6 +28,10 @@ SHOP_TIMEZONE = os.environ.get("TZ", "Africa/Casablanca")
 # Folder of the daily backups (docker-compose.prod.yml). Empty while developing: no backups then.
 BACKUP_DIR = os.environ.get("BACKUP_DIR", "")
 
+# Where PostgreSQL's tools (pg_dump, pg_restore) are. Empty = found on the PATH (Docker). The Windows
+# app brings its own copy and sets this.
+PG_BIN = os.environ.get("PG_BIN", "")
+
 # Optional local AI (Ollama). Empty or unreachable = "AI is off" and the app works without it.
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "").rstrip("/")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3:4b-instruct")

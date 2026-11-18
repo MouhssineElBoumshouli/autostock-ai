@@ -66,7 +66,7 @@ Sur le PC du magasin, ouvrez **http://localhost:8080**. Entrez le nom du magasin
 - Chaque jour à **02:00**, et au démarrage si la dernière date de plus de 24 h (PC éteint la nuit), AutoStock fait une sauvegarde dans le dossier **`backups`**, à côté du programme : `autostock-2026-10-29.dump`. Il garde les 14 derniers jours et 1 par mois pendant 12 mois. Une sauvegarde ne compte qu'une fois relue et vérifiée.
 - **Paramètres** montre la dernière sauvegarde. Sans sauvegarde depuis 2 jours, le propriétaire voit « À traiter » sur l'Accueil.
 - **Une fois par semaine, copiez le dossier `backups` sur une clé USB ou un espace en ligne** (Google Drive, OneDrive…). Une sauvegarde sur le même disque disparaît avec le disque.
-- Une sauvegarde tout de suite : `docker compose -f docker-compose.prod.yml exec backup backup.sh make autostock-maintenant`
+- Une sauvegarde tout de suite : `docker compose -f docker-compose.prod.yml exec app python -m app.backups now`
 
 ### 9. Restaurer une sauvegarde
 Remettez le fichier voulu dans le dossier `backups`, puis :
@@ -167,7 +167,7 @@ On the shop PC, open **http://localhost:8080**. Enter the shop name, your name, 
 - Every day at **02:00**, and at start if the last one is older than 24 hours (PC off at night), AutoStock saves a backup in the **`backups`** folder next to the program: `autostock-2026-10-29.dump`. It keeps the last 14 days and 1 per month for 12 months. A backup only counts once it has been read back and checked.
 - **Settings** shows the last backup. With no backup for 2 days, the owner sees "Needs action" on Today.
 - **Once a week, copy the `backups` folder to a USB stick or a cloud drive** (Google Drive, OneDrive…). A backup on the same disk is lost with the disk.
-- A backup right now: `docker compose -f docker-compose.prod.yml exec backup backup.sh make autostock-now`
+- A backup right now: `docker compose -f docker-compose.prod.yml exec app python -m app.backups now`
 
 ### 9. Restore a backup
 Put the file you want in the `backups` folder, then:

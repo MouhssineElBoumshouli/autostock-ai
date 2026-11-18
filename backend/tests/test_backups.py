@@ -1,4 +1,4 @@
-"""Daily backups (scripts/backup.sh): checked before they count, old ones pruned, a full disk skipped;
+"""Daily backups (app/backups.py): checked before they count, old ones pruned, a full disk skipped;
 what the owner sees in Settings and on Today."""
 
 import os
@@ -7,8 +7,10 @@ import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from app.backups import backup_status, is_good_backup, is_overdue, make_backup
-from tests.backup_helpers import run_backup_script, shop_with_everything
+import pytest
+
+from app.backups import BackupFailed, backup_due, backup_status, is_good_backup, is_overdue, make_backup, prune
+from tests.backup_helpers import shop_with_everything
 from tests.helpers import add_member, member_with_own_password, set_up_shop
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
@@ -50,10 +52,9 @@ def test_an_empty_or_broken_file_is_not_a_backup(tmp_path):
 def test_not_enough_disk_space_skips_the_backup_and_says_so(browser, tmp_path):
     set_up_shop(browser)
 
-    done = run_backup_script("make", "autostock-2026-10-29", folder=tmp_path, BACKUP_MARGIN_KB=str(10**12))
+    with pytest.raises(BackupFailed, match="Backup skipped: not enough free disk space"):
+        make_backup("autostock-2026-10-29", tmp_path, margin=10**18)
 
-    assert done.returncode == 1
-    assert "Backup skipped: not enough free disk space" in done.stderr
     assert not (tmp_path / "autostock-2026-10-29.dump").exists()
     assert backup_status(tmp_path).problem == "disk_full"
 
@@ -66,7 +67,7 @@ def test_old_backups_are_pruned_to_14_days_and_one_per_month_for_12_months(tmp_p
     for n in range(8):
         (tmp_path / f"autostock-before-update-2026-10-0{n + 1}-120000.dump").write_text("x")
 
-    assert run_backup_script("prune", folder=tmp_path).returncode == 0
+    prune(tmp_path)
 
     kept = sorted(path.name for path in tmp_path.iterdir())
     daily = [name for name in kept if "before" not in name]
@@ -77,6 +78,19 @@ def test_old_backups_are_pruned_to_14_days_and_one_per_month_for_12_months(tmp_p
     assert len({name[10:17] for name in monthly}) == 12  # one per month
     assert all(name[18:20] in ("28", "29", "30", "31") for name in monthly)  # the month's last day
     assert len([name for name in kept if "before-update" in name]) == 5
+
+
+def test_a_backup_is_due_at_2_am_or_when_the_last_one_is_older_than_a_day(tmp_path):
+    assert backup_due(tmp_path, datetime(2026, 10, 29, 15, 0))  # none at all
+    (tmp_path / "autostock-2026-10-28.dump").write_text("x")  # made just now
+    assert not backup_due(tmp_path, datetime(2026, 10, 29, 15, 0))
+    assert backup_due(tmp_path, datetime(2026, 10, 29, 2, 10))  # 02:00 and today's not made yet
+    (tmp_path / "autostock-2026-10-29.dump").write_text("x")
+    assert not backup_due(tmp_path, datetime(2026, 10, 29, 2, 15))
+    a_day_ago = time.time() - 25 * 3600
+    for file in tmp_path.iterdir():
+        os.utime(file, (a_day_ago, a_day_ago))
+    assert backup_due(tmp_path, datetime(2026, 10, 29, 15, 0))
 
 
 def test_status_shows_the_newest_backup_and_two_days_without_one_is_overdue(tmp_path):
