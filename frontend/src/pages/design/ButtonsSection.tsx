@@ -30,7 +30,7 @@ export function ButtonsSection() {
     <Section
       id="buttons"
       title="Buttons"
-      description="Pill-shaped. Filled (violet) is the one main action of a screen, tonal for strong second actions, outlined for other actions, text for quiet ones, danger for deleting. Hover or press to see the state layer."
+      description="Pill-shaped. Filled (blue) is the one main action of a screen, tonal for strong second actions, outlined for other actions, text for quiet ones, danger for deleting. Hover or press to see the state layer."
     >
       <Card>
         <CardContent className="grid gap-6">

@@ -6,7 +6,7 @@ import { t } from "@/i18n";
 export const steps = ["upload", "match", "check", "save"] as const;
 export type Step = (typeof steps)[number];
 
-// "1 Upload  2 Match columns  3 Check  4 Save", with the current step in violet.
+// "1 Upload  2 Match columns  3 Check  4 Save", with the current step in blue.
 // On a phone, only the current step's name is shown (the others are just circles), so it
 // always fits on one line instead of wrapping.
 export function StepList({ current }: { current: Step }) {

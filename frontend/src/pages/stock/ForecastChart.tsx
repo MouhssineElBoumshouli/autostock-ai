@@ -9,8 +9,8 @@ const rtl = direction === "rtl";
 
 type ChartRow = { label: string; actual?: number; base?: number; belowPoint?: number; abovePoint?: number; tooltip: string };
 
-// The last 12 weeks actually sold, as solid violet bars, then the forecast as one bar in the
-// same violet: solid from "low" up to the point estimate, lighter from there up to "high" — so
+// The last 12 weeks actually sold, as solid blue bars, then the forecast as one bar in the
+// same blue: solid from "low" up to the point estimate, lighter from there up to "high" — so
 // the likely range is drawn, not just said in text, and never the amber/orange used for warnings.
 // Weekly totals only: the forecast itself is one number for its whole horizon, so it gets one bar.
 export function ForecastChart({ weeks, horizon }: { weeks: { week_start: string; quantity: number }[]; horizon: HorizonForecast }) {

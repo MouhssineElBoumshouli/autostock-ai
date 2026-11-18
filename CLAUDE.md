@@ -61,7 +61,7 @@ The old forecasting code (random forest + baselines + Croston for slow-moving pa
 ## Design
 
 Style: **Material Design 3** (Google's public design system, m3.material.io), so the app feels like a Google product. Do not use Google's logos or name.
-- Color: a Material 3 color scheme generated from the seed color violet `#7847ee` (tonal surfaces, primary/secondary containers). Green = healthy, amber = low, red = out. Never color alone: always a word too.
+- Color: a Material 3 color scheme generated from the seed color deep blue `#1f4fa3` (changed from violet on 18 November 2026, after feedback) (tonal surfaces, primary/secondary containers). Green = healthy, amber = low, red = out. Never color alone: always a word too.
 - Font: Roboto Flex (free). Numbers use tabular figures. Material 3 type scale.
 - Material 3 shapes, elevation, state layers (hover/press), and motion. Pill-shaped buttons, filled/tonal/outlined/text buttons, chips for filters, navigation rail on tablet, navigation drawer on desktop, bottom bar or drawer on phone.
 - Earlier reference image: `design/dashboard-concept.png` (layout ideas only, not real data).
