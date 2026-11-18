@@ -11,7 +11,7 @@ datas = [
 ] + collect_data_files("tzdata")                  # time zones: Windows has none for Python
 
 hidden = (collect_submodules("app") + collect_submodules("uvicorn")
-          + ["psycopg_binary", "sklearn.ensemble._hist_gradient_boosting"])
+          + collect_submodules("sklearn") + collect_submodules("scipy") + ["psycopg_binary"])
 
 a = Analysis(
     [SPECPATH + "/autostock_main.py"],
