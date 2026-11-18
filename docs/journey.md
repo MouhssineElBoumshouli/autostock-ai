@@ -195,6 +195,8 @@ Update this section as each step of `PLAN.md` is finished, so the final presenta
 
 - **Deep blue instead of violet (18 November 2026):** after feedback that the violet looked bad, the Material 3 colors are now generated from the deep blue #1f4fa3 (same "fidelity" method, one file: `frontend/src/index.css`). Green, amber and red for Healthy / Low / Out did not change. Screenshots in the README, report and slides were retaken.
 
+- **Our own logo (18 November 2026):** a stack of boxes (the stock) with an arrow going up (the forecast), in navy and deep blue. It replaces the plain "A" in the app (`frontend/public/logo-mark.svg`), the browser-tab icon (`favicon.svg`), the README, the report cover and the slides.
+
 ## The design we kept
 
 The approved design direction, used for both versions:

@@ -13,7 +13,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 p-3 md:max-xl:items-center md:max-xl:px-0">
       <div className="flex min-h-14 shrink-0 items-center gap-3 px-4 md:max-xl:justify-center md:max-xl:px-0">
-        <img src="/favicon.svg" alt="" className="size-9 shrink-0" />
+        <img src="/logo-mark.svg" alt="" className="h-8 w-10 shrink-0" />
         <span className="grid min-w-0 md:max-xl:sr-only">
           <span className="text-title-medium">{t.appName}</span>
           <span dir="auto" className="truncate text-body-small text-on-surface-variant">
