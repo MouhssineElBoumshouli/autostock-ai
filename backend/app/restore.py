@@ -9,7 +9,6 @@
 4. Applies this version's database changes (migrations) and prints the main tables' row counts.
 """
 
-import subprocess
 import sys
 from pathlib import Path
 
@@ -18,7 +17,7 @@ from alembic.config import Config
 from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.engine import make_url
 
-from app.backups import BackupFailed, backup_folder, database_env, is_good_backup, maintenance_lock, make_backup, time_stamp
+from app.backups import BackupFailed, backup_folder, is_good_backup, maintenance_lock, make_backup, run_tool, time_stamp
 from app.config import DATABASE_URL
 from app.db import engine
 
@@ -57,10 +56,8 @@ def restore(file: Path, folder: Path) -> dict[str, tuple[int, str]]:
                 make_backup(f"autostock-before-restore-{time_stamp()}", folder)
             admin.execute(text(f'DROP DATABASE IF EXISTS "{restoring}" WITH (FORCE)'))
             admin.execute(text(f'CREATE DATABASE "{restoring}"'))
-            loaded = subprocess.run(
-                ["pg_restore", "--no-owner", "--exit-on-error", "--dbname", restoring, str(file)],
-                env=database_env(url.set(database=restoring)), capture_output=True, text=True,
-            )
+            loaded = run_tool("pg_restore", "--no-owner", "--exit-on-error", "--dbname", restoring, str(file),
+                              url=url.set(database=restoring))
             if loaded.returncode != 0:
                 admin.execute(text(f'DROP DATABASE "{restoring}" WITH (FORCE)'))
                 raise RestoreFailed(f"The backup could not be loaded, so nothing was changed: {loaded.stderr.strip()}")

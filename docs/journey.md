@@ -197,6 +197,8 @@ Update this section as each step of `PLAN.md` is finished, so the final presenta
 
 - **Our own logo (18 November 2026):** a stack of boxes (the stock) with an arrow going up (the forecast), in navy and deep blue. It replaces the plain "A" in the app (`frontend/public/logo-mark.svg`), the browser-tab icon (`favicon.svg`), the README, the report cover and the slides.
 
+- **A normal Windows app, no Docker (18 November 2026):** Docker Desktop runs a hidden Linux computer and uses a lot of memory, too much to ask of a shop. `AutoStock-Setup.exe` now installs AutoStock like any program, for the current user (no administrator password): a desktop icon opens it in its own window (Edge app mode), it ships its own PostgreSQL (started only while AutoStock runs), starts with Windows so the phones in the shop can reach it, and everything works without the internet. Backups are now plain Python made by the app itself (no shell script), the same in Docker and on Windows. GitHub builds the installer on a Windows machine for every change and tests it: install, start, create a shop, measure memory, stop, update, and the shop is still there.
+
 ## The design we kept
 
 The approved design direction, used for both versions:

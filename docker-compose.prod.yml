@@ -60,25 +60,7 @@ services:
     ports:
       - "${APP_PORT:-8080}:8000"
     volumes:
-      - ./backups:/backups # backups before an update or a restore, and the Settings page reads them
-    depends_on:
-      db:
-        condition: service_healthy
-
-  backup:
-    <<: *shop
-    build: ./backend/scripts
-    image: autostock-shop-postgres
-    command: ["backup.sh", "daily"]
-    environment:
-      <<: *shop-env
-      BACKUP_DIR: /backups
-      PGHOST: db
-      PGUSER: ${POSTGRES_USER:-autostock}
-      PGPASSWORD: ${POSTGRES_PASSWORD}
-      PGDATABASE: ${POSTGRES_DB:-autostock}
-    volumes:
-      - ./backups:/backups # the backups folder next to this file, visible in Windows Explorer
+      - ./backups:/backups # every day's backup, and those made before an update or a restore (app/backups.py)
     depends_on:
       db:
         condition: service_healthy

@@ -29,6 +29,7 @@ from app.api import (
     today,
     users,
 )
+from app.backups import keep_making_backups
 from app.config import IS_PRODUCTION, WEBSITE_DIR
 from app.error_handling import add_error_handling
 from app.forecast.run import keep_running_forecasts
@@ -40,11 +41,12 @@ from app.website import serve_website
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """Work that runs while the server is up: saving stock-out days and stock history, daily
-    alerts, nightly forecasts (and the order suggestions that follow them)."""
+    alerts, nightly forecasts (and the order suggestions that follow them), daily backups."""
     tasks = [
         asyncio.create_task(keep_recording_stock_outs()),
         asyncio.create_task(keep_raising_alerts()),
         asyncio.create_task(keep_running_forecasts()),
+        asyncio.create_task(keep_making_backups()),
     ]
     yield
     for task in tasks:

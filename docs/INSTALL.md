@@ -6,6 +6,22 @@
 
 ## Français
 
+### L'application Windows (recommandé)
+
+AutoStock s'installe comme un programme normal. Pas de Docker, pas de commande à taper, et **tout marche sans Internet**.
+
+1. **Installer.** Téléchargez `AutoStock-Setup.exe` sur la page *Releases* du projet (github.com/MouhssineElBoumshouli/autostock-ai/releases/latest), puis double-cliquez dessus. Si Windows affiche « Windows a protégé votre ordinateur », cliquez sur **Informations complémentaires**, puis **Exécuter quand même** (ce message vient du fait que le programme n'est pas encore signé). Cliquez sur **Suivant** jusqu'à la fin. Aucun mot de passe administrateur n'est demandé.
+2. **Ouvrir.** Double-cliquez sur l'icône **AutoStock AI** du bureau. AutoStock s'ouvre dans sa propre fenêtre. La première fois, il crée la base de données du magasin (quelques secondes), puis demande le nom du magasin et le compte du propriétaire.
+3. **Les autres ordinateurs et téléphones du magasin.** Sur le même Wi-Fi, ouvrez le navigateur et tapez `http://NOM-DU-PC:8765` (le nom du PC est dans Paramètres Windows > Système > Informations système). La première fois, Windows demande d'autoriser AutoStock sur le réseau : cliquez sur **Autoriser** (réseaux privés).
+4. **Fermer la fenêtre n'arrête pas AutoStock**, pour que les autres appareils continuent à l'utiliser. Il démarre aussi tout seul avec Windows. Pour l'arrêter : menu Démarrer > **Stop AutoStock**.
+5. **Sauvegardes.** Une par jour, toute seule, dans `Documents\AutoStock backups` (les 14 derniers jours et 1 par mois pendant 12 mois). Copiez ce dossier sur une clé USB de temps en temps.
+6. **Restaurer une sauvegarde.** Fermez AutoStock (Stop AutoStock), puis dans PowerShell : `& "$env:LOCALAPPDATA\Programs\AutoStock\AutoStock.exe" --restore autostock-2026-10-29.dump`
+7. **Mettre à jour.** Lancez le nouveau `AutoStock-Setup.exe`. Les données du magasin ne sont jamais touchées, et une sauvegarde est faite avant chaque changement de la base de données.
+8. **Où sont les données ?** `%LOCALAPPDATA%\AutoStock` (base de données, réglages, journaux). La désinstallation ne les supprime pas.
+9. **L'assistant en ligne de « Questions » (facultatif).** Ouvrez `%LOCALAPPDATA%\AutoStock\settings.env` avec le Bloc-notes, collez votre clé Groq après `GROQ_API_KEY=`, enregistrez, puis Stop AutoStock et rouvrez-le.
+
+### Avec Docker (pour les développeurs)
+
 AutoStock tourne sur **un seul PC du magasin**. Les autres ordinateurs et les téléphones l'ouvrent dans leur navigateur, sur le même réseau (Wi-Fi ou câble). Rien n'est envoyé sur Internet, sauf si vous activez l'écriture Groq dans Paramètres.
 
 Toutes les commandes se tapent dans **PowerShell**, ouvert dans le dossier AutoStock (dans l'Explorateur : ouvrir le dossier, cliquer dans la barre d'adresse, taper `powershell`, Entrée).
@@ -66,7 +82,7 @@ Sur le PC du magasin, ouvrez **http://localhost:8080**. Entrez le nom du magasin
 - Chaque jour à **02:00**, et au démarrage si la dernière date de plus de 24 h (PC éteint la nuit), AutoStock fait une sauvegarde dans le dossier **`backups`**, à côté du programme : `autostock-2026-10-29.dump`. Il garde les 14 derniers jours et 1 par mois pendant 12 mois. Une sauvegarde ne compte qu'une fois relue et vérifiée.
 - **Paramètres** montre la dernière sauvegarde. Sans sauvegarde depuis 2 jours, le propriétaire voit « À traiter » sur l'Accueil.
 - **Une fois par semaine, copiez le dossier `backups` sur une clé USB ou un espace en ligne** (Google Drive, OneDrive…). Une sauvegarde sur le même disque disparaît avec le disque.
-- Une sauvegarde tout de suite : `docker compose -f docker-compose.prod.yml exec backup backup.sh make autostock-maintenant`
+- Une sauvegarde tout de suite : `docker compose -f docker-compose.prod.yml exec app python -m app.backups now`
 
 ### 9. Restaurer une sauvegarde
 Remettez le fichier voulu dans le dossier `backups`, puis :
@@ -106,6 +122,22 @@ Avec une carte graphique NVIDIA : `docker compose -f docker-compose.prod.yml --p
 ---
 
 ## English
+
+### The Windows app (recommended)
+
+AutoStock installs like a normal program. No Docker, no commands to type, and **everything works without the internet**.
+
+1. **Install.** Download `AutoStock-Setup.exe` from the project's *Releases* page (github.com/MouhssineElBoumshouli/autostock-ai/releases/latest), then double-click it. If Windows shows "Windows protected your PC", click **More info**, then **Run anyway** (this shows because the program is not signed yet). Click **Next** until the end. No administrator password is needed.
+2. **Open.** Double-click the **AutoStock AI** icon on the desktop. AutoStock opens in its own window. The first time, it creates the shop's database (a few seconds), then asks for the shop's name and the owner's account.
+3. **The shop's other computers and phones.** On the same Wi-Fi, open the browser and type `http://PC-NAME:8765` (the PC's name is in Windows Settings > System > About). The first time, Windows asks to allow AutoStock on the network: click **Allow** (private networks).
+4. **Closing the window does not stop AutoStock**, so the other devices keep using it. It also starts by itself with Windows. To stop it: Start menu > **Stop AutoStock**.
+5. **Backups.** One a day, by itself, in `Documents\AutoStock backups` (the last 14 days, and 1 per month for 12 months). Copy that folder to a USB stick now and then.
+6. **Restore a backup.** Stop AutoStock, then in PowerShell: `& "$env:LOCALAPPDATA\Programs\AutoStock\AutoStock.exe" --restore autostock-2026-10-29.dump`
+7. **Update.** Run the new `AutoStock-Setup.exe`. The shop's data is never touched, and a backup is made before every database change.
+8. **Where is the data?** `%LOCALAPPDATA%\AutoStock` (database, settings, logs). Uninstalling never deletes it.
+9. **Ask's online assistant (optional).** Open `%LOCALAPPDATA%\AutoStock\settings.env` in Notepad, paste your Groq key after `GROQ_API_KEY=`, save, then Stop AutoStock and open it again.
+
+### With Docker (for developers)
 
 AutoStock runs on **one PC in the shop**. The other computers and phones open it in their browser, on the same network (Wi-Fi or cable). Nothing is sent to the internet, unless you turn on Groq writing in Settings.
 
@@ -167,7 +199,7 @@ On the shop PC, open **http://localhost:8080**. Enter the shop name, your name, 
 - Every day at **02:00**, and at start if the last one is older than 24 hours (PC off at night), AutoStock saves a backup in the **`backups`** folder next to the program: `autostock-2026-10-29.dump`. It keeps the last 14 days and 1 per month for 12 months. A backup only counts once it has been read back and checked.
 - **Settings** shows the last backup. With no backup for 2 days, the owner sees "Needs action" on Today.
 - **Once a week, copy the `backups` folder to a USB stick or a cloud drive** (Google Drive, OneDrive…). A backup on the same disk is lost with the disk.
-- A backup right now: `docker compose -f docker-compose.prod.yml exec backup backup.sh make autostock-now`
+- A backup right now: `docker compose -f docker-compose.prod.yml exec app python -m app.backups now`
 
 ### 9. Restore a backup
 Put the file you want in the `backups` folder, then:

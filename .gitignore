@@ -14,3 +14,6 @@ trial/
 
 # Measuring results of app/ask/check_real_assistant.py (summarised in docs, never committed)
 backend/check_results/
+
+# Windows app build (windows/build.ps1)
+build/

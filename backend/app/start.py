@@ -23,20 +23,22 @@ from app.db import engine
 
 log = logging.getLogger("autostock.start")
 PORT = 8000
+# How the owner restores a backup: Docker here, the Windows app sets its own (app/desktop.py).
+RESTORE_COMMAND = os.environ.get("RESTORE_COMMAND", "docker compose -f docker-compose.prod.yml run --rm app python -m app.restore")
 
 BACKUP_FAILED = """AutoStock was not updated: the backup made before every update failed ({reason}).
-Nothing was changed. Fix the reason (often a full disk), then start AutoStock again (docs/INSTALL.md, "It doesn't start")."""
+Nothing was changed. Fix the reason (often a full disk), then start AutoStock again."""
 
 NEWER_DATABASE = """This database was updated by a newer AutoStock, so this version can't use it.
 Use the newer version, or restore the backup made before the update (autostock-before-update-....dump):
-   docker compose -f docker-compose.prod.yml run --rm app python -m app.restore autostock-before-update-....dump
+   {restore} autostock-before-update-....dump
 Anything entered since the update is then lost."""
 
 UPDATE_FAILED = """AutoStock could not update its database: {error}
 Nothing was lost: the database was left exactly as it was before the update.
 1. Put the previous AutoStock folder back (keep .env and backups), then start it again.
 2. Only if the data looks wrong afterwards, restore the copy made just before the update:
-   docker compose -f docker-compose.prod.yml run --rm app python -m app.restore {backup}"""
+   {restore} {backup}"""
 
 
 def alembic_config() -> Config:
@@ -65,7 +67,7 @@ def update_database() -> str | None:
     with maintenance_lock():
         version = database_version()
         if version == "newer":
-            return NEWER_DATABASE
+            return NEWER_DATABASE.format(restore=RESTORE_COMMAND)
         backup = None
         if version == "older":
             try:
@@ -76,11 +78,11 @@ def update_database() -> str | None:
             command.upgrade(alembic_config(), "head")
         except Exception as error:
             log.exception("The database update failed")
-            return UPDATE_FAILED.format(error=error, backup=backup.name if backup else "<the newest autostock-....dump>")
+            return UPDATE_FAILED.format(restore=RESTORE_COMMAND, error=error, backup=backup.name if backup else "<the newest autostock-....dump>")
     return None
 
 
-def show_problem(message: str) -> None:
+def show_problem(message: str, port: int = PORT) -> None:
     """Instead of the app: every address answers with the problem, so the owner sees it in the browser."""
     page = f"<!doctype html><meta charset=utf-8><title>AutoStock</title><pre style='font:16px/1.5 sans-serif;white-space:pre-wrap;margin:2rem'>{html.escape(message)}</pre>"
 
@@ -91,7 +93,7 @@ def show_problem(message: str) -> None:
             self.end_headers()
             self.wfile.write(page.encode())
 
-    HTTPServer(("0.0.0.0", PORT), ProblemPage).serve_forever()
+    HTTPServer(("0.0.0.0", port), ProblemPage).serve_forever()
 
 
 def main() -> None:
