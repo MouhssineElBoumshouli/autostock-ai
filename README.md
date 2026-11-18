@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/images/logo.png" alt="AutoStock AI" width="420">
+
 # AutoStock AI
 
 **Inventory and demand forecasting for auto parts shops.**
