@@ -10,7 +10,7 @@
 
 AutoStock s'installe comme un programme normal. Pas de Docker, pas de commande à taper, et **tout marche sans Internet**.
 
-1. **Installer.** Double-cliquez sur `AutoStock-Setup.exe`. Si Windows affiche « Windows a protégé votre ordinateur », cliquez sur **Informations complémentaires**, puis **Exécuter quand même** (ce message vient du fait que le programme n'est pas encore signé). Cliquez sur **Suivant** jusqu'à la fin. Aucun mot de passe administrateur n'est demandé.
+1. **Installer.** Téléchargez `AutoStock-Setup.exe` sur la page *Releases* du projet (github.com/MouhssineElBoumshouli/autostock-ai/releases/latest), puis double-cliquez dessus. Si Windows affiche « Windows a protégé votre ordinateur », cliquez sur **Informations complémentaires**, puis **Exécuter quand même** (ce message vient du fait que le programme n'est pas encore signé). Cliquez sur **Suivant** jusqu'à la fin. Aucun mot de passe administrateur n'est demandé.
 2. **Ouvrir.** Double-cliquez sur l'icône **AutoStock AI** du bureau. AutoStock s'ouvre dans sa propre fenêtre. La première fois, il crée la base de données du magasin (quelques secondes), puis demande le nom du magasin et le compte du propriétaire.
 3. **Les autres ordinateurs et téléphones du magasin.** Sur le même Wi-Fi, ouvrez le navigateur et tapez `http://NOM-DU-PC:8765` (le nom du PC est dans Paramètres Windows > Système > Informations système). La première fois, Windows demande d'autoriser AutoStock sur le réseau : cliquez sur **Autoriser** (réseaux privés).
 4. **Fermer la fenêtre n'arrête pas AutoStock**, pour que les autres appareils continuent à l'utiliser. Il démarre aussi tout seul avec Windows. Pour l'arrêter : menu Démarrer > **Stop AutoStock**.
@@ -127,7 +127,7 @@ Avec une carte graphique NVIDIA : `docker compose -f docker-compose.prod.yml --p
 
 AutoStock installs like a normal program. No Docker, no commands to type, and **everything works without the internet**.
 
-1. **Install.** Double-click `AutoStock-Setup.exe`. If Windows shows "Windows protected your PC", click **More info**, then **Run anyway** (this shows because the program is not signed yet). Click **Next** until the end. No administrator password is needed.
+1. **Install.** Download `AutoStock-Setup.exe` from the project's *Releases* page (github.com/MouhssineElBoumshouli/autostock-ai/releases/latest), then double-click it. If Windows shows "Windows protected your PC", click **More info**, then **Run anyway** (this shows because the program is not signed yet). Click **Next** until the end. No administrator password is needed.
 2. **Open.** Double-click the **AutoStock AI** icon on the desktop. AutoStock opens in its own window. The first time, it creates the shop's database (a few seconds), then asks for the shop's name and the owner's account.
 3. **The shop's other computers and phones.** On the same Wi-Fi, open the browser and type `http://PC-NAME:8765` (the PC's name is in Windows Settings > System > About). The first time, Windows asks to allow AutoStock on the network: click **Allow** (private networks).
 4. **Closing the window does not stop AutoStock**, so the other devices keep using it. It also starts by itself with Windows. To stop it: Start menu > **Stop AutoStock**.

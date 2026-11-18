@@ -10,6 +10,9 @@ on:
     paths: ["backend/**", "frontend/**", "windows/**", ".github/workflows/windows-app.yml"]
   workflow_dispatch:
 
+permissions:
+  contents: write # to publish the installer on the repository's Releases page
+
 jobs:
   build:
     runs-on: windows-2025
@@ -22,6 +25,8 @@ jobs:
         with: { node-version: "22" }
 
       - name: Build the installer
+        env:
+          APP_VERSION: "1.0.${{ github.run_number }}"
         run: powershell -ExecutionPolicy Bypass -File windows\build.ps1
 
       - name: Install, start, use, stop, update
@@ -84,3 +89,14 @@ jobs:
           name: AutoStock-Setup
           path: build/AutoStock-Setup.exe
           retention-days: 30
+
+      # On main only, after every test passed: the newest installer on the Releases page, for shops to download.
+      - name: Publish on the Releases page
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = "v1.0.${{ github.run_number }}"
+          gh release create $tag build\AutoStock-Setup.exe --title "AutoStock AI $tag" --latest `
+            --notes "Windows installer. Double-click AutoStock-Setup.exe; no Docker, works without internet. Guide: docs/INSTALL.md."
