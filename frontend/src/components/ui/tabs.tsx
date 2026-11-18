@@ -18,7 +18,7 @@ function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimi
   );
 }
 
-// Material 3 primary tabs: the active tab is violet with a 3px rounded indicator under its label.
+// Material 3 primary tabs: the active tab is blue with a 3px rounded indicator under its label.
 function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
   return (
     <TabsPrimitive.Trigger

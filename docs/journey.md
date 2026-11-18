@@ -193,6 +193,8 @@ Update this section as each step of `PLAN.md` is finished, so the final presenta
 
 - **Confidence intervals and the English report (11 November 2026):** `app.demo.check_confidence` gives 95% intervals for the forecast scores (paired bootstrap over the 5,153 part-branch pairs, 2,000 resamples): the gain over the 4-week average is 8.4% [6.3, 10.4] at 7 days, 26.7% [24.2, 29.2] at 30 days and 37.5% [35.2, 39.7] at 60 days, so it is not luck. Every constant in the report's methods chapter was checked against the code. The internship report is now fully in English (`docs/internship-report.pdf`), and the README pictures are English screenshots.
 
+- **Deep blue instead of violet (18 November 2026):** after feedback that the violet looked bad, the Material 3 colors are now generated from the deep blue #1f4fa3 (same "fidelity" method, one file: `frontend/src/index.css`). Green, amber and red for Healthy / Low / Out did not change. Screenshots in the README, report and slides were retaken.
+
 ## The design we kept
 
 The approved design direction, used for both versions:

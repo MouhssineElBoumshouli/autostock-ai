@@ -12,8 +12,8 @@
  * bg-primary, text-on-surface-variant, text-title-medium, rounded-md, shadow-elevation-2...
  * Never write a raw color (#...) in a component.
  *
- * Colors: the Material 3 light scheme generated from the seed #7847ee ("fidelity" variant, so the
- * brand violet stays vivid), with Google's open-source color utilities. Green and amber are
+ * Colors: the Material 3 light scheme generated from the seed #1f4fa3 ("fidelity" variant, so the
+ * brand deep blue stays strong), with Google's open-source color utilities. Green and amber are
  * Material "custom colors" blended toward the seed: green = healthy, amber = low, error red = out.
  *
  * Spacing uses Tailwind's 4px scale. Use start/end classes (ps-4, me-2, text-start, end-0),
@@ -22,35 +22,35 @@
  */
 
 :root {
-  --primary: #5f26d5;
+  --primary: #003883;
   --on-primary: #ffffff;
-  --primary-container: #7847ee;
-  --on-primary-container: #f2e9ff;
-  --secondary: #65529c;
+  --primary-container: #1f4fa3;
+  --on-primary-container: #afc6ff;
+  --secondary: #505e80;
   --on-secondary: #ffffff;
-  --secondary-container: #c2acfe;
-  --on-secondary-container: #503c85;
-  --tertiary: #824100;
+  --secondary-container: #c9d7ff;
+  --on-secondary-container: #4f5d7f;
+  --tertiary: #642b00;
   --on-tertiary: #ffffff;
-  --tertiary-container: #a65500;
-  --on-tertiary-container: #ffe8da;
+  --tertiary-container: #883d00;
+  --on-tertiary-container: #ffb68d;
   --error: #ba1a1a;
   --on-error: #ffffff;
   --error-container: #ffdad6;
   --on-error-container: #93000a;
-  --surface: #fdf7ff;
-  --on-surface: #1d1a24;
-  --on-surface-variant: #494455;
+  --surface: #faf8ff;
+  --on-surface: #1a1b21;
+  --on-surface-variant: #434652;
   --surface-container-lowest: #ffffff;
-  --surface-container-low: #f8f1ff;
-  --surface-container: #f2ebf9;
-  --surface-container-high: #ece5f3;
-  --surface-container-highest: #e7e0ee;
-  --outline: #7a7487;
-  --outline-variant: #cbc3d8;
-  --inverse-surface: #322f39;
-  --inverse-on-surface: #f5eefc;
-  --inverse-primary: #cfbdff;
+  --surface-container-low: #f3f3fb;
+  --surface-container: #ededf5;
+  --surface-container-high: #e8e7ef;
+  --surface-container-highest: #e2e2ea;
+  --outline: #737783;
+  --outline-variant: #c3c6d3;
+  --inverse-surface: #2f3036;
+  --inverse-on-surface: #f0f0f8;
+  --inverse-primary: #afc6ff;
   --scrim: #000000;
   --success: #006d43;
   --on-success: #ffffff;

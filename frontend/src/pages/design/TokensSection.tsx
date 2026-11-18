@@ -4,7 +4,7 @@ import { ExampleLabel, Section } from "./Section";
 
 const colors = [
   { name: "primary", use: "Main action, active" },
-  { name: "primary-container", use: "Brand violet #7847ee" },
+  { name: "primary-container", use: "Brand deep blue #1f4fa3" },
   { name: "secondary-container", use: "Active menu item" },
   { name: "surface", use: "Page background" },
   { name: "surface-container-low", use: "Cards, menu" },
@@ -52,7 +52,7 @@ export function TokensSection() {
     <Section
       id="tokens"
       title="Tokens"
-      description="Material 3 colors (generated from #7847ee), type scale, shapes and elevation. They all come from src/index.css. Change them there, never in a component."
+      description="Material 3 colors (generated from #1f4fa3), type scale, shapes and elevation. They all come from src/index.css. Change them there, never in a component."
     >
       <Card>
         <CardContent className="grid gap-8">
