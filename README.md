@@ -12,7 +12,7 @@ Know what you have, what is selling, and what to order.
 ![React](https://img.shields.io/badge/React-TypeScript-61DAFB?logo=react&logoColor=black)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?logo=scikitlearn&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-one%20command-2496ED?logo=docker&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-installer%2C%20works%20offline-0078D4)
 ![Tests](https://img.shields.io/badge/tests-826%20passing-2ea44f)
 
 <img src="docs/images/home.jpg" alt="AutoStock AI home page" width="900">
@@ -114,8 +114,8 @@ The full story, step by step: [docs/journey.md](docs/journey.md).
 | Database | PostgreSQL 16 (with `pg_trgm` for typo-tolerant search) |
 | Forecasting | NumPy, scikit-learn |
 | Assistant | Groq (`openai/gpt-oss-120b`, free tier), optional local model through Ollama |
-| Running | Docker Compose — one command, nightly backups |
-| Quality | 826 automated tests (pytest) |
+| Running | A normal Windows app (`AutoStock-Setup.exe`, works without internet, daily backups); Docker for developing |
+| Quality | 827 automated tests (pytest), plus an install-start-update test of the Windows app on every change |
 
 ## Project documents
 
@@ -138,15 +138,20 @@ Built with the help of an AI coding assistant (Claude Code).
 ## Install it in a shop
 
 **[docs/INSTALL.md](docs/INSTALL.md)** (French, then English): one PC in the shop, the other computers
-and phones open it on the shop network. In short:
+and phones open it on the shop network at `http://PC-NAME:8765`.
 
-```
-docker compose -f docker-compose.prod.yml up -d --build
-```
+**The Windows app (recommended).** Double-click `AutoStock-Setup.exe`: no Docker, no administrator
+password, works without the internet. It ships its own PostgreSQL, started only while AutoStock runs,
+and starts with Windows so the phones can always reach it (`app/desktop.py`). The shop's data lives in
+`%LOCALAPPDATA%\AutoStock`, the daily backups in `Documents\AutoStock backups`.
+GitHub builds the installer on Windows for every change (`.github/workflows/windows-app.yml`, artifact
+"AutoStock-Setup") and tests it: install, start, create a shop, stop, update, shop still there.
+To build it yourself on Windows: `powershell -ExecutionPolicy Bypass -File windows\build.ps1`.
 
+**With Docker (servers):** `docker compose -f docker-compose.prod.yml up -d --build`.
 Production mode (`docker-compose.prod.yml`): one container serves the built website and `/api` on
 port 8080, with no reload, no `/api/docs`, no `/design`; a strong database password is required;
-every service restarts by itself; a daily checked backup goes to the `backups` folder; an update
+every service restarts by itself; a daily checked backup goes to the `backups` folder (made by the app, `app/backups.py`); an update
 backs up first. The commands in this README (`docker compose up`) are for developing only.
 
 ## Run it on Windows (developing)
